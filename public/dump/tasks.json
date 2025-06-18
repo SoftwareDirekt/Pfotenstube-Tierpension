@@ -1,0 +1,13 @@
+[
+{"type":"header","version":"5.2.1","comment":"Export to JSON plugin for PHPMyAdmin"},
+{"type":"database","name":"tierqhoo_dog"},
+{"type":"table","name":"tasksCms","database":"tierqhoo_dog","data":
+[
+{"id":"4","title":"Hunde waschen","date":"2023-12-15 07:17:38"},
+{"id":"5","title":"FÃ¼ttern um 10 Uhr","date":"2023-12-15 07:18:01"},
+{"id":"6","title":"Gassi gehen um 13Uhr","date":"2023-12-15 07:18:17"},
+{"id":"7","title":"Einkaufen gehen","date":"2023-12-19 07:37:48"},
+{"id":"8","title":"Wasser SchÃ¼ssel reinigen","date":"2023-12-20 05:46:48"}
+]
+}
+]

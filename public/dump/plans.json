@@ -1,0 +1,23 @@
+[
+{"type":"header","version":"5.2.1","comment":"Export to JSON plugin for PHPMyAdmin"},
+{"type":"database","name":"tierqhoo_dog"},
+{"type":"table","name":"plans","database":"tierqhoo_dog","data":
+[
+{"id":"1","title":"Tag â‚¬ 25","type":"Kleiner Hund ","price":"25.00","discount":"0.00","flatRate":"0","created":"2023-10-04 13:50:54","updated":"2024-01-24 01:56:04"},
+{"id":"2","title":"Tag â‚¬ 28","type":"GroÃŸer Hund","price":"28.00","discount":"0.00","flatRate":"0","created":"2023-10-06 08:14:27","updated":"2024-01-24 01:56:26"},
+{"id":"3","title":"Pension â‚¬ 28","type":"Tarif K H","price":"28.00","discount":"0.00","flatRate":"0","created":"2023-10-06 08:15:00","updated":"2024-01-24 02:00:39"},
+{"id":"6","title":"Pension â‚¬ 30","type":"Tarif G H","price":"30.00","discount":"0.00","flatRate":"0","created":"2023-10-06 12:03:47","updated":"2024-01-24 02:00:53"},
+{"id":"12","title":"2 Hunde Tag â‚¬ 45","type":"2 Hunde ","price":"45.00","discount":"0.00","flatRate":"0","created":"2023-12-20 05:48:31","updated":"2024-01-24 02:00:03"},
+{"id":"13","title":"2 Hunde Pension â‚¬ 50","type":"2 Hunde","price":"50.00","discount":"0.00","flatRate":"0","created":"2023-12-20 05:49:36","updated":"2024-01-24 01:59:40"},
+{"id":"14","title":"TSV Tarif â‚¬ 25","type":"TSV Tarif 25","price":"25.00","discount":"0.00","flatRate":"0","created":"2023-12-20 10:01:47","updated":"2024-01-24 05:41:16"},
+{"id":"15","title":"TSV Tarif â‚¬ 20","type":"TSV Tarif 20","price":"20.00","discount":"0.00","flatRate":"0","created":"2023-12-20 10:02:33","updated":"2024-01-24 05:41:02"},
+{"id":"16","title":"TSV Tarif â‚¬ 15","type":"TSV Tarif 15","price":"15.00","discount":"0.00","flatRate":"0","created":"2024-01-04 13:21:50","updated":"2024-01-24 05:40:50"},
+{"id":"17","title":"3 Hunde Tag â‚¬ 66","type":"3 Hunde Tag","price":"66.00","discount":"0.00","flatRate":"0","created":"2024-01-24 02:01:47","updated":"2024-01-24 02:01:47"},
+{"id":"18","title":"3 Hunde Pension â‚¬ 66","type":"3 Hunde P","price":"66.00","discount":"0.00","flatRate":"0","created":"2024-01-24 02:02:23","updated":"2024-01-24 02:02:23"},
+{"id":"19","title":"Tag â‚¬ 20","type":"Tages â‚¬ 20","price":"20.00","discount":"0.00","flatRate":"0","created":"2024-02-05 05:18:04","updated":"2024-02-05 05:18:04"},
+{"id":"20","title":"3 Std. â‚¬ 10","type":"3 Std. â‚¬ 10","price":"10.00","discount":"0.00","flatRate":"0","created":"2024-02-27 02:37:57","updated":"2024-02-27 02:37:57"},
+{"id":"21","title":"Tag â‚¬ 22,50","type":"Tag â‚¬ 22,50","price":"22.50","discount":"0.00","flatRate":"0","created":"2024-02-29 10:25:01","updated":"2024-02-29 10:25:01"},
+{"id":"22","title":"Freunde","type":"0","price":"0.00","discount":"0.00","flatRate":"0","created":"2024-03-16 03:15:40","updated":"2024-03-16 03:15:40"}
+]
+}
+]

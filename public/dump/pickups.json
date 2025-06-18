@@ -1,0 +1,27 @@
+[
+{"type":"header","version":"5.2.1","comment":"Export to JSON plugin for PHPMyAdmin"},
+{"type":"database","name":"tierqhoo_dog"},
+{"type":"table","name":"pickup","database":"tierqhoo_dog","data":
+[
+{"id":"1","name":"Sabrina Novak","phone_number":"0676 682 87 10","picture":"no-user-picture.gif","id_number":"","dog_id":"1","created":"2023-12-21 03:39:19"},
+{"id":"2","name":"Margaretha Maier","phone_number":"0660 435 29 28 ","picture":"no-user-picture.gif","id_number":"","dog_id":"3","created":"2023-12-22 08:51:05"},
+{"id":"3","name":"Margaretha Maier","phone_number":"0660 435 29 28 ","picture":"no-user-picture.gif","id_number":"","dog_id":"2","created":"2023-12-23 03:05:39"},
+{"id":"4","name":"Sophie Pogats","phone_number":"0650 290 8108","picture":"no-user-picture.gif","id_number":"","dog_id":"4","created":"2023-12-23 03:29:03"},
+{"id":"5","name":"Verena Schmidt","phone_number":"0650 53 15 203","picture":"no-user-picture.gif","id_number":"","dog_id":"4","created":"2023-12-23 03:29:03"},
+{"id":"6","name":"Eva UrschÃ¼tz","phone_number":"0660 344 18 83","picture":"no-user-picture.gif","id_number":"","dog_id":"4","created":"2023-12-23 03:29:03"},
+{"id":"7","name":"Iris Edelmann","phone_number":"0699 1975 16 02","picture":"no-user-picture.gif","id_number":"","dog_id":"5","created":"2023-12-23 03:31:49"},
+{"id":"8","name":"Alexandra S.","phone_number":"0660 376 93 99","picture":"no-user-picture.gif","id_number":"","dog_id":"5","created":"2023-12-23 03:31:49"},
+{"id":"9","name":"Verena Schmidt","phone_number":"0650 53 15 203","picture":"no-user-picture.gif","id_number":"","dog_id":"5","created":"2023-12-23 03:31:49"},
+{"id":"10","name":"Sophie Pogats","phone_number":"0650 290 8108","picture":"no-user-picture.gif","id_number":"","dog_id":"6","created":"2024-01-01 06:53:00"},
+{"id":"11","name":"Eva UrschÃ¼tz","phone_number":"0660 344 18 83","picture":"no-user-picture.gif","id_number":"","dog_id":"6","created":"2024-01-01 07:13:46"},
+{"id":"12","name":"Peter Mattersdorfer","phone_number":"0650 511 23 55","picture":"no-user-picture.gif","id_number":"","dog_id":"16","created":"2024-01-02 13:45:11"},
+{"id":"13","name":"Jennifer Hasieber","phone_number":"nicht gegeben","picture":"no-user-picture.gif","id_number":"","dog_id":"461","created":"2024-02-28 04:47:09"},
+{"id":"14","name":"Margarete Lackner","phone_number":"nicht gegeben","picture":"no-user-picture.gif","id_number":"","dog_id":"461","created":"2024-02-28 04:47:09"},
+{"id":"16","name":"x","phone_number":"x","picture":"no-user-picture.gif","id_number":"","dog_id":"500","created":"2024-03-28 01:56:24"},
+{"id":"17","name":"Admin","phone_number":"0300","picture":"no-user-picture.gif","id_number":"k123","dog_id":"533","created":"2024-04-19 14:17:01"},
+{"id":"18","name":"Eva Maria Trippl","phone_number":"0","picture":"no-user-picture.gif","id_number":"","dog_id":"534","created":"2024-04-25 10:59:04"},
+{"id":"20","name":"x","phone_number":"x","picture":"picture_01715245913.jpg","id_number":"","dog_id":"545","created":"2024-05-09 05:11:53"},
+{"id":"21","name":"x","phone_number":"x","picture":"no-user-picture.gif","id_number":"","dog_id":"546","created":"2024-05-09 05:13:52"}
+]
+}
+]
