@@ -14,6 +14,7 @@
       content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
     @yield('title')
+      <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <meta name="description" content="" />
 
@@ -124,8 +125,8 @@
     <script src="assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
     <script src="assets/vendor/libs/apex-charts/apexcharts.js"></script>
     <script src="assets/vendor/libs/swiper/swiper.js"></script>
-    
-    <!-- Main JS -->  
+
+    <!-- Main JS -->
     <script src="assets/js/main.js"></script>
 
     <!-- Page JS -->

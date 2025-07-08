@@ -33,6 +33,7 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
     });
     Route::get('/login', [AdminsController::class, 'login_view'])->name('login.view');
     Route::post('/login', [AdminsController::class, 'login'])->name('login');
+    Route::post('/employeetrack/workingrecord', [EmployeeTrackController::class, 'workingRecordPdf'])->name('employee.workingrecord');
 
 
     // Authenticated Admin Routes
@@ -156,6 +157,7 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
 
         //Working Time Measurement Routes
         Route::get('/employeetrack', [EmployeeTrackController::class, 'index'])->name('employee.track');
+
         //monatsplan
 
         Route::get('/employeetrack/monatsplan', [EmployeeTrackController::class, 'monatsplanShow'])->name('employee.track.monatsplan');
@@ -183,6 +185,7 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::get('/sales', [ReportController::class, 'sales'])->name('sales');
         // Dogs Calendar
         Route::get('/dogs/calendar', [CalendarController::class, 'index'])->name('dog.calendar');
+        Route::get('/dogs/calendar2', [CalendarController::class, 'dogsCalendar'])->name('dog.calendar2');
         Route::get('/calendar', [CalendarController::class, 'showCalendar'])->name('calendar');
 
         //V&V Page Routes
