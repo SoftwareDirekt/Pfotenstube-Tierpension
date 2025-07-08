@@ -31,22 +31,23 @@
 @endsection
 
 @section('body')
-    @php use Carbon\Carbon; @endphp
+    @php
+        use Carbon\Carbon;
+        $current = Carbon::now()->startOfMonth()->addMonths($incrementMonth);
+    @endphp
 
     <div class="px-4 flex-grow-1 container-p-y">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4>Reservierung: {{ $totalReservations }}</h4>
+                    <h4>Reservierung: {{ $total_reservations }}</h4>
                     <div class="dropdown">
-                        <a class="badge badge2 badge-secondary dropdown-toggle"
-                           href="#" data-bs-toggle="dropdown">
-                            {{ $current->locale('de')->isoFormat('MMMM Y') }}
+                        <a class="badge badge2 badge-secondary dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            {{ $monthAndYear }}
                         </a>
                         <div class="dropdown-menu" style="max-height:300px; overflow:auto;">
                             @foreach($months as $i => $label)
-                                <a class="dropdown-item"
-                                   href="{{ route('admin.dog.calendar', ['month' => $i]) }}">
+                                <a class="dropdown-item" href="{{ route('admin.dog.calendar', ['month' => $i]) }}">
                                     {{ $label }}
                                 </a>
                             @endforeach
@@ -60,84 +61,62 @@
                         <tr>
                             <th>#</th>
                             @for($day = 1; $day <= $daysInMonth; $day++)
-                                <th data-bs-toggle="tooltip" title="UV: {{$compatibles[$day]['UV']}} V: {{$compatibles[$day]['V']}} VJ: {{$compatibles[$day]['VJ']}} VM: {{$compatibles[$day]['VM']}} S: {{$compatibles[$day]['S']}}">{{ str_pad($day, 2, '0', STR_PAD_LEFT) }} </th>
+                                <th data-bs-toggle="tooltip"
+                                    title="UV: {{ $compatibles[$day]['UV'] }}  V: {{ $compatibles[$day]['V'] }}  VJ: {{ $compatibles[$day]['VJ'] }}  VM: {{ $compatibles[$day]['VM'] }}  S: {{ $compatibles[$day]['S'] }}">
+                                    {{ str_pad($day, 2, '0', STR_PAD_LEFT) }}
+                                </th>
                             @endfor
                         </tr>
                         </thead>
 
                         <tbody>
-                        @for($idx = 0; $idx < $totalRooms; $idx++)
-                            @php $res = $reservationsArray[$idx]; @endphp
+                        @foreach($matrix as $idx => $row)
                             <tr>
                                 <td>{{ $idx + 1 }}</td>
-
-                                @if($res)
-                                    @php
-                                        $from      = max($res['checkin_date'], $current->toDateString());
-                                        $to        = min($res['checkout_date'], $current->copy()->endOfMonth()->toDateString());
-                                        $startDay  = \Carbon\Carbon::parse($from)->tz('Europe/Vienna')->day;
-                                        $endDay    = \Carbon\Carbon::parse($to)->tz('Europe/Vienna')->day;
-                                        $length    = $endDay - $startDay + 1;
-
-                                        $isCont    = \Carbon\Carbon::parse($res['checkin_date'])
-                                                        ->lt($current->copy()->startOfMonth());
-
-                                        $symbol    = $isCont ? '--->' : '';
-                                        if($startDay == $endDay){
-                                            $symbol = '+';
-                                        }
-
-                                        switch($res['dog']['compatibility']){
-                                            case('UV'):
-                                                $bg = 'red';
-                                                break;
-                                            case('V'):
-                                                $bg = 'green';
-                                                break;
-                                            case('VJ'):
-                                                $bg = 'blue';
-                                                break;
-                                            case('VM'):
-                                                $bg = 'deeppink';
-                                                break;
-                                            case('S'):
-                                                $bg = 'orange';
-                                                break;
-                                        }
-
-                                        $skip = 0;
-                                    @endphp
-
-                                    @for($d = 1; $d <= $daysInMonth; $d++)
-                                        @if($skip > 0)
-                                            @php $skip--; @endphp
-                                            @continue
-                                        @endif
-
-                                        @if($d < $startDay || $d > $endDay)
-                                            <td class="free">{{ $d }}</td>
-                                        @else
-                                            <td colspan="{{ $length }}"
-                                                style="background-color: {{ $bg }};
-                                                       white-space: nowrap;
-                                                       overflow: hidden;
-                                                       text-overflow: ellipsis;"
-                                                @if($isCont) class="text-start" @endif
-                                                    data-bs-toggle="tooltip"
-                                                title="{{ $res['dog']['name'] }} ({{$res['dog']['id']}}) - {{$res['dog']['compatibility']}}">
-                                                {{ $symbol }}
-                                            </td>
-                                            @php $skip = $length - 1; @endphp
-                                        @endif
-                                    @endfor
-
-                                @else
-                                    @for($d = 1; $d <= $daysInMonth; $d++)
+                                @php $d = 1; @endphp
+                                @while($d <= $daysInMonth)
+                                    @if(is_null($row[$d]))
                                         <td class="free">{{ $d }}</td>
-                                    @endfor
-                                @endif
+                                        @php $d++; @endphp
+                                    @else
+                                        @php
+                                            $res = $row[$d];
+                                            // Determine span
+                                            $startDay = $d;
+                                            $endDay   = $d;
+                                            while($endDay + 1 <= $daysInMonth && isset($row[$endDay + 1]) && $row[$endDay + 1]?->id === $res->id) {
+                                                $endDay++;
+                                            }
+                                            $length = $endDay - $startDay + 1;
+                                            // Color by compatibility
+                                            switch($res->dog->compatibility) {
+                                                case 'UV': $bg = 'red'; break;
+                                                case 'V':  $bg = 'green'; break;
+                                                case 'VJ': $bg = 'blue'; break;
+                                                case 'VM': $bg = 'deeppink'; break;
+                                                case 'S':  $bg = 'orange'; break;
+                                                default:   $bg = 'gray';
+                                            }
+                                            // Continuation symbol
+                                            $isCont = Carbon::parse($res->checkin_date)->lt($current->copy()->startOfMonth());
+                                            $symbol = $isCont ? '--->' : '';
+                                            if ($length === 1) {
+                                                $symbol = '+';
+                                            }
+                                        @endphp
+
+                                        <td colspan="{{ $length }}"
+                                            style="background-color: {{ $bg }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                                            @if($isCont) class="text-start" @endif
+                                            data-bs-toggle="tooltip"
+                                            title="{{ $res->dog->name }} ({{ $res->dog->id }}) - {{ $res->dog->compatibility }}">
+                                            {{ $symbol }}
+                                        </td>
+                                        @php $d = $endDay + 1; @endphp
+                                    @endif
+                                @endwhile
                             </tr>
-                        @endfor
+                        @endforeach
                         </tbody>
 
                     </table>

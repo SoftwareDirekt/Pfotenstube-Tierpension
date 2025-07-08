@@ -148,90 +148,99 @@ class CalendarController extends Controller
 
         return view('admin.calendar.main');
     }
+
+
     public function dogsCalendar(Request $request)
     {
-        if (! General::permissions('Hundekalender')) {
+        if (!General::permissions('Hundekalender')) {
             return to_route('admin.settings');
         }
 
-        $increment   = (int) $request->input('month', 0);
-        $current     = Carbon::now()->startOfMonth()->addMonths($increment);
-        $start       = $current->copy()->startOfMonth()->toDateString();
-        $end         = $current->copy()->endOfMonth()->toDateString();
+        $incrementMonth = (int)$request->input('month', 0);
+        $current = Carbon::now()->startOfMonth()->addMonths($incrementMonth);
+        $start = $current->toDateString();
+        $end = $current->copy()->endOfMonth()->toDateString();
         $daysInMonth = $current->daysInMonth;
 
+        $monthAndYear = $current->locale('de')->isoFormat('MMMM Y');
+
         $reservations = Reservation::with('dog')
-            ->whereDate('checkin_date',  '<=', $end)
+            ->whereDate('checkin_date', '<=', $end)
             ->whereDate('checkout_date', '>=', $start)
+            ->where('status', 3)
+            ->orWhere('status', 1)
             ->orderBy('checkin_date')
             ->get();
 
+        [$fullMonth, $otherRes] = $reservations->partition(function ($res) use ($start, $end) {
+            return $res->checkin_date <= $start && $res->checkout_date >= $end;
+        });
+        $reservations = $fullMonth->concat($otherRes);
+
+        $compatTypes = ['UV', 'V', 'VJ', 'VM', 'S'];
         $compatibles = [];
-        for ($d = 1; $d <= $daysInMonth; $d++) {
-            $compatibles[$d] = [
-                'UV' => 0,
-                'V'  => 0,
-                'VJ'  => 0,
-                'VM'  => 0,
-                'S'  => 0,
-            ];
+        foreach (range(1, $daysInMonth) as $d) {
+            $compatibles[$d] = array_fill_keys($compatTypes, 0);
         }
         foreach ($reservations as $res) {
             $compat = $res->dog->compatibility;
-            $from   = max($res->checkin_date,  $start);
-            $to     = min($res->checkout_date, $end);
-
-            for ($d = Carbon::parse($from); $d->lte($to); $d->addDay()) {
-                $day = $d->day;
-                switch($compat){
-                    case('UV'):
-                        $compatibles[$day]['UV']++;
-                        break;
-                    case('V'):
-                        $compatibles[$day]['V']++;
-                        break;
-                    case('VJ'):
-                        $compatibles[$day]['VJ']++;
-                        break;
-                    case('VM'):
-                        $compatibles[$day]['VM']++;
-                        break;
-                    case('S'):
-                        $compatibles[$day]['S']++;
-                        break;
-                }
+            if (!in_array($compat, $compatTypes, true)) continue;
+            $from = max($res->checkin_date, $start);
+            $to = min($res->checkout_date, $end);
+            for ($dt = Carbon::parse($from); $dt->lte($to); $dt->addDay()) {
+                $compatibles[$dt->day][$compat]++;
             }
         }
 
         $months = [];
-        for ($i = 0; $i <= 130; $i++) {
-            $m = Carbon::now()->startOfMonth()->addMonths($i);
-            $months[$i] = $m->locale('de')->isoFormat('MMMM Y');
+        foreach (range(0, 130) as $i) {
+            $months[$i] = Carbon::now()->startOfMonth()->addMonths($i)
+                ->locale('de')->isoFormat('MMMM Y');
         }
 
-        $totalReservations = Reservation::whereMonth('checkin_date', $current->month)
-            ->orWhereMonth('checkout_date', $current->month)
-            ->count();
-
-        $reservationsArray = $reservations->toArray();
         $totalRooms = $this->general->totalSpace();
 
-        if (count($reservationsArray) < $totalRooms) {
-            $reservationsArray = array_pad(
-                array_values($reservationsArray),
-                $totalRooms,
-                null
-            );
+        $matrix = [];
+        for ($r = 0; $r < $totalRooms; $r++) {
+            $matrix[$r] = array_fill(1, $daysInMonth, null);
         }
+
+        foreach ($reservations as $res) {
+            $fromDay = Carbon::parse(max($res->checkin_date, $start))->day;
+            $toDay = Carbon::parse(min($res->checkout_date, $end))->day;
+            foreach ($matrix as $r => $row) {
+                $free = true;
+                for ($d = $fromDay; $d <= $toDay; $d++) {
+                    if ($matrix[$r][$d] !== null) {
+                        $free = false;
+                        break;
+                    }
+                }
+                if ($free) {
+                    for ($d = $fromDay; $d <= $toDay; $d++) {
+                        $matrix[$r][$d] = $res;
+                    }
+                    break;
+                }
+            }
+        }
+
+        $total_reservations = Reservation::whereMonth('checkin_date', $current->month)
+            ->orWhereMonth('checkout_date', $current->month)
+            ->where('status', 3)
+            ->orWhere('status', 1)
+            ->count();
+
         return view('admin.calendar.dogs2', compact(
-            'current',
-            'reservationsArray',
+            'monthAndYear',
+            'incrementMonth',
+            'months',
+            'total_reservations',
             'daysInMonth',
             'compatibles',
-            'increment',
-            'months',
-            'totalReservations',
+            'matrix',
             'totalRooms'
         ));
     }
+
 }
