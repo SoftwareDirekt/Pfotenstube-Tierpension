@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Event;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use SebastianBergmann\Type\NullType;
@@ -151,9 +153,30 @@ class EmployeeTrackController extends Controller
             ]);
         }
     }
+    public function workingRecordPdf(Request $request)
+    {
+        $selected_month = $request->month ?? Carbon::now()->month;
+        $selected_year  = $request->year  ?? Carbon::now()->year;
 
+        $start  = Carbon::createFromDate($selected_year, $selected_month, 1);
+        $end    = $start->copy()->endOfMonth();
+        $period = CarbonPeriod::create($start, $end);
+        $days   = iterator_to_array($period);
 
+        $employee = User::findOrFail($request->employee);
 
+        $pdf = PDF::loadView(
+            'admin.workingrecord.pdf',
+            compact('days', 'employee', 'selected_month', 'selected_year')
+        )
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled'      => true,
+            ]);
+
+        return $pdf->download("Arbeitszeit_{$selected_year}_{$selected_month}.pdf");
+    }
 
 
 

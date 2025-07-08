@@ -83,7 +83,6 @@ class GeneralFunctionsService
     {
         $startOfMonth = Carbon::now()->addMonths($month)->format('Y-m-01');
         $endOfMonth = Carbon::now()->addMonths($month)->format('Y-m-t');
-
         return Reservation::whereBetween('checkin_date', [$startOfMonth, $endOfMonth])
             ->where('status', 3)
             ->orWhere('status', 1)

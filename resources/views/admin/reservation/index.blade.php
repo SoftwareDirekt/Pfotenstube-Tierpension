@@ -128,7 +128,7 @@
                                     </td>
                                     <td>{{ $obj->dog->customer->phone }}</td>
                                     <td>@php echo isset($obj->plan->title) ? $obj->plan->title : '' @endphp</td>
-                                    <td>{{ date('d.m.Y', strtotime($obj->checkin_date)) }}</td>
+                                    <td>{{ $obj->checkin_date->format('d.m.Y') }}</td>
                                     <td>{{ date('d.m.Y', strtotime($obj->checkout_date)) }}</td>
                                     <td>
                                         @if ($obj->status == 1)

@@ -10,11 +10,10 @@ class Reservation extends Model
     use HasFactory;
 
     protected $guarded = [];
-    protected $table = 'reservations';
 
-    protected $hidden = [
-        'password',
-        'remember_token',
+    protected $casts = [
+        'checkin_date' => 'datetime',
+        'checkout_date' => 'datetime',
     ];
 
     public function dog()
