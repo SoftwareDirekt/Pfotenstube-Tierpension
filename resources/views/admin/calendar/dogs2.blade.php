@@ -97,7 +97,6 @@
                                                 case 'S':  $bg = 'orange'; break;
                                                 default:   $bg = 'gray';
                                             }
-                                            // Continuation symbol
                                             $isCont = Carbon::parse($res->checkin_date)->lt($current->copy()->startOfMonth());
                                             $symbol = $isCont ? '--->' : '';
                                             if ($length === 1) {
