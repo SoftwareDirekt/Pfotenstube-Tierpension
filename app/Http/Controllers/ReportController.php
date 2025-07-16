@@ -157,13 +157,13 @@ class ReportController extends Controller
         $salesData = [];
         $weeklyTotals = [];
         $monthlyTotal = 0;
-        $currentWeek = 1;
         $weekData = [];
         $weeklyTotal = 0;
 
         // Loop through each day in the month
         $rest = false;
         for ($date = $startOfMonth; $date < $endOfMonth; $date->addDay()) {
+            $currentWeek = Carbon::parse($date)->weekOfYear;
             $formattedDate = date('d.m.Y', strtotime($date));
             $dbDate = date('Y-m-d', strtotime($date));
 

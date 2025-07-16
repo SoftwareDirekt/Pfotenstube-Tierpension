@@ -6,7 +6,7 @@
     {{-- <link href="{{ asset('assets/css/fullcalendar.css') }}" rel="stylesheet" /> --}}
     {{-- <link href="{{ asset('assets/css/fullcalendar.print.css') }}" rel="stylesheet" media="print" />--}}
     <style>
-    
+
     </style>
 @endsection
 @section('body')
@@ -50,7 +50,7 @@
             })
             moment.locale('de_AT');
 
-            
+
 
             // document.addEventListener('DOMContentLoaded', function() {
                 // var events = getEvents();
@@ -71,7 +71,7 @@
                     },
                     columnHeaderFormat: {
                         hour12: false,
-                        hour: '2-digit', 
+                        hour: '2-digit',
                         minute: '2-digit'
                     },
                     buttonText: {
@@ -87,10 +87,10 @@
                         timeGridWeek: {
                             // titleFormat: { year: 'numeric', month: '2-digit', day: '2-digit' },
                             // eventTimeFormat: { hour12: false, hour: '2-digit', minute: '2-digit' },
-                            
+
                         },
                         timeGridDay: {
-                      
+
                             // eventTimeFormat: { hour12: false, hour: '2-digit', minute: '2-digit' },
                         }
                     },
@@ -177,7 +177,7 @@
                 })
                 calendar.render();
             // })
-        
+
             // var calendar = $('#calendar2').fullCalendar({
             //     header: {
             //         left: 'prev,next today',
@@ -307,7 +307,7 @@
             function doDelete() {
                 $("#calendarModal").modal('hide');
                 var eventID = $('#eventID').val();
-                
+
                 $.ajax({
                     url: '/admin/events/delete',
                     data: { id: eventID },

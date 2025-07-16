@@ -20,57 +20,37 @@ class ReservationsController extends Controller
 {
     public function reservation(Request $request)
     {
-        if(!General::permissions('Reservierung'))
-        {
-            return to_route('admin.settings');
+        if (!General::permissions('Reservierung')) {
+            return redirect()->route('admin.settings');
         }
 
-        if ($request->ajax()) {
-            $keyword = isset($request->keyword) ? $request->keyword : "";
-            $order = isset($request->order) ? $request->order : 'asc';
+        $keyword = $request->input('keyword', '');
+        $status  = $request->input('status', [3]);
+        $order   = $request->input('order', 'desc');
 
-            $reservations = Reservation::with(['plan', 'dog.customer']);
-
-            if (!empty($keyword)){
-                $reservations = $reservations->whereHas('dog', function($query) use ($keyword) {
-                    $query->where('name', 'like', '%' . $keyword . '%')
-                        ->orWhereHas('customer', function ($query) use ($keyword) {
-                            $query->where('name', 'like', '%' . $keyword . '%')
-                                ->orWhere('phone', 'like', '%' . $keyword . '%');
+        $reservations = Reservation::with(['plan', 'dog.customer'])
+            ->when($keyword, function ($q) use ($keyword) {
+                $q->whereHas('dog', function ($q2) use ($keyword) {
+                    $q2->where('name', 'like', "%{$keyword}%")
+                        ->orWhereHas('customer', function ($q3) use ($keyword) {
+                            $q3->where('name', 'like', "%{$keyword}%")
+                                ->orWhere('phone', 'like', "%{$keyword}%");
                         });
                 });
-            }
+            })
+            ->when($status && !in_array('all', (array)$status), function ($q) use ($status) {
+                $q->whereIn('status', (array)$status);
+            })
+            ->orderBy('checkin_date', $order)
+            ->paginate(30)
+            ->appends($request->query());
 
-            if (isset($request->status) && $request->status != 'all'){
-                $stat = explode(',', $request->status);
-                $reservations = $reservations->whereIn('status', $stat);
-            }
-
-            $reservations = $reservations->orderBy('checkin_date', $order)
-            ->limit(30)
-            ->get();
-
-            return $reservations;
-        }
-
-        $status = false;
-        if(isset($request->sl))
-        {
-            $status = $request->sl;
-            $status = explode(',',$status);
-        }
-
-        $reservations = Reservation::with(['plan', 'dog' => function($query){
-            $query->with('customer');
-        }]);
-        if($status)
-        {
-            $reservations = $reservations->whereIn('status', $status);
-        }
-        $reservations = $reservations->orderBy('checkin_date', 'desc')
-        ->paginate(30);
-
-        return view ("admin.reservation.index", compact('reservations'));
+        return view('admin.reservation.index', compact(
+            'reservations',
+            'keyword',
+            'status',
+            'order'
+        ));
     }
 
     public function add_reservation_view()
