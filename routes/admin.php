@@ -184,8 +184,7 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         //report
         Route::get('/sales', [ReportController::class, 'sales'])->name('sales');
         // Dogs Calendar
-        Route::get('/dogs/calendar', [CalendarController::class, 'index'])->name('dog.calendar');
-        Route::get('/dogs/calendar2', [CalendarController::class, 'dogsCalendar'])->name('dog.calendar2');
+        Route::get('/dogs/calendar', [CalendarController::class, 'dogsCalendar'])->name('dog.calendar2');
         Route::get('/calendar', [CalendarController::class, 'showCalendar'])->name('calendar');
 
         //V&V Page Routes
