@@ -763,8 +763,9 @@ class CustomersController extends Controller
             return to_route('admin.settings');
         }
 
-        $dogs = Dog::with('customer')->orderBy('id' , 'desc')->get();
-        return view("admin.vandv.index" , compact("dogs"));
+        $dogsVermittelt = Dog::with('customer')->where('status',2)->orderBy('id' , 'desc')->get();
+        $dogsVerstorben = Dog::with('customer')->where('status',3)->orderBy('id' , 'desc')->get();
+        return view("admin.vandv.index" , compact("dogsVermittelt", "dogsVerstorben"));
     }
 
     public function v_v_dieddog(Request $request)
