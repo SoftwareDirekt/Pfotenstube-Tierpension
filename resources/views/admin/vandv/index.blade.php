@@ -67,7 +67,7 @@
                                 @else
                                     <td>-</td>
                                 @endif
-                                <td>{{isset($obj->adopt_date) ? date('d/m/Y', strtotime($obj->adopt_date)) : ''}}</td>
+                                <td>{{isset($obj->adopt_date) ? date('d.m.Y', strtotime($obj->adopt_date)) : ''}}</td>
                                 <td>
                                     <div class="d-flex justify-content-end">
                                         <div class="mx-2">
@@ -115,7 +115,7 @@
                                   @else
                                       <td>-</td>
                                   @endif
-                                  <td>{{date('d/m/Y', strtotime($obj->died))}}</td>
+                                  <td>{{date('d.m.Y', strtotime($obj->died))}}</td>
                                   <td>
                                       <div class="d-flex justify-content-end">
                                           <div class="mx-2">
