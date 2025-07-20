@@ -52,18 +52,21 @@
                           </tr>
                         </thead>
                         <tbody class="table-border-bottom-0">
-                            @foreach($dogs as $obj)
-                            @if ($obj->status == 2)
+                        @foreach($dogsVermittelt as $obj)
                             <tr>
                                 <td><img src="/uploads/users/dogs/{{$obj->picture}}" style="object-fit: cover" width="60" height="60" alt="img"></td>
                                 <td>{{$obj->name}} ({{$obj->id}})</td>
                                 <td><a href="{{route('admin.customers.preview' , ['id' => $obj->customer->id])}}">{{$obj->customer->name}} ({{$obj->customer->id_number}})</a></td>
-                                @php 
-                                $current_date = \Carbon\Carbon::now();
-                                $birthdate = \Carbon\Carbon::createFromFormat('Y-m-d', $obj->age);
-                                $age = $current_date->diffInDays($birthdate);
+                                @if($obj->age)
+                                @php
+                                    $current_date = \Carbon\Carbon::now();
+                                    $birthdate = \Carbon\Carbon::createFromFormat('Y-m-d', $obj->age);
+                                    $age = $current_date->diffInYears($birthdate);
                                 @endphp
-                                <td>{{$age}}</td>
+                                    <td>{{$age}}</td>
+                                @else
+                                    <td>-</td>
+                                @endif
                                 <td>{{isset($obj->adopt_date) ? date('d/m/Y', strtotime($obj->adopt_date)) : ''}}</td>
                                 <td>
                                     <div class="d-flex justify-content-end">
@@ -75,7 +78,6 @@
                                     </div>
                                 </td>
                             </tr>
-                            @endif
                             @endforeach
                         </tbody>
                       </table>
@@ -98,18 +100,21 @@
                             </tr>
                           </thead>
                           <tbody class="table-border-bottom-0">
-                              @foreach($dogs as $obj)
-                              @if ($obj->status == 3)
+                              @foreach($dogsVerstorben as $obj)
                               <tr>
                                   <td><img src="/uploads/users/dogs/{{$obj->picture}}" style="object-fit: cover" width="60" height="60" alt="img"></td>
                                   <td>{{$obj->name}} ({{$obj->id}})</td>
                                   <td><a href="{{route('admin.customers.preview' , ['id' => $obj->customer->id])}}">{{$obj->customer->name}} ({{$obj->customer->id_number}})</a></td>
-                                  @php 
-                                  $current_date = \Carbon\Carbon::now();
-                                  $birthdate = \Carbon\Carbon::createFromFormat('Y-m-d', $obj->age);
-                                  $age = $current_date->diffInDays($birthdate);
-                                  @endphp
-                                  <td>{{$age}}</td>
+                                  @if($obj->age)
+                                      @php
+                                          $current_date = \Carbon\Carbon::now();
+                                          $birthdate = \Carbon\Carbon::createFromFormat('Y-m-d', $obj->age);
+                                          $age = $current_date->diffInYears($birthdate);
+                                      @endphp
+                                      <td>{{$age}}</td>
+                                  @else
+                                      <td>-</td>
+                                  @endif
                                   <td>{{date('d/m/Y', strtotime($obj->died))}}</td>
                                   <td>
                                       <div class="d-flex justify-content-end">
@@ -121,7 +126,6 @@
                                       </div>
                                   </td>
                               </tr>
-                              @endif
                               @endforeach
                           </tbody>
                         </table>
@@ -195,7 +199,7 @@
 
 <script>
     async function ajaxSearch(route, method, token, id, keyword)
-    {   
+    {
 
         $.ajax({
             url: route,
@@ -238,12 +242,12 @@
     {
         $("#deleteDiedDog #id").val(id);
         $("#deleteDiedDog").modal('show');
-    }   
+    }
 
     function deleteAdoptedDog(id)
     {
         $("#deleteAdoptedDog #id").val(id);
         $("#deleteAdoptedDog").modal('show');
-    }   
+    }
 </script>
 @endsection
