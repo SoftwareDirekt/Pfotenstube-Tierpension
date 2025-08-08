@@ -211,7 +211,7 @@ class CalendarController extends Controller
             foreach ($matrix as $r => $row) {
                 $free = true;
                 for ($d = $fromDay; $d <= $toDay; $d++) {
-                    if ($matrix[$r][$d] !== null) {
+                    if (isset($matrix[$r][$d]) && $matrix[$r][$d] !== null) {
                         $free = false;
                         break;
                     }
