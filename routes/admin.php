@@ -14,6 +14,8 @@ use App\Http\Controllers\TasksController;
 use App\Http\Controllers\ReservationsController;
 use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\TodosController;
+use App\Http\Controllers\VaccinationController;
+use App\Http\Controllers\NotificationController;
 use App\Models\Room;
 /*
 |--------------------------------------------------------------------------
@@ -88,6 +90,17 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::post('/customers/dog/friend/remove', [CustomersController::class, 'remove_friend'])->name('dog.remove.friend');
         Route::post('/customers/dog/friend/add', [CustomersController::class, 'add_friend'])->name('dog.friends.add');
         Route::post('/customers/dog/delete', [CustomersController::class, 'delete_dog'])->name('customers.delete_dog');
+
+        //Vaccination Management Routes
+        Route::get('/vaccinations/{dog}', [VaccinationController::class, 'index'])->name('vaccinations.index');
+        Route::post('/vaccinations', [VaccinationController::class, 'store'])->name('vaccinations.store');
+        Route::delete('/vaccinations/{vaccination}', [VaccinationController::class, 'destroy'])->name('vaccinations.destroy');
+        Route::post('/vaccinations/{vaccination}/toggle', [VaccinationController::class, 'toggleVaccinationStatus'])->name('vaccinations.toggle');
+
+        //Notification Management Routes
+        Route::get('/notifications', [NotificationController::class, 'getNotifications'])->name('notifications.index');
+        Route::post('/notifications/mark-as-read', [NotificationController::class, 'markAsRead'])->name('notifications.mark-as-read');
+        Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-as-read');
 
         //Room Management Routes
         Route::get('/rooms', [RoomsController::class, 'rooms'])->name('rooms');

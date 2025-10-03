@@ -76,7 +76,7 @@
         <div class="layout-page">
           <!-- Navbar -->
 
-          {{-- @include('admin.layouts.header') --}}
+          @include('admin.layouts.header')
 
           <!-- / Navbar -->
 
@@ -132,6 +132,7 @@
     <!-- Page JS -->
     <script src="assets/js/form-layouts.js"></script>
     <script src="assets/js/dashboards-crm.js"></script>
+    <script src="assets/js/notifications.js"></script>
 
     @include('util.flash')
     @yield('extra_js')

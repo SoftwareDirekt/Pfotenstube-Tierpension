@@ -30,6 +30,54 @@
         .parent-container {
             overflow: visible;
         }
+
+        /* Hide scrollbars for dog info modal */
+        #dogInfo .modal-body::-webkit-scrollbar {
+            display: none;
+        }
+        
+        #dogInfo .modal-body {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+
+        /* Ensure no horizontal overflow in modal content */
+        #dogInfo .modal-content {
+            overflow-x: hidden;
+        }
+
+        /* Fix table responsiveness to prevent horizontal scroll */
+        #dogInfo .table-responsive {
+            overflow-x: hidden;
+        }
+
+        #dogInfo .dogInfoTable {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        #dogInfo .dogInfoTable th,
+        #dogInfo .dogInfoTable td {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Fix vaccination form to prevent horizontal overflow */
+        #dogInfo .vaccination-form .row {
+            margin: 0;
+        }
+
+        #dogInfo .vaccination-form .col-md-4,
+        #dogInfo .vaccination-form .col-md-3,
+        #dogInfo .vaccination-form .col-md-2 {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+
+        /* Ensure form controls don't overflow */
+        #dogInfo .form-control {
+            max-width: 100%;
+        }
     </style>
 @endsection
 @section('body')
@@ -402,10 +450,14 @@
                                                             @endphp
                                                             <div
                                                                 class="card-body space-nill bg-extralight {{ $color }}">
-                                                                <div class="flex justify-between">
-                                                                    <p>
-                                                                        ID{{str_pad($item->dog_id, 3, '0', STR_PAD_LEFT)}}</p>
-                                                                    <p>{{$item->stays}}</p>
+                                                                <div class="flex justify-between align-items-center">
+                                                                    <p>ID{{str_pad($item->dog_id, 3, '0', STR_PAD_LEFT)}}</p>
+                                                                    <div class="d-flex align-items-center">
+                                                                        <div class="vaccination-indicator d-none me-2">
+                                                                            <i class="mdi mdi-needle text-danger fs-4"></i>
+                                                                        </div>
+                                                                        <p class="mb-0">{{$item->stays}}</p>
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
@@ -1010,8 +1062,8 @@
     {{-- Dog Information Modal --}}
     <div class="modal fade" id="dogInfo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content p-3 p-md-5">
-                <div class="modal-body p-md-0">
+            <div class="modal-content p-3 p-md-5" style="overflow: hidden;">
+                <div class="modal-body p-md-0" style="overflow-y: auto; overflow-x: hidden; max-height: 100vh; scrollbar-width: none; -ms-overflow-style: none;">
                     <div class="d-flex justify-content-between">
                         <div class="d-flex align-items-center">
                             <div>
@@ -1033,11 +1085,11 @@
                     </div>
                     <hr/>
 
-                    <div class="row">
+                    <div class="row" style="margin: 0; width: 100%;">
 
-                        <div class="col-md-8">
+                        <div class="col-md-8" style="padding-right: 15px; max-width: 100%;">
                             <table class="table table-striped text-cente infoModalHabitsTable"
-                                   style="width: 100%; margin-left:0;">
+                                   style="width: 100%; margin-left:0; table-layout: fixed;">
                                 <thead>
                                 <tr>
                                     <th></th>
@@ -1110,6 +1162,67 @@
                                     </tbody>
                                 </table>
                             </div>
+
+                            <hr style="width: 100%; height: 2px; background-color: grey;">
+                            
+                            <!-- Vaccinations Section -->
+                            <h4 class="text-start">Impfungen</h4>
+                            <div class="mb-3">
+                                <form id="vaccinationForm" class="vaccination-form py-2 mb-3" style="width:100%">
+                                    @csrf
+                                    <input type="hidden" id="vaccination_dog_id" name="dog_id">
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label mb-1">Impfstoff Name</label>
+                                            <input type="text" class="form-control" id="vaccine_name" name="vaccine_name" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label mb-1">Impfdatum</label>
+                                            <input type="date" class="form-control" id="vaccination_date" name="vaccination_date" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label mb-1">Nächste Impfung</label>
+                                            <input type="date" class="form-control" id="next_vaccination_date" name="next_vaccination_date" required>
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-primary w-100">Hinzufügen</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                            <p id="vaccination_saved" class="text-success hidden">
+                                <i class="far fa-check-circle"></i>
+                                Impfung erfolgreich gespeichert
+                            </p>
+                            <p id="vaccination_deleted" class="text-success hidden">
+                                <i class="far fa-check-circle"></i>
+                                Impfung erfolgreich gelöscht
+                            </p>
+                            <p id="vaccination_updated" class="text-success hidden">
+                                <i class="far fa-check-circle"></i>
+                                Impfstatus erfolgreich aktualisiert
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-striped dogInfoTable" id="vaccinationsTable">
+                                    <thead>
+                                    <tr>
+                                        <th>Impfstoffname</th>
+                                        <th>Impfdatum</th>
+                                        <th>Nächste Impfung</th>
+                                        <th>Status</th>
+                                        <th>Aktion</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr>
+                                        <td colspan="5" class="text-center">Keine Impfungen gefunden</td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <hr style="width: 100%; height: 2px; background-color: grey;">
+
                             <h4 class="text-start">Hunde Freunde</h4>
                             <div class="table-responsive">
                                 <table class="table table-striped dogInfoTable" id="hundeFriends">
@@ -1139,9 +1252,8 @@
                                     </tbody>
                                 </table>
                             </div>
-
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4" style="padding-left: 15px; max-width: 100%;">
                             {{-- Checkin/Checkout --}}
                             <div class="form-floating form-floating-outline mb-2">
                                 <input type="text" id="rangepicker" name="dates[]"
@@ -1970,7 +2082,7 @@
                             });
                             $("#hundeFriends tbody").html(html);
                         } else {
-                            var html = "<tr><td colspan='4' class='text-center'>No records found</td></tr>";
+                            var html = "<tr><td colspan='4' class='text-center'>Keine Datensätze gefunden</td></tr>";
                             $("#hundeFriends tbody").html(html);
                         }
 
@@ -1979,7 +2091,16 @@
                         $("#dogInfo #note").val(res.dog.note);
                         $("#dogInfo #note_id").val(res.dog.id);
                         $("#dogInfo #res_id").val(res.id);
+                        $("#vaccination_dog_id").val(dog.id);
 
+                        fetchVaccinations(dog.id);
+                        checkVaccinationAlerts(dog.id);
+                        
+                        // Refresh notifications after opening dog info
+                        setTimeout(() => {
+                            loadNotifications();
+                        }, 500);
+                        
                         $("#dogInfo").modal('show');
                     }
                 }
@@ -2152,6 +2273,9 @@
         fetchTodos();
 
         $(document).ready(function () {
+            // Check vaccination alerts for all dogs on page load
+            checkAllVaccinationAlerts();
+            
             // Update Note
             $("#submitNote").on('click', function () {
                 var note = $("#dogInfo #note").val();
@@ -2489,6 +2613,278 @@
         });
 
         fetchEventStatuses();
+
+        // Vaccination AJAX Functions
+        function fetchVaccinations(dogId) {
+            $.ajax({
+                url: `/admin/vaccinations/${dogId}`,
+                type: 'GET',
+                success: function(vaccinations) {
+                    displayVaccinations(vaccinations);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching vaccinations:', error);
+                    $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center">Fehler beim Laden der Impfungen</td></tr>');
+                }
+            });
+        }
+
+        function displayVaccinations(vaccinations) {
+            if (vaccinations.length > 0) {
+                var html = "";
+                vaccinations.forEach(function(vaccination) {
+                    var vaccinationDate = new Date(vaccination.vaccination_date);
+                    var nextDate = new Date(vaccination.next_vaccination_date);
+                    
+                    var vaccinationFormatted = vaccinationDate.toLocaleDateString('de-DE');
+                    var nextFormatted = nextDate.toLocaleDateString('de-DE');
+                    
+                    var statusCheckbox = '<div class="form-check d-flex align-items-center">' +
+                        '<input class="form-check-input vaccination-status" type="checkbox" data-id="' + vaccination.id + '"' + 
+                        (vaccination.is_vaccinated ? ' checked' : '') + '>' +
+                        '<label class="form-check-label ms-2">Geimpft</label>' +
+                        '</div>';
+                    
+                    html += '<tr data-id="' + vaccination.id + '">';
+                    html += '<td>' + vaccination.vaccine_name + '</td>';
+                    html += '<td>' + vaccinationFormatted + '</td>';
+                    html += '<td>' + nextFormatted + '</td>';
+                    html += '<td>' + statusCheckbox + '</td>';
+                    html += '<td><button class="btn btn-sm btn-danger delete-vaccination" data-id="' + vaccination.id + '"><i class="fa fa-trash"></i></button></td>';
+                    html += '</tr>';
+                });
+                $("#vaccinationsTable tbody").html(html);
+            } else {
+                $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center">Keine Impfungen gefunden</td></tr>');
+            }
+        }
+
+        // Handle vaccination form submission
+        $('#vaccinationForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                dog_id: $('#vaccination_dog_id').val(),
+                vaccine_name: $('#vaccine_name').val(),
+                vaccination_date: $('#vaccination_date').val(),
+                next_vaccination_date: $('#next_vaccination_date').val()
+            };
+
+            const submitButton = $(this).find('button[type="submit"]');
+            const originalText = submitButton.html();
+            const originalClass = submitButton.attr('class');
+            
+            // Show loading state
+            submitButton.html('<i class="fas fa-spinner fa-spin"></i> Speichern...').prop('disabled', true).removeClass('btn-primary').addClass('btn-secondary');
+            
+            // Show loading indicator on table
+            $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Speichere Impfung...</td></tr>');
+
+            $.ajax({
+                url: '/admin/vaccinations',
+                method: 'POST',
+                data: formData,
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        fetchVaccinations(formData.dog_id);
+                        checkVaccinationAlerts(formData.dog_id);
+                        $('#vaccinationForm')[0].reset();
+                        $("#vaccination_saved").show();
+                        setTimeout(() => {
+                            $("#vaccination_saved").hide();
+                        }, 3000);
+                        
+                        // Refresh notifications
+                        setTimeout(() => {
+                            loadNotifications();
+                        }, 500);
+                    } else {
+                        alert('Fehler: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Fehler beim Speichern der Impfung';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseJSON && xhr.responseJSON.errors) {
+                        errorMessage = Object.values(xhr.responseJSON.errors).flat().join('\n');
+                    }
+                    alert(errorMessage);
+                },
+                complete: function() {
+                    submitButton.html(originalText).prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary');
+                }
+            });
+        });
+
+        // Handle vaccination deletion
+        $(document).on('click', '.delete-vaccination', function() {
+            const vaccinationId = $(this).data('id');
+            const dogId = $('#vaccination_dog_id').val();
+            const deleteButton = $(this);
+            
+            if (confirm('Möchten Sie diese Impfung wirklich löschen?')) {
+                // Show loading state
+                deleteButton.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+                $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Lösche Impfung...</td></tr>');
+                
+                $.ajax({
+                    url: `/admin/vaccinations/${vaccinationId}`,
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            fetchVaccinations(dogId);
+                            checkVaccinationAlerts(dogId);
+                            $("#vaccination_deleted").show();
+                            setTimeout(() => {
+                                $("#vaccination_deleted").hide();
+                            }, 3000);
+                            
+                            // Refresh notifications
+                            setTimeout(() => {
+                                loadNotifications();
+                            }, 500);
+                        } else {
+                            alert('Fehler: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        let errorMessage = 'Fehler beim Löschen der Impfung';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        deleteButton.html('<i class="fa fa-trash"></i>').prop('disabled', false);
+                    }
+                });
+            }
+        });
+
+        // Handle vaccination status checkbox change
+        $(document).on('change', '.vaccination-status', function() {
+            const vaccinationId = $(this).data('id');
+            const isVaccinated = $(this).is(':checked');
+            const dogId = $('#vaccination_dog_id').val();
+            const checkbox = $(this);
+            
+            // Show loading state
+            checkbox.prop('disabled', true);
+            $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Aktualisiere Status...</td></tr>');
+            
+            $.ajax({
+                url: `/admin/vaccinations/${vaccinationId}/toggle`,
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                data: {
+                    is_vaccinated: isVaccinated ? 1 : 0
+                },
+                success: function(response) {
+                    if (response.success) {
+                        const dogId = $('#vaccination_dog_id').val();
+                        checkVaccinationAlerts(dogId);
+                        $("#vaccination_updated").show();
+                        setTimeout(() => {
+                            $("#vaccination_updated").hide();
+                        }, 3000);
+                        
+                        // Refresh notifications
+                        setTimeout(() => {
+                            loadNotifications();
+                        }, 500);
+                    } else {
+                        alert('Fehler: ' + response.message);
+                        // Revert checkbox state on error
+                        checkbox.prop('checked', !isVaccinated);
+                    }
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Fehler beim Aktualisieren des Impfstatus';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    alert(errorMessage);
+                    // Revert checkbox state on error
+                    checkbox.prop('checked', !isVaccinated);
+                },
+                complete: function() {
+                    // Reset checkbox state
+                    checkbox.prop('disabled', false);
+                }
+            });
+        });
+
+        // Check vaccination alerts for all dogs on page load
+        function checkAllVaccinationAlerts() {
+            // Get all dog IDs from the page
+            $('.child').each(function() {
+                const dogId = $(this).attr('id').replace('child_', '');
+                if (dogId) {
+                    checkVaccinationAlerts(dogId);
+                }
+            });
+        }
+
+        // Check vaccination alerts for a specific dog
+        function checkVaccinationAlerts(dogId) {
+            $.ajax({
+                url: `/admin/vaccinations/${dogId}`,
+                method: 'GET',
+                success: function(vaccinations) {
+                    const today = new Date();
+                    const upcomingVaccinations = vaccinations.filter(vaccination => {
+                        const nextDate = new Date(vaccination.next_vaccination_date);
+                        const diffTime = nextDate - today;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        return diffDays >= 0 && diffDays <= 3 && !vaccination.is_vaccinated;
+                    });
+
+                    const indicator = $(`#child_${dogId} .vaccination-indicator`);
+                    if (upcomingVaccinations.length > 0) {
+                        indicator.removeClass('d-none');
+                    } else {
+                        indicator.addClass('d-none');
+                    }
+
+                    // Display alerts for upcoming vaccinations in modal
+                    if (upcomingVaccinations.length > 0) {
+                        let alertHtml = '<div class="alert alert-danger mx-4 shadow-sm">';
+                        alertHtml += '<h6 class="text-danger fw-bolder mb-2"><i class="mdi mdi-needle fs-5 fw-bolder text-danger"></i> Anstehende Impfungen</h6>';
+
+                        upcomingVaccinations.forEach(vaccination => {
+                            const nextDate = new Date(vaccination.next_vaccination_date);
+                            const diffTime = nextDate - today;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            alertHtml += `<div class="ms-3 mb-1">`;
+                            alertHtml += `• <strong>${vaccination.vaccine_name}</strong> - Fällig in ${diffDays} Tag${diffDays !== 1 ? 'en' : ''} (${nextDate.toLocaleDateString('de-DE')})`;
+                            alertHtml += `</div>`;
+                        });
+
+                        alertHtml += '</div>';
+                        
+                        // Remove existing vaccination alerts
+                        $('#dogInfo .alert-danger').remove();
+                        
+                        // Add new alert at the top of modal body
+                        $('#dogInfo .modal-body').prepend(alertHtml);
+                    } else {
+                        // Remove vaccination alerts if none
+                        $('#dogInfo .alert-danger').remove();
+                    }
+                }
+            });
+        }
 
     </script>
 @endsection

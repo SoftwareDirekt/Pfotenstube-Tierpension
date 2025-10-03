@@ -57,4 +57,14 @@ class Dog extends Model
     {
         return $this->hasMany(Pickup::class, 'dog_id', 'id');
     }
+
+    public function vaccinations()
+    {
+        return $this->hasMany(Vaccination::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
 }

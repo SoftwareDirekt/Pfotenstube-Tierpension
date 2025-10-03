@@ -369,7 +369,97 @@ ol#selectable li{
 .scrumboard .card.room{
     background-color: #f5f5f5!important;
     border: 1px solid #ccc;
-    box-shadow: 0 0.125rem 0.625rem 0 rgba(76, 78, 100, 0.01);
+}
+
+/* Vaccination indicator styles */
+.vaccination-indicator {
+    z-index: 1;
+}
+.vaccination-indicator i {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Notification dropdown styling */
+.dropdown-notifications .dropdown-menu {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.dropdown-notifications-list {
+    max-height: 350px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+
+.dropdown-notifications-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-notifications-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dropdown-notifications-list::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 3px;
+}
+
+.dropdown-notifications-list::-webkit-scrollbar-thumb:hover {
+    background-color: #999;
+}
+
+.notification-item.vaccination-alert.bg-light {
+    background-color: #e9ecef !important;
+}
+
+.notification-item.vaccination-alert:hover {
+    background-color: #dee2e6 !important;
+}
+
+/* Header styling - hide on scroll and proper spacing */
+#layout-navbar {
+    background-color: white !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    transition: transform 0.3s ease-in-out !important;
+}
+
+#layout-navbar.hidden {
+    transform: translateY(-100%) !important;
+}
+
+/* Notification bell animation */
+.vibrate {
+    animation: bellPulse 1s ease-in-out infinite;
+}
+
+@keyframes bellPulse {
+    0% { 
+        transform: scale(1);
+        color: #828393;
+    }
+    50% { 
+        transform: scale(1.1);
+        color: #ff6b6b;
+    }
+    100% { 
+        transform: scale(1);
+        color: #828393;
+    }
 }
 .adoptedBG{
     background: #72E128;
