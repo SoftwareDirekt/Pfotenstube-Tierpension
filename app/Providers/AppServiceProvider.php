@@ -28,17 +28,18 @@ class AppServiceProvider extends ServiceProvider
         if (
             Schema::hasTable('customers') &&
             Schema::hasTable('dogs') &&
-            Schema::hasTable('reservations')
+            Schema::hasTable('reservations') &&
+            Schema::hasColumn('dogs', 'deleted_at') 
         ) {
             $total_customers = Customer::count();
             $total_dogs = Dog::count();
             $total_reservations = Reservation::where('status', 3)->count();
-
+    
             View::share('total_customers', $total_customers);
             View::share('total_dogs', $total_dogs);
             View::share('total_reservations_count', $total_reservations);
         }
-
+    
         Paginator::useBootstrap();
     }
 }

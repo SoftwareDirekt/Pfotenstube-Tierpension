@@ -5,322 +5,421 @@
 @endsection
 
 @section('extra_css')
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .monatsplan-table {
+        width: 100%;
+        border-collapse: collapse;
     }
-
-    table {
-      width: 60%;
-      border-collapse: collapse;
+    .monatsplan-table th,
+    .monatsplan-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: center;
+        vertical-align: top;
     }
-
-    th, td {
-      border: 1px solid #ccc;
-      padding: 5px;
-      text-align: center;
+    .monatsplan-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
     }
-
-    th {
-      background-color: #f4f4f4;
-      font-weight: bold;
+    .monatsplan-table td.day-column {
+        width: 60px;
+        font-weight: 600;
+        background-color: #f8f9fa;
     }
-
-    td {
-      vertical-align: top;
+    .shift-cell {
+        min-height: 40px;
+        cursor: pointer;
+        transition: background-color 0.2s;
     }
-
-    .shift-column {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    .shift-cell:hover {
+        background-color: rgba(0,0,0,0.03);
     }
-
-    ul {
-      padding: 0;
-      margin: 5px 0;
-      list-style: none;
+    .shift-pill {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        margin: 2px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: opacity 0.2s;
     }
-
-    ul li {
-      margin: 5px 0;
+    .shift-pill:hover {
+        opacity: 0.85;
     }
-
-    button {
-      margin-top: 5px;
-      padding: 5px 10px;
-      background-color: #f4f4f4;
-      color: #007bff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-
+    .shift-pill .time {
+        font-weight: 600;
     }
-
-
-    .month-navigation {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 20px;
-    font-family: Arial, sans-serif;
-    align-items:center;
+    .shift-pill .name {
+        font-weight: 400;
     }
-
-    .btn-arrow{
-    margin:0;
+    .add-shift-btn {
+        color: #ccc;
+        background: #f5f5f5;
+        border: 1px dashed #ddd;
+        padding: 6px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
     }
-
-
-    .month-display {
-        font-size: 18px;
-        font-weight: bold;
-        margin: 0 50px; /* Reduced the margin to decrease the gap between the arrows */
+    .add-shift-btn:hover {
+        background: #e9ecef;
+        color: #666;
+        border-color: #ccc;
     }
-
-  </style>
+    .month-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    .month-nav .month-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        min-width: 200px;
+        text-align: center;
+    }
+    .month-nav .btn-nav {
+        background: none;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 1.5rem;
+    }
+    .month-nav .btn-nav:hover {
+        background: #e9ecef;
+    }
+    .weekend-row {
+        background-color: #fafafa;
+    }
+</style>
 @endsection
 
 @section('body')
-
-
-    <div class="month-navigation">
-
-      <form action="{{route('admin.employee.track.monatsplan')}}" method="GET">
-        <input type="hidden" name="month" value="{{ $currentMonth }}">
-        <input type="hidden" name="action" value="prev">
-
-        <button type="submit" class="btn-arrow"><i class="fas fa-arrow-left"></i></button> <!-- Previous month -->
-      </form>
-      <span id="monthDisplay "class="month-display text-danger">{{$deMonth}}</span> <!-- Current month -->
-      <form action="{{ route('admin.employee.track.monatsplan') }}" method="GET">
-        <input type="hidden" name="month" value="{{ $currentMonth }}">
-        <input type="hidden" name="action" value="next">
-        <button type="submit" class="btn-arrow"><i class="fas fa-arrow-right"></i></button> <!-- Next month -->
-    </form>
-
-    </div>
-
-  <br>
-    <div class="table">
-      <table class='table'>
-        <thead>
-            <tr>
-                <th>Tag</th> <!-- Day -->
-                <th>Frühschicht</th> <!-- Morning Shift -->
-                <th>Nachtschicht</th> <!-- Evening Shift -->
-            </tr>
-        </thead>
-        <tbody>
-          @for ($day = 1; $day <= 31; $day++)
-              <tr id="dayFetch-{{ $day }}">
-                  <td>{{ $day }}</td>
-
-                  {{-- Frühschicht (Morning Shift) --}}
-                  <td>
-                      <div class="clickable-shift" data-bs-toggle="modal" data-bs-target="#shiftModal"
-                      onclick="openModal('morning', '{{ $day }}')" style="cursor: pointer;">
-                          @php
-                              $currentMonthEvents = $events[$currentMonth] ?? collect();
-                              $morningEmployees = $currentMonthEvents->filter(function($event) use ($day) {
-                                  return $event->shift === 'morning' && \Carbon\Carbon::parse($event->start)->day == $day;
-                              });
-                          @endphp
-                          @if ($morningEmployees->isNotEmpty())
-                              @foreach ($morningEmployees as $event)
-                                  <div>
-                                      (<strong>{{ \Carbon\Carbon::parse($event->start)->format('H:i') }}</strong>) -
-                                      (<strong>{{ \Carbon\Carbon::parse($event->end)->format('H:i') }}</strong>)
-                                      {{ $event->status }} (<strong>{{ $event->user->name }}</strong>)
-                                  </div>
-                              @endforeach
-                          @else
-                          <button
-                              class="btn no-bg w-100 py-2 fw-bold"
-                              data-bs-toggle="modal"
-                              style="color:#ddd;background: #eaeaea;border-radius:0"
-                              data-bs-target="#shiftModal"
-                              data-day="{{ $day }}"
-                              data-month="{{ $currentMonth }}">
-                              Add
-                          </button>
-
-                          @endif
-                      </div>
-                  </td>
-
-                  {{-- Spätschicht (Evening Shift) --}}
-                  <td>
-                    <div class="clickable-shift" data-bs-toggle="modal" data-bs-target="#shiftModal"
-                    onclick="openModal('evening', '{{ $day }}')" style="cursor: pointer;">
-                         @php
-                         // Get the events for the current month
-                         $currentMonthEvents = $events[$currentMonth] ?? collect();
-                         $eveningEmployees = $currentMonthEvents->filter(function($event) use ($day) {
-                             return $event->shift === 'evening' && \Carbon\Carbon::parse($event->start)->day == $day;
-                         });
-                     @endphp
-                        @if ($eveningEmployees->isNotEmpty())
-                            {{-- Loop through the evening shifts and display employee names --}}
-                            @foreach ($eveningEmployees as $event)
-                                <div>
-                                    (<strong>{{ \Carbon\Carbon::parse($event->start)->format('H:i') }}</strong>) -
-                                    (<strong>{{ \Carbon\Carbon::parse($event->end)->format('H:i') }}</strong>)
-                                    {{ $event->status }} (<strong>{{ $event->user->name }}</strong>)
-                                </div>
-                            @endforeach
-                        @else
-                        <button
-                              class="btn no-bg w-100 py-2 fw-bold"
-                              data-bs-toggle="modal"
-                              style="color:#ddd;background: #eaeaea;border-radius:0"
-                              data-bs-target="#shiftModal"
-                              data-day="{{ $day }}"
-                              data-month="{{ $currentMonth }}">
-                              Add
-                          </button>
-                     <!-- Add -->
-                        @endif
-                    </div>
-                </td>
-
-              </tr>
-          @endfor
-        </tbody>
-    </table>
-
-    </div>
-
-    <!-- Modal for adding shift -->
-    <div class="modal fade" id="shiftModal" tabindex="-1" aria-labelledby="shiftModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="shiftModalLabel">Schicht hinzufügen</h5> <!-- Add Shift -->
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="container-fluid px-4 py-4">
+    <div class="card">
+        <div class="card-body">
+            {{-- Month Navigation --}}
+            <div class="month-nav">
+                <form action="{{ route('admin.employee.track.monatsplan') }}" method="GET" class="d-inline">
+                    <input type="hidden" name="month" value="{{ $currentMonth }}">
+                    <input type="hidden" name="action" value="prev">
+                    <button type="submit" class="btn-nav text-success">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                </form>
+                
+                <span class="month-title text-danger">{{ $germanMonth }}</span>
+                
+                <form action="{{ route('admin.employee.track.monatsplan') }}" method="GET" class="d-inline">
+                    <input type="hidden" name="month" value="{{ $currentMonth }}">
+                    <input type="hidden" name="action" value="next">
+                    <button type="submit" class="btn-nav text-success">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
             </div>
-            <div class="modal-body">
-              <form action="{{ route('admin.storeEmployees.monatsplan') }}" method="POST">
-                @csrf
-                <!-- Hidden input to store the selected day -->
-                <input type="hidden" name="daySelected" id="daySelected">
 
-                <!-- Select Employees -->
-                <div class="mb-3">
-                    <label for="employees" class="form-label">Mitarbeiter auswählen</label>
-                    <select id="employees" name="employees[]" class="form-select" style="height:200px;font-size:17px;" multiple required>
-                        @foreach($employees as $employee)
-                            <option value="{{ $employee->id }}" style="margin-bottom: 6px;font-weight:600">{{ $employee->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <!-- Start Date & Time -->
-                <div class="mb-3">
-                    <label for="startDateTime" class="form-label">Startdatum und -zeit</label>
-                    <input
-                        type="datetime-local"
-                        name="startDateTime"
-                        id="startDateTime"
-                        class="form-control"
-                        required
-                        min=""
-                        max=""
-                    >
-                </div>
-
-                <!-- End Date & Time -->
-                <div class="mb-3">
-                    <label for="endDateTime" class="form-label">Enddatum und -zeit</label>
-                    <input
-                        type="datetime-local"
-                        name="endDateTime"
-                        id="endDateTime"
-                        class="form-control"
-                        required
-                        min=""
-                        max=""
-                    >
-                </div>
-
-                <!-- Shift Selection -->
-                <div class="mb-3">
-                    <label for="shiftType" class="form-label">Schicht</label>
-                    <select id="shiftType" name="shiftType" class="form-select" required>
-                        <option value="morning">Morgen</option> <!-- Morning -->
-                        <option value="evening">Abend</option> <!-- Evening -->
-                    </select>
-                </div>
-
-                <!-- Submit Button -->
-                <button type="submit" class="btn btn-primary">Schicht speichern</button>
-            </form>
-
+            {{-- Monatsplan Table --}}
+            <div class="table-responsive">
+                <table class="monatsplan-table">
+                    <thead>
+                        <tr>
+                            <th>Tag</th>
+                            <th>Frühschicht</th>
+                            <th>Spätschicht</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for ($day = 1; $day <= $daysInMonth; $day++)
+                            @php
+                                $date = $startOfMonth->copy()->day($day);
+                                $isWeekend = $date->isWeekend();
+                                $dateStr = $date->format('Y-m-d');
+                                $dayName = $date->locale('de')->shortDayName;
+                                $morningEvents = $eventsByDayAndShift[$day]['morning'] ?? [];
+                                $eveningEvents = $eventsByDayAndShift[$day]['evening'] ?? [];
+                            @endphp
+                            <tr class="{{ $isWeekend ? 'weekend-row' : '' }}">
+                                <td class="day-column">
+                                    <div>{{ $day }}</div>
+                                    <small class="text-muted">{{ $dayName }}</small>
+                                </td>
+                                
+                                {{-- Morning Shift --}}
+                                <td class="shift-cell" 
+                                    onclick="openCreateModal('morning', '{{ $dateStr }}')"
+                                    data-day="{{ $day }}" 
+                                    data-shift="morning">
+                                    @if (count($morningEvents) > 0)
+                                        @foreach ($morningEvents as $event)
+                                            <div class="shift-pill" 
+                                                 style="background-color: {{ $event->backgroundColor }}; color: {{ $event->textColor }};"
+                                                 onclick="event.stopPropagation(); openEditModal({{ $event->id }}, '{{ $dateStr }}', 'morning', '{{ Carbon\Carbon::parse($event->start)->format('H:i') }}', '{{ Carbon\Carbon::parse($event->end)->format('H:i') }}', {{ $event->uid ?? 'null' }})">
+                                                <span class="time">{{ Carbon\Carbon::parse($event->start)->format('H:i') }}-{{ Carbon\Carbon::parse($event->end)->format('H:i') }}</span>
+                                                <span class="name">({{ $event->user?->name ?? 'Unbekannt' }})</span>
+                                            </div>
+                                        @endforeach
+                                    @else
+                                        <span class="add-shift-btn">+ Hinzufügen</span>
+                                    @endif
+                                </td>
+                                
+                                {{-- Evening Shift --}}
+                                <td class="shift-cell" 
+                                    onclick="openCreateModal('evening', '{{ $dateStr }}')"
+                                    data-day="{{ $day }}" 
+                                    data-shift="evening">
+                                    @if (count($eveningEvents) > 0)
+                                        @foreach ($eveningEvents as $event)
+                                            <div class="shift-pill" 
+                                                 style="background-color: {{ $event->backgroundColor }}; color: {{ $event->textColor }};"
+                                                 onclick="event.stopPropagation(); openEditModal({{ $event->id }}, '{{ $dateStr }}', 'evening', '{{ Carbon\Carbon::parse($event->start)->format('H:i') }}', '{{ Carbon\Carbon::parse($event->end)->format('H:i') }}', {{ $event->uid ?? 'null' }})">
+                                                <span class="time">{{ Carbon\Carbon::parse($event->start)->format('H:i') }}-{{ Carbon\Carbon::parse($event->end)->format('H:i') }}</span>
+                                                <span class="name">({{ $event->user?->name ?? 'Unbekannt' }})</span>
+                                            </div>
+                                        @endforeach
+                                    @else
+                                        <span class="add-shift-btn">+ Hinzufügen</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endfor
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 </div>
 
+{{-- Create Shift Modal --}}
+<div class="modal fade" id="createShiftModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Schicht hinzufügen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <form id="createShiftForm" action="{{ route('admin.monatsplan.store') }}" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <input type="hidden" id="createDate" name="date">
+                    <input type="hidden" id="createShift" name="shift">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-medium" id="createDateDisplay"></label>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Mitarbeiter <span class="text-danger">*</span></label>
+                        <select class="form-select" id="createEmployees" name="employees[]" multiple required>
+                            @foreach($employees as $employee)
+                                <option value="{{ $employee->id }}">{{ $employee->name }}</option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">Mehrfachauswahl möglich</small>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Startzeit <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="createStartTime" name="start_time" placeholder="HH:mm" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Endzeit <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="createEndTime" name="end_time" placeholder="HH:mm" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">Hinzufügen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
+{{-- Edit Shift Modal --}}
+<div class="modal fade" id="editShiftModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Schicht bearbeiten</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <form id="editShiftForm" method="POST">
+                @csrf
+                @method('PUT')
+                <div class="modal-body">
+                    <input type="hidden" id="editDate" name="date">
+                    <input type="hidden" id="editShift" name="shift">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-medium" id="editDateDisplay"></label>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Mitarbeiter <span class="text-danger">*</span></label>
+                        <select class="form-select" id="editEmployee" name="uid" required>
+                            @foreach($employees as $employee)
+                                <option value="{{ $employee->id }}">{{ $employee->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Startzeit <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editStartTime" name="start_time" placeholder="HH:mm" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Endzeit <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editEndTime" name="end_time" placeholder="HH:mm" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex flex-column">
+                    <div class="d-flex w-100 gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                        <button type="submit" class="btn btn-primary">Aktualisieren</button>
+                    </div>
+                    <hr class="w-100 my-3">
+                    <button type="button" class="btn btn-outline-danger w-100" id="deleteShiftBtn">
+                        <i class="bx bx-trash me-1"></i> Schicht löschen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- Delete Form (hidden) --}}
+<form id="deleteShiftForm" method="POST" style="display: none;">
+    @csrf
+    @method('DELETE')
+</form>
 @endsection
 
 @section('extra_js')
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>
 <script>
-  function openModal(shiftType, day) {
-    document.getElementById('shiftType').value = shiftType;
-
-    // Get the current year and month
-    var cur_month = @json($currentMonth);
-    if(cur_month)
-    {
-      const [monthName, year] = cur_month.split(' ');
-      const monthIndex = new Date(`${monthName} ${day}, 2021`).getMonth();
-      var selectedDate = new Date(year, monthIndex, day);
-
+document.addEventListener('DOMContentLoaded', function() {
+    const createModal = new bootstrap.Modal(document.getElementById('createShiftModal'));
+    const editModal = new bootstrap.Modal(document.getElementById('editShiftModal'));
+    
+    let currentEditId = null;
+    
+    // Flatpickr config
+    const timeConfig = {
+        enableTime: true,
+        noCalendar: true,
+        dateFormat: 'H:i',
+        time_24hr: true,
+        minuteIncrement: 15,
+        allowInput: true,
+        locale: 'de'
+    };
+    
+    const createStartPicker = flatpickr('#createStartTime', timeConfig);
+    const createEndPicker = flatpickr('#createEndTime', timeConfig);
+    const editStartPicker = flatpickr('#editStartTime', timeConfig);
+    const editEndPicker = flatpickr('#editEndTime', timeConfig);
+    
+    // Format date for display
+    function formatDateDisplay(dateStr) {
+        const date = new Date(dateStr + 'T00:00:00');
+        return date.toLocaleDateString('de-AT', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
     }
-    else{
-      const now = new Date();
-      var selectedDate = new Date(now.getFullYear(), now.getMonth(), day);
+    
+    // Get shift label
+    function getShiftLabel(shift) {
+        return shift === 'morning' ? 'Frühschicht' : 'Spätschicht';
     }
-
-    // Format the date as "YYYY-MM-DD"
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0'); // Adjust for zero-based month
-    const date = String(selectedDate.getDate()).padStart(2, '0');
-    const dateOnly = `${year}-${month}-${date}`;
-
-
-    document.getElementById('daySelected').value = day;
-
-    // Default start and end times
-    const defaultStartTime = shiftType === 'morning' ? "09:00" : "14:00";
-    const defaultEndTime = shiftType === 'morning' ? "13:00" : "18:00";
-
-    // Populate modal inputs with calculated values
-    document.getElementById('startDateTime').value = `${dateOnly}T${defaultStartTime}`;
-    document.getElementById('startDateTime').min = `${dateOnly}T00:00`;
-    document.getElementById('startDateTime').max = `${dateOnly}T23:59`;
-
-    document.getElementById('endDateTime').value = `${dateOnly}T${defaultEndTime}`;
-    document.getElementById('endDateTime').min = `${dateOnly}T00:00`;
-    document.getElementById('endDateTime').max = `${dateOnly}T23:59`;
-
-    // Set the shiftType in dropdown (hide if it's a morning or evening shift)
-    const shiftTypeDropdown = document.getElementById('shiftType');
-    const shiftTypeLabel = document.querySelector('label[for="shiftType"]');
-
-
-    if (shiftType === 'morning' || shiftType === 'evening') {
-        shiftTypeDropdown.value = shiftType; // Set the default shift type
-        shiftTypeDropdown.style.display = 'none'; // Hide the dropdown
-        shiftTypeLabel.style.display = 'none'; // Hide the label
-    } else {
-        shiftTypeDropdown.style.display = 'block';
-        shiftTypeLabel.style.display = 'block';
+    
+    // Default times for shifts
+    function getDefaultTimes(shift) {
+        if (shift === 'morning') {
+            return { start: '06:00', end: '14:00' };
+        }
+        return { start: '14:00', end: '22:00' };
     }
-  }
+    
+    // Open create modal
+    window.openCreateModal = function(shift, dateStr) {
+        document.getElementById('createDate').value = dateStr;
+        document.getElementById('createShift').value = shift;
+        document.getElementById('createDateDisplay').textContent = formatDateDisplay(dateStr) + ' - ' + getShiftLabel(shift);
+        
+        // Reset form
+        document.getElementById('createShiftForm').reset();
+        document.getElementById('createDate').value = dateStr;
+        document.getElementById('createShift').value = shift;
+        
+        // Reset employees select
+        $('#createEmployees').val(null).trigger('change');
+        
+        // Set default times based on shift
+        const defaults = getDefaultTimes(shift);
+        createStartPicker.setDate(defaults.start, true, 'H:i');
+        createEndPicker.setDate(defaults.end, true, 'H:i');
+        
+        createModal.show();
+    };
+    
+    // Open edit modal
+    window.openEditModal = function(eventId, dateStr, shift, startTime, endTime, uid) {
+        currentEditId = eventId;
+        
+        document.getElementById('editDate').value = dateStr;
+        document.getElementById('editShift').value = shift;
+        document.getElementById('editDateDisplay').textContent = formatDateDisplay(dateStr) + ' - ' + getShiftLabel(shift);
+        document.getElementById('editEmployee').value = uid;
+        
+        editStartPicker.setDate(startTime, true, 'H:i');
+        editEndPicker.setDate(endTime, true, 'H:i');
+        
+        // Update form action
+        document.getElementById('editShiftForm').action = '{{ url("admin/monatsplan") }}/' + eventId;
+        
+        editModal.show();
+    };
+    
+    // Delete shift
+    document.getElementById('deleteShiftBtn').addEventListener('click', function() {
+        if (!currentEditId) return;
+        
+        if (confirm('Möchten Sie diese Schicht wirklich löschen?')) {
+            const deleteForm = document.getElementById('deleteShiftForm');
+            deleteForm.action = '{{ url("admin/monatsplan") }}/' + currentEditId;
+            deleteForm.submit();
+        }
+    });
+    
+    // Reset modals on close
+    document.getElementById('createShiftModal').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('createShiftForm').reset();
+        $('#createEmployees').val(null).trigger('change');
+        createStartPicker.clear();
+        createEndPicker.clear();
+    });
+    
+    document.getElementById('editShiftModal').addEventListener('hidden.bs.modal', function() {
+        currentEditId = null;
+        editStartPicker.clear();
+        editEndPicker.clear();
+    });
+});
 </script>
-
 @endsection

@@ -385,7 +385,170 @@
                     </table>
                 </div>
             </div>
+
+            <hr>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5>Impfungen</h5>
+                    </div>
+                    <div class="col-md-6 d-flex justify-content-end">
+                        <button type="button" class="no-style" style="color: #5a5fe0" data-bs-toggle="modal" data-bs-target="#addVaccinationModal">
+                            <i class="fa fa-plus"></i>
+                            Impfung hinzufügen
+                        </button>
+                    </div>
+                </div>
+                <hr>
+                <p id="vaccination_saved" class="text-success" style="display:none;">
+                    <i class="far fa-check-circle"></i>
+                    Impfung erfolgreich gespeichert
+                </p>
+                <p id="vaccination_deleted" class="text-success" style="display:none;">
+                    <i class="far fa-check-circle"></i>
+                    Impfung erfolgreich gelöscht
+                </p>
+                <p id="vaccination_updated" class="text-success" style="display:none;">
+                    <i class="far fa-check-circle"></i>
+                    Impfstatus erfolgreich aktualisiert
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="vaccinationsTable">
+                        <thead>
+                            <tr>
+                                <th>Impfstoffname</th>
+                                <th>Impfdatum</th>
+                                <th>Nächste Impfung</th>
+                                <th>Status</th>
+                                <th>Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if($dog->vaccinations && count($dog->vaccinations) > 0)
+                                @foreach($dog->vaccinations as $vaccination)
+                                <tr data-id="{{$vaccination->id}}">
+                                    <td>{{$vaccination->vaccine_name}}</td>
+                                    <td>{{\Carbon\Carbon::parse($vaccination->vaccination_date)->format('d.m.Y')}}</td>
+                                    <td>{{\Carbon\Carbon::parse($vaccination->next_vaccination_date)->format('d.m.Y')}}</td>
+                                    <td>
+                                        <div class="form-check d-flex align-items-center">
+                                            <input class="form-check-input vaccination-status" type="checkbox" data-id="{{$vaccination->id}}" {{$vaccination->is_vaccinated ? 'checked' : ''}}>
+                                            <label class="form-check-label ms-2">Geimpft</label>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger delete-vaccination" data-id="{{$vaccination->id}}">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                @endforeach
+                            @else
+                            <tr>
+                                <td colspan="5" class="text-center">Keine Impfungen gefunden</td>
+                            </tr>
+                            @endif
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
+    </div>
+
+    {{-- Documents Section --}}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Externe Dokumente</h5>
+                </div>
+                <div class="col-md-6 d-flex justify-content-end">
+                    <button type="button" class="no-style" style="color: #5a5fe0" data-bs-toggle="modal" data-bs-target="#addDocumentModal">
+                        <i class="fa fa-plus"></i>
+                        Dokument hinzufügen
+                    </button>
+                </div>
+            </div>
+            <hr>
+            <p id="document_saved" class="text-success" style="display:none;">
+                <i class="far fa-check-circle"></i>
+                Dokument erfolgreich hochgeladen
+            </p>
+            <p id="document_deleted" class="text-success" style="display:none;">
+                <i class="far fa-check-circle"></i>
+                Dokument erfolgreich gelöscht
+            </p>
+            <div class="table-responsive">
+                <table class="table table-striped" id="documentsTable">
+                    <thead>
+                        <tr>
+                            <th>Dokumentname</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if($dog->documents && count($dog->documents) > 0)
+                            @foreach($dog->documents as $document)
+                            <tr data-id="{{$document->id}}">
+                                <td>
+                                    <a href="{{ asset('uploads/users/documents/' . $document->file_path) }}" target="_blank" style="color: #5a5fe0; text-decoration: none;">
+                                        {{$document->name}}
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ asset('uploads/users/documents/' . $document->file_path) }}" download class="btn btn-sm btn-info me-1" title="Herunterladen">
+                                        <i class="fa fa-download"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-danger delete-document" data-id="{{$document->id}}" title="Löschen">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            @endforeach
+                        @else
+                        <tr>
+                            <td colspan="2" class="text-center">Keine Dokumente gefunden</td>
+                        </tr>
+                        @endif
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Add Document Modal --}}
+<div class="modal fade" id="addDocumentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-simple modal-enable-otp modal-xl modal-dialog-centered">
+      <div class="modal-content p-3 p-md-5">
+        <div class="modal-body p-md-0">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <div class="mb-4">
+            <h3 class="mb-2 pb-1">Dokument hinzufügen</h3>
+          </div>
+          <form id="documentForm" class="row g-3" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" id="document_dog_id" name="dog_id" value="{{$dog->id}}">
+            <div class="col-md-6">
+                <div class="form-floating form-floating-outline mb-4">
+                    <input type="text" class="form-control" id="document_name" name="name" placeholder="Dokumentname" required>
+                    <label for="document_name">Dokumentname</label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating form-floating-outline mb-4">
+                    <input type="file" class="form-control" id="document_file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
+                    <label for="document_file">Datei (PDF, DOC, DOCX, JPG, PNG - Max. 10MB)</label>
+                </div>
+            </div>
+            <hr>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
 </div>
 
@@ -603,9 +766,10 @@
                   @foreach ($dogs as $obj)
                     @if(isset($obj->customer))
                     @if($obj->id != $dog->id && !in_array($obj->id, $dog->friend_ids))
-                    <option data-tokens="ketchup " value="{{$obj->id}}" {{ in_array($obj->id, $dog->friend_ids) ? 'selected' : '' }} >
-                        <img src="uploads/users/dogs/{{$obj->picture}}" alt="#">
-                        {{ $obj->name }} ({{$obj->customer->name}} - {{$obj->customer->phone }})
+                    <option
+                      data-tokens="ketchup"
+                      value="{{$obj->id}}"
+                      data-content="<img src='uploads/users/dogs/{{$obj->picture}}' class='me-2' style='width:24px;height:24px;border-radius:50%'> {{ $obj->name }} ({{$obj->customer->name}} - {{$obj->customer->phone }})">
                     </option>
                     @endif
                     @endif
@@ -633,12 +797,68 @@
     </div>
 </div>
 
+{{-- Add Vaccination Modal --}}
+<div class="modal fade" id="addVaccinationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-simple modal-enable-otp modal-xl modal-dialog-centered">
+      <div class="modal-content p-3 p-md-5">
+        <div class="modal-body p-md-0">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <div class="mb-4">
+            <h3 class="mb-2 pb-1">Impfung hinzufügen</h3>
+          </div>
+          <form id="vaccinationForm" class="row g-3">
+            @csrf
+            <input type="hidden" id="vaccination_dog_id" name="dog_id" value="{{$dog->id}}">
+            <div class="col-md-4">
+                <div class="form-floating form-floating-outline mb-4">
+                    <input type="text" class="form-control" id="vaccine_name" name="vaccine_name" placeholder="Impfstoff Name" required>
+                    <label for="vaccine_name">Impfstoff Name</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-floating form-floating-outline mb-4">
+                    <input type="date" class="form-control" id="vaccination_date" name="vaccination_date" placeholder="Impfdatum" required>
+                    <label for="vaccination_date">Impfdatum</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-floating form-floating-outline mb-4">
+                    <input type="date" class="form-control" id="next_vaccination_date" name="next_vaccination_date" placeholder="Nächste Impfung" required>
+                    <label for="next_vaccination_date">Nächste Impfung</label>
+                </div>
+            </div>
+            <hr>
+            <div class="col-12 d-flex ">
+                <button type="submit" class="btn btn-primary me-sm-3 me-1">
+                    Hinzufügen
+                </button>
+                <button
+                    type="reset"
+                    class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal"
+                    aria-label="Close">
+                    Stornieren
+                </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+</div>
+
 @endsection
 @section('extra_js')
 <script src="assets/vendor/libs/bootstrap-select/bootstrap-select.js"></script>
 <script src="assets/vendor/libs/select2/select2.js"></script>
 
 <script>
+    $('#addFriendsModal').on('shown.bs.modal', function () {
+        const $el = $('#dog_friends');
+        if ($el.data('selectpicker')) {
+            $el.selectpicker('destroy');
+        }
+        $el.selectpicker();
+    });
     function addPickup()
     {
         var id = $('#addPickupWrapper').children('.item').length;
@@ -753,6 +973,304 @@
             $(`#special_abend_box`).addClass('d-none');
         }
     }
+
+    // Vaccination AJAX Functions
+    function fetchVaccinations(dogId) {
+        $.ajax({
+            url: `/admin/vaccinations/${dogId}`,
+            type: 'GET',
+            success: function(vaccinations) {
+                displayVaccinations(vaccinations);
+            },
+            error: function(xhr, status, error) {
+                console.error('Error fetching vaccinations:', error);
+                $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center">Fehler beim Laden der Impfungen</td></tr>');
+            }
+        });
+    }
+
+    function displayVaccinations(vaccinations) {
+        if (vaccinations.length > 0) {
+            var html = "";
+            vaccinations.forEach(function(vaccination) {
+                var vaccinationDate = new Date(vaccination.vaccination_date);
+                var nextDate = new Date(vaccination.next_vaccination_date);
+                
+                var vaccinationFormatted = vaccinationDate.toLocaleDateString('de-DE');
+                var nextFormatted = nextDate.toLocaleDateString('de-DE');
+                
+                var statusCheckbox = '<div class="form-check d-flex align-items-center">' +
+                    '<input class="form-check-input vaccination-status" type="checkbox" data-id="' + vaccination.id + '"' + 
+                    (vaccination.is_vaccinated ? ' checked' : '') + '>' +
+                    '<label class="form-check-label ms-2">Geimpft</label>' +
+                    '</div>';
+                
+                html += '<tr data-id="' + vaccination.id + '">';
+                html += '<td>' + vaccination.vaccine_name + '</td>';
+                html += '<td>' + vaccinationFormatted + '</td>';
+                html += '<td>' + nextFormatted + '</td>';
+                html += '<td>' + statusCheckbox + '</td>';
+                html += '<td><button class="btn btn-sm btn-danger delete-vaccination" data-id="' + vaccination.id + '"><i class="fa fa-trash"></i></button></td>';
+                html += '</tr>';
+            });
+            $("#vaccinationsTable tbody").html(html);
+        } else {
+            $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center">Keine Impfungen gefunden</td></tr>');
+        }
+    }
+
+    // Handle vaccination form submission
+    $('#vaccinationForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            dog_id: $('#vaccination_dog_id').val(),
+            vaccine_name: $('#vaccine_name').val(),
+            vaccination_date: $('#vaccination_date').val(),
+            next_vaccination_date: $('#next_vaccination_date').val()
+        };
+
+        const submitButton = $(this).find('button[type="submit"]');
+        const originalText = submitButton.html();
+        
+        // Show loading state
+        submitButton.html('<i class="fas fa-spinner fa-spin"></i> Speichern...').prop('disabled', true);
+        
+        // Show loading indicator on table
+        $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Speichere Impfung...</td></tr>');
+
+        $.ajax({
+            url: '/admin/vaccinations',
+            method: 'POST',
+            data: formData,
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    fetchVaccinations(formData.dog_id);
+                    $('#vaccinationForm')[0].reset();
+                    $('#addVaccinationModal').modal('hide');
+                    $("#vaccination_saved").show();
+                    setTimeout(() => {
+                        $("#vaccination_saved").hide();
+                    }, 3000);
+                } else {
+                    alert('Fehler: ' + response.message);
+                    fetchVaccinations(formData.dog_id);
+                }
+            },
+            error: function(xhr) {
+                let errorMessage = 'Fehler beim Speichern der Impfung';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                } else if (xhr.responseJSON && xhr.responseJSON.errors) {
+                    errorMessage = Object.values(xhr.responseJSON.errors).flat().join('\n');
+                }
+                alert(errorMessage);
+                fetchVaccinations(formData.dog_id);
+            },
+            complete: function() {
+                submitButton.html(originalText).prop('disabled', false);
+            }
+        });
+    });
+
+    // Handle vaccination deletion
+    $(document).on('click', '.delete-vaccination', function() {
+        const vaccinationId = $(this).data('id');
+        const dogId = $('#vaccination_dog_id').val();
+        const deleteButton = $(this);
+        
+        if (confirm('Möchten Sie diese Impfung wirklich löschen?')) {
+            // Show loading state
+            deleteButton.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+            $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Lösche Impfung...</td></tr>');
+            
+            $.ajax({
+                url: `/admin/vaccinations/${vaccinationId}`,
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        fetchVaccinations(dogId);
+                        $("#vaccination_deleted").show();
+                        setTimeout(() => {
+                            $("#vaccination_deleted").hide();
+                        }, 3000);
+                    } else {
+                        alert('Fehler: ' + response.message);
+                        fetchVaccinations(dogId);
+                    }
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Fehler beim Löschen der Impfung';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    alert(errorMessage);
+                    fetchVaccinations(dogId);
+                },
+                complete: function() {
+                    // Reset button state
+                    deleteButton.html('<i class="fa fa-trash"></i>').prop('disabled', false);
+                }
+            });
+        }
+    });
+
+    // Handle vaccination status checkbox change
+    $(document).on('change', '.vaccination-status', function() {
+        const vaccinationId = $(this).data('id');
+        const isVaccinated = $(this).is(':checked');
+        const dogId = $('#vaccination_dog_id').val();
+        const checkbox = $(this);
+        
+        // Show loading state
+        checkbox.prop('disabled', true);
+        $("#vaccinationsTable tbody").html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Aktualisiere Status...</td></tr>');
+        
+        $.ajax({
+            url: `/admin/vaccinations/${vaccinationId}/toggle`,
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            data: {
+                is_vaccinated: isVaccinated ? 1 : 0
+            },
+            success: function(response) {
+                if (response.success) {
+                    fetchVaccinations(dogId);
+                    $("#vaccination_updated").show();
+                    setTimeout(() => {
+                        $("#vaccination_updated").hide();
+                    }, 3000);
+                } else {
+                    alert('Fehler: ' + response.message);
+                    checkbox.prop('checked', !isVaccinated);
+                    fetchVaccinations(dogId);
+                }
+            },
+            error: function(xhr) {
+                let errorMessage = 'Fehler beim Aktualisieren des Impfstatus';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                
+                alert(errorMessage);
+                checkbox.prop('checked', !isVaccinated);
+                fetchVaccinations(dogId);
+            },
+            complete: function() {
+                // Reset checkbox state
+                checkbox.prop('disabled', false);
+            }
+        });
+    });
+
+    // Document AJAX Functions
+    function fetchDocuments(dogId) {
+        $.ajax({
+            url: `/admin/dogs/${dogId}/documents`,
+            type: 'GET',
+            success: function(documents) {
+                displayDocuments(documents);
+            },
+            error: function(xhr, status, error) {
+                console.error('Error fetching documents:', error);
+                $("#documentsTable tbody").html('<tr><td colspan="5" class="text-center">Fehler beim Laden der Dokumente</td></tr>');
+            }
+        });
+    }
+
+    function displayDocuments(documents) {
+        if (documents && documents.length > 0) {
+            var html = "";
+            documents.forEach(function(document) {
+                html += '<tr data-id="' + document.id + '">';
+                html += '<td>';
+                html += '<a href="/uploads/users/documents/' + document.file_path + '" target="_blank" style="color: #5a5fe0; text-decoration: none;">' + document.name + '</a>';
+                html += '</td>';
+                html += '<td>';
+                html += '<a href="/uploads/users/documents/' + document.file_path + '" download class="btn btn-sm btn-info me-1" title="Herunterladen"><i class="fa fa-download"></i></a>';
+                html += '<button class="btn btn-sm btn-danger delete-document" data-id="' + document.id + '" title="Löschen"><i class="fa fa-trash"></i></button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+            $("#documentsTable tbody").html(html);
+        } else {
+            $("#documentsTable tbody").html('<tr><td colspan="2" class="text-center">Keine Dokumente gefunden</td></tr>');
+        }
+    }
+
+    // Handle document form submission
+    $('#documentForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        var dogId = $('#document_dog_id').val();
+        
+        $.ajax({
+            url: `/admin/dogs/${dogId}/documents`,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    $('#document_saved').fadeIn().delay(3000).fadeOut();
+                    $('#addDocumentModal').modal('hide');
+                    $('#documentForm')[0].reset();
+                    fetchDocuments(dogId);
+                } else {
+                    alert('Fehler: ' + (response.message || 'Unbekannter Fehler'));
+                }
+            },
+            error: function(xhr) {
+                var errorMessage = 'Ein Fehler ist aufgetreten.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    });
+
+    // Handle document deletion
+    $(document).on('click', '.delete-document', function() {
+        var documentId = $(this).data('id');
+        var dogId = $('#document_dog_id').val();
+        
+        if (!confirm('Möchten Sie dieses Dokument wirklich löschen?')) {
+            return;
+        }
+        
+        $.ajax({
+            url: `/admin/dogs/documents/${documentId}`,
+            type: 'DELETE',
+            data: {
+                _token: '{{ csrf_token() }}'
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#document_deleted').fadeIn().delay(3000).fadeOut();
+                    fetchDocuments(dogId);
+                } else {
+                    alert('Fehler: ' + (response.message || 'Unbekannter Fehler'));
+                }
+            },
+            error: function(xhr) {
+                var errorMessage = 'Ein Fehler ist aufgetreten.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                alert(errorMessage);
+            }
+        });
+    });
 
 </script>
 @endsection

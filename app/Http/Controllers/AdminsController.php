@@ -19,6 +19,7 @@ use App\Models\Visit;
 use App\Models\Event;
 use App\Models\Reservation;
 use App\Models\Plan;
+use App\Models\Payment;
 use Carbon\Carbon;
 use Log;
 
@@ -35,10 +36,6 @@ class AdminsController extends Controller
             'email' => 'required|email',
             'password' => 'required',
         ]);
-
-        // if (Auth::guard('admin')->attempt(['email' => $request->email, 'password' => $request->password], $request->remember)) {
-        //     return to_route('admin.dashboard');
-        // }
 
         if(Auth::attempt(['email' => $request->email, 'password' => $request->password], $request->remember))
         {
@@ -85,6 +82,8 @@ class AdminsController extends Controller
             ->get();
 
         $today = Carbon::now()->toDateString();
+        $customerBalanceCache = [];
+
         foreach($reservations as $obj)
         {
             // check for checkin date
@@ -93,41 +92,12 @@ class AdminsController extends Controller
             $checkin_check_date = Carbon::parse($checkin_check)->toDateString();
             $checkout_check_date = Carbon::parse($checkout_check)->toDateString();
 
-            // if($checkin_check_date < $today)
-            // {
-            //     $obj->checkin_date = $today.' 00:00:00';
-            //     Reservation::where('id', $obj->id)->update([
-            //         'checkin_date' => $obj->checkin_date
-            //     ]);
-            // }
-            // if($checkout_check_date < $obj->checkin_date)
-            // {
-            //     $checkout_new = Carbon::parse($obj->checkin_date)->addDays(1)->toDateString();
-            //     $obj->checkout_date = $checkout_new.' 23:59:00';
-            //     Reservation::where('id', $obj->id)->update([
-            //         'checkout_date' => $obj->checkout_date
-            //     ]);
-            // }
-
             $dog_id = $obj->dog_id;
 
             if(isset($obj->dog->customer))
             {
                 $customer_id = $obj->dog->customer->id;
-                $records = \DB::select("select * from payments,dogs,customers,reservations WHERE reservations.id=payments.res_id and reservations.dog_id=dogs.id and customers.id=dogs.customer_id and customers.id=$customer_id");
-                $totalAmount = 0;
-                foreach($records as $record)
-                {
-                    $amount         = $record->received_amount;
-                    $cost           = $record->cost;
-                    $discount       = $record->discount;
-
-                    $remaining = $amount-$cost;
-
-                    $totalAmount = $totalAmount+$remaining;
-                }
-
-                $obj->totalAmount = $totalAmount;
+                $obj->totalAmount = $this->calculateCustomerBalance($customer_id, $customerBalanceCache);
             }
 
             // check interval
@@ -145,62 +115,12 @@ class AdminsController extends Controller
 
             $currentYear = Carbon::now()->year;
 
-            // $record = Reservation::selectRaw("COUNT(*) as num_stays, SUM(DATEDIFF(checkout_date, checkin_date) + 1) AS total_days")
-            //     ->whereIn('status', [1, 2])
-            //     ->whereYear('checkin_date', $currentYear)
-            //     ->where('dog_id', $dog_id)
-            //     ->first();
-
-            // if ($record['total_days'] == "")
-            //     $record['total_days'] = 0;
-            // if ($record['num_stays'] == "")
-            //     $record['num_stays'] = 0;
-
-            // $row = Visit::where('dog_id', $dog_id)->whereYear('created_at', $currentYear)->orderBy('id','desc')->get();
-
-
-            // if (count($row) > 0) {
-            //     $row = $row[0];
-            //     $obj->stays = abs($record['num_stays'] + $row['visits']) . "/" . abs($record['total_days'] + $row['stay']);
-            // }
-            // else{
-            //     $obj->stays = abs($record['num_stays']) . "/" . abs($record['total_days']);
-            // }
-
-            $reservations_ig = Reservation::where('dog_id', $dog_id)
-                ->whereIn('status', [1, 2])
-                ->get();
-
-            $numTimes = $reservations_ig->count();
-            $totalDays = $reservations_ig->reduce(function ($carry, $reservation) {
-                if ($reservation->checkin_date) {
-                    $checkinDate = Carbon::parse($reservation->checkin_date);
-
-                    if ($reservation->status == 1) {
-                        // Dog is currently in the room, count the days until today
-                        $checkoutDate = Carbon::now();
-                    } elseif ($reservation->status == 2 && $reservation->checkout_date) {
-                        // Dog has checked out, use the recorded checkout_date
-                        $checkoutDate = Carbon::parse($reservation->checkout_date);
-                    } else {
-                        return $carry;
-                    }
-
-                    // Ensure we don't count future dates by comparing with today
-                    if ($checkoutDate->isFuture()) {
-                        $checkoutDate = Carbon::now();
-                    }
-
-                    // Calculate the difference in days between checkin and checkout
-                    $daysStayed = $checkoutDate->diffInDays($checkinDate);
-
-                    return $carry + $daysStayed;
-                }
-                return $carry;
-            }, 0);
-
-            $obj->stays = "$numTimes/$totalDays";
-            // return $obj->stays;
+            // Get visit counts from Visit model (includes initial values + increments)
+            // All dogs should have a Visit record (created on dog creation or by legacy script)
+            $visit = \App\Models\Visit::where('dog_id', $dog_id)->first();
+            $visits = $visit ? ($visit->visits ?? 0) : 0;
+            $days = $visit ? ($visit->stay ?? 0) : 0;
+            $obj->stays = "$visits/$days";
         }
 
         // Get Dogs in Rooms
@@ -243,19 +163,7 @@ class AdminsController extends Controller
                     if(isset($res->dog->customer))
                     {
                         $customer_id = $res->dog->customer->id;
-                        $records = \DB::select("select * from payments,dogs,customers,reservations WHERE reservations.id=payments.res_id and reservations.dog_id=dogs.id and customers.id=dogs.customer_id and customers.id=$customer_id");
-                        $totalAmount = 0;
-                        foreach($records as $record)
-                        {
-                            $amount         = $record->received_amount;
-                            $cost           = $record->cost;
-                            $discount       = $record->discount;
-
-                            $remaining = $amount-$cost;
-
-                            $totalAmount = $totalAmount+$remaining;
-                        }
-                        $res->totalAmount = $totalAmount;
+                        $res->totalAmount = $this->calculateCustomerBalance($customer_id, $customerBalanceCache);
                     }
 
 
@@ -284,62 +192,12 @@ class AdminsController extends Controller
                     $dog_id = $res->dog_id;
                     $currentYear = Carbon::now()->year;
 
-                    // $record = Reservation::selectRaw("COUNT(*) as num_stays, SUM(DATEDIFF(checkout_date, checkin_date) + 1) AS total_days")
-                    //     ->whereIn('status', [1, 2])
-                    //     ->whereYear('checkin_date', $currentYear)
-                    //     ->where('dog_id', $dog_id)
-                    //     ->first();
-
-                    // if ($record['total_days'] == "")
-                    //     $record['total_days'] = 0;
-                    // if ($record['num_stays'] == "")
-                    //     $record['num_stays'] = 0;
-
-
-                    // $row = Visit::where('dog_id', $dog_id)->whereYear('created_at', $currentYear)->orderBy('id','desc')->get();
-                    // // return $row;
-
-                    // if (count($row) > 0) {
-                    //     $row = $row[0];
-                    //     $res->stays = ($record['num_stays'] + $row['visits']) . "/" . abs($record['total_days'] + $row['stay']);
-                    // }
-                    // else{
-                    //     $res->stays = ($record['num_stays']) . "/" . abs($record['total_days']);
-                    // }
-
-                    $reservations_in = Reservation::where('dog_id', $dog_id)
-                        ->whereIn('status', [1, 2])
-                        ->get();
-
-                    $numTimes = $reservations_in->count();
-                    $totalDays = $reservations_in->reduce(function ($carry, $reservation) {
-                        if ($reservation->checkin_date) {
-                            $checkinDate = Carbon::parse($reservation->checkin_date);
-
-                            if ($reservation->status == 1) {
-                                // Dog is currently in the room, count the days until today
-                                $checkoutDate = Carbon::now();
-                            } elseif ($reservation->status == 2 && $reservation->checkout_date) {
-                                // Dog has checked out, use the recorded checkout_date
-                                $checkoutDate = Carbon::parse($reservation->checkout_date);
-                            } else {
-                                return $carry;
-                            }
-
-                            // Ensure we don't count future dates by comparing with today
-                            if ($checkoutDate->isFuture()) {
-                                $checkoutDate = Carbon::now();
-                            }
-
-                            // Calculate the difference in days between checkin and checkout
-                            $daysStayed = $checkoutDate->diffInDays($checkinDate);
-
-                            return $carry + $daysStayed;
-                        }
-                        return $carry;
-                    }, 0);
-
-                    $res->stays = "$numTimes/$totalDays";
+                    // Get visit counts from Visit model (includes initial values + increments)
+                    // All dogs should have a Visit record (created on dog creation or by legacy script)
+                    $visit = \App\Models\Visit::where('dog_id', $dog_id)->first();
+                    $visits = $visit ? ($visit->visits ?? 0) : 0;
+                    $days = $visit ? ($visit->stay ?? 0) : 0;
+                    $res->stays = "$visits/$days";
                 }
             }
         }
@@ -354,6 +212,21 @@ class AdminsController extends Controller
 
         return view('admin.dashboard', compact('currentMonth','reservations' , 'dogs', 'tasks','rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users'));
 
+    }
+
+    private function calculateCustomerBalance(int $customerId, array &$cache): float
+    {
+        if (array_key_exists($customerId, $cache)) {
+            return $cache[$customerId];
+        }
+
+        // Use customer balance column directly (accounts for settlements and wallet)
+        $customer = Customer::find($customerId);
+        $balance = $customer ? (float)($customer->balance ?? 0) : 0;
+
+        $cache[$customerId] = $balance;
+
+        return $cache[$customerId];
     }
 
     public function admin_settings()
@@ -470,10 +343,26 @@ class AdminsController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users'), $picture_name);
-            $user->picture = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $user->picture = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('User picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $user->save();
@@ -516,10 +405,26 @@ class AdminsController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users'), $picture_name);
-            $user->picture = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $user->picture = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('User picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $user->save();

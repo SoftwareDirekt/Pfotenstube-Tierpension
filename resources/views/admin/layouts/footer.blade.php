@@ -6,7 +6,7 @@
           ©
           <script>
             document.write(new Date().getFullYear());
-          </script>, tierpension.fun. All rights reserved
+          </script>, All rights reserved.
         </div>
       </div>
     </div>

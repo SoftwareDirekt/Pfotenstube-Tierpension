@@ -77,11 +77,17 @@ td.iconz.v.check{
                     <thead class="table-light">
                     <tr>
                         <th class="id">
-                            <button class="no-style btn-sort"
-                            onclick="sort('{{route('admin.customers')}}', 'GET', '{{csrf_token()}}','myTable')">
-                                <i class="fa fa-sort"></i>
+                            @php
+                                $currentOrder = $order ?? 'desc';
+                                $newOrder = $currentOrder === 'asc' ? 'desc' : 'asc';
+                                $queryParams = request()->query();
+                                $queryParams['order'] = $newOrder;
+                                $queryParams['sort_by'] = 'id_number';
+                            @endphp
+                            <a href="{{ route('admin.customers', $queryParams) }}" class="no-style btn-sort" id="sortButton">
+                                <i class="fa fa-sort{{ $currentOrder === 'desc' ? '-down' : ($currentOrder === 'asc' ? '-up' : '') }}" id="sortIcon"></i>
                                 ID
-                            </button>
+                            </a>
                         </th>
                         <th>Name</th>
                         <th class="hundnam">Hund</th>
@@ -170,7 +176,7 @@ td.iconz.v.check{
                 </table>
 
                 <div class="paginate">
-                    {{$customers->links()}}
+                    {{$customers->appends(request()->query())->links()}}
                 </div>
             </div>
 
@@ -215,26 +221,26 @@ td.iconz.v.check{
         document.getElementById('togglerMenuBy').click();
     });
     
-    var order = 'asc';
+    var order = '{{ $order ?? 'desc' }}';
+    var sortBy = '{{ $sortBy ?? 'id_number' }}';
+    
     async function ajaxSearch(route, method, token, id, keyword='')
     {
+        // Get current sort parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentOrder = urlParams.get('order') || '{{ $order ?? 'desc' }}';
+        const currentSortBy = urlParams.get('sort_by') || '{{ $sortBy ?? 'id_number' }}';
 
         $.ajax({
             url: route,
             method: method,
-            data: {_token: token, keyword: keyword, order: order},
+            data: {_token: token, keyword: keyword, order: currentOrder, sort_by: currentSortBy},
             success: function(res)
             {
                 let html = '';
                 if(res.length > 0)
                 {
                     res.forEach(obj => {
-
-                        // var phone = '';
-                        // if(obj.phone)
-                        // {
-                        //     phone = `(${obj.phone})`;   
-                        // }
 
                         html += '<tr>';
                         html += `<td>${obj.id_number ? obj.id_number : ''}</td>`;
@@ -318,12 +324,6 @@ td.iconz.v.check{
                 }
             }
         })
-    }
-
-    async function sort(route, method, token, id)
-    {
-        await ajaxSearch(route, method, token, id);
-        order = (order == 'asc') ? 'desc' : 'asc';
     }
 
     function deleteCustomer(id)

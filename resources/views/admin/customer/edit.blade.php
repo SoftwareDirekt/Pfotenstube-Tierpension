@@ -19,8 +19,8 @@
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <select name="type" id="type" class="form-control" required>
-                                <option value="Regular Customer" {{ ($customer->type == 'Regular Customer') ? 'selected' : '' }}>Stammkunde</option>
-                                <option value="Organization" {{ ($customer->type == 'Organization') ? 'selected' : '' }}>Organisation</option>
+                                <option value="Stammkunde" {{ ($customer->type == 'Stammkunde') ? 'selected' : '' }}>Stammkunde</option>
+                                <option value="Organisation" {{ ($customer->type == 'Organisation') ? 'selected' : '' }}>Organisation</option>
                             </select>
                             <label for="type">Typ</label>
                             

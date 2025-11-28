@@ -158,7 +158,7 @@
 
       @if($permissions['report'] && Session::has('lock'))
       <li class="menu-item">
-        <a href="{{route('admin.sales', ['type' => 'monthly', 'year' => 2024])}}" class="menu-link">
+        <a href="{{route('admin.sales', ['year' => now()->year, 'month' => now()->month])}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-chart-bar"></i>
           <div data-i18n="Verkaufsbericht">Verkaufsbericht</div>
         </a>

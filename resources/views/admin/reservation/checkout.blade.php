@@ -30,6 +30,7 @@
                                     <th>Preispläne</th>
                                     <th>Zahlungsart</th>
                                     <th>Rabatt</th>
+                                    <th>Zusätzliche Kosten</th>
                                     <th>Rechnungsbetrag</th>
                                     <th>Betrag Erhalten</th>
                                 </tr>
@@ -38,9 +39,12 @@
                                 @php $total = 0; @endphp
                                 @foreach($reservations as $obj)
                                 @php
-                                    $now = date('Y-m-d H:i:s');
-                                    $days_between = (int)(abs(strtotime($now) - strtotime($obj->checkin_date)) / 86400);
-                                    $days_between = ($days_between == 0) ? 1: $days_between;
+                                    // Calculate days as 1 day per night (not inclusive)
+                                    // Normalize dates to start of day for consistent calculation
+                                    $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
+                                    $now = \Carbon\Carbon::now()->startOfDay();
+                                    $days_between = $checkinDate->diffInDays($now);
+                                    $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
 
                                     if(isset($obj->plan) && $obj->plan != null)
                                     {
@@ -81,20 +85,24 @@
                                         </select>
                                     </td>
                                     <td>
-                                        <select required class="form-control" id="discount{{$loop->index}}" name="discount[]" onchange="discountMe(this.value, '{{$loop->index}}')">
+                                        <select required class="form-control" id="discount{{$loop->index}}" name="discount[]" onchange="recalculateRow('{{$loop->index}}')">
                                             <option selected value="0">0%</option>
                                             <option value="10">10%</option>
                                             <option value="15">15%</option>
                                         </select>
                                     </td>
                                     <td>
-                                        <input required type="text" class="form-control" id="invoice_amount{{$loop->index}}" name="invoice_amount[]" value="{{ (double)$plan_price * (int)$days_between}}">
+                                        <input type="number" step="0.10" class="form-control" id="special_cost{{$loop->index}}" name="special_cost[]" value="0.00" oninput="recalculateRow('{{$loop->index}}')">
                                     </td>
                                     <td>
-                                        <input required type="text" class="form-control" id="received_amount{{$loop->index}}" name="received_amount[]" value="{{ (double)$plan_price * (int)$days_between}}" onchange="changeTotal()">
+                                        <input required type="number" step="0.10" class="form-control" id="invoice_amount{{$loop->index}}" name="invoice_amount[]" value="{{ number_format((double)$plan_price * (int)$days_between, 2, '.', '')}}" oninput="changeTotal()">
+                                    </td>
+                                    <td>
+                                        <input required type="number" step="0.10" class="form-control" id="received_amount{{$loop->index}}" name="received_amount[]" value="{{ number_format((double)$plan_price * (int)$days_between, 2, '.', '')}}" oninput="changeTotal()">
                                     </td>
                                     <input type="hidden" class="form-control" name="res_id[]" value="{{$obj->id}}">
-                                    <input type="hidden" class="form-control" name="cost[]" id="cost{{$loop->index}}" value="{{ (double)$plan_price}}">
+                                    <input type="hidden" class="form-control" name="base_cost[]" id="base_cost{{$loop->index}}" value="{{ (double)$plan_price * (int)$days_between}}">
+                                    <input type="hidden" class="form-control" name="days[]" id="days{{$loop->index}}" value="{{ (int)$days_between}}">
                                 </tr>
                                 @endforeach
                             </tbody>
@@ -120,19 +128,26 @@
 @section('extra_js')
 
 <script>
-    function discountMe(discount, index)
+    function recalculateRow(index)
     {
-        var cost = $("#cost"+index).val();
-        if(cost == null)
-        {
-            return;
+        var baseCost = parseFloat($("#base_cost"+index).val()) || 0;
+        var specialCost = parseFloat($("#special_cost"+index).val()) || 0;
+        var discount = parseInt($("#discount"+index).val()) || 0;
+        
+        // Calculate total before discount
+        var totalBeforeDiscount = baseCost + specialCost;
+        
+        // Apply discount
+        var totalAfterDiscount = totalBeforeDiscount;
+        if(discount > 0) {
+            totalAfterDiscount = totalBeforeDiscount * (1 - (discount / 100));
         }
-        cost = parseFloat(cost);
-        discount = parseInt(discount);
-
-        var discounted_amount = cost * (1 - (discount/100));
-        $("#invoice_amount"+index).val(discounted_amount);
-        $("#received_amount"+index).val(discounted_amount);
+        
+        // Update invoice and received amount
+        $("#invoice_amount"+index).val(totalAfterDiscount.toFixed(2));
+        $("#received_amount"+index).val(totalAfterDiscount.toFixed(2));
+        
+        // Update grand total
         changeTotal();
     }
     async function ajaxSearch(route, method, token, id, keyword)
@@ -192,7 +207,7 @@
             var val = (item.value == '' || item.value == undefined) ? 0 : item.value;
             total += parseFloat(val);
         });
-        $("#totalAmount").text(total)
+        $("#totalAmount").text(total.toFixed(2));
     }
 
     $(document).ready(function(){
