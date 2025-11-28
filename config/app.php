@@ -185,4 +185,16 @@ return [
         // 'Example' => App\Facades\Example::class,
     ])->toArray(),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin PIN
+    |--------------------------------------------------------------------------
+    |
+    | This value is the PIN used for admin lock functionality.
+    | Set this in your ".env" file as ADMIN_PIN.
+    |
+    */
+
+    'admin_pin' => env('ADMIN_PIN', '1122'),
+
 ];
