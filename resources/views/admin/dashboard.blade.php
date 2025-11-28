@@ -78,6 +78,26 @@
         #dogInfo .form-control {
             max-width: 100%;
         }
+
+        #visitHistory {
+            font-size: 0.9rem;
+        }
+
+        #visitHistory th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+
+        #visitHistory tfoot tr {
+            background-color: #e9ecef;
+            border-top: 2px solid #dee2e6;
+        }
+
+        #hundeFriends img {
+            width: 40px !important;
+            height: 40px;
+            object-fit: cover;
+        }
     </style>
 @endsection
 @section('body')
@@ -203,7 +223,47 @@
                             Zimmer
                         </button>
                     </div>
-
+                    {{--Timer Button--}}
+                    <div id="timerButtonContainer">
+                        <a href="#" id="timerButton" class="add_style_btn active"
+                           style="border-radius: 0!important" onclick="toggleTimerDropdown(event)">
+                            Timer &nbsp;
+                            <i class="fa fa-clock"></i>
+                        </a>
+                        
+                        <!-- Dropdown for selecting minutes -->
+                        <div id="timerDropdown" style="display: none;">
+                            <div style="max-height: 300px; overflow-y: auto;">
+                                <div class="dropdown-item" onclick="selectTimerDuration(1)">1 Minute</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(5)">5 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(10)">10 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(15)">15 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(20)">20 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(25)">25 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(30)">30 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(45)">45 Minuten</div>
+                                <div class="dropdown-item" onclick="selectTimerDuration(60)">60 Minuten</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Running Timer Display -->
+                        <div id="timerRunning" style="display: none;">
+                            <div class="add_style_btn active" style="border-radius: 0!important; cursor: default;">
+                                <span id="timerDisplay">00:00</span>
+                            </div>
+                            <button onclick="stopTimer()" class="btn btn-danger mt-1" style="width: 100%;">
+                                <i class="fa fa-stop me-2"></i> Stop Timer
+                            </button>
+                        </div>
+                    </div>
+                    {{--End Timer Button--}}
+                    
+                    <!-- Audio element for bell sound -->
+                    <audio id="timerBellSound" preload="auto">
+                        <source src="{{ asset('assets/audio/bell.mp3') }}" type="audio/mpeg">
+                        <source src="{{ asset('assets/audio/bell.mp3') }}" type="audio/mpeg">
+                    </audio>
+                    
                     <div id="profilePicturesContainer" class="d-flex justify-content-center flex-wrap mt-1">
                     </div>
 
@@ -258,7 +318,17 @@
                                                                     </a>
                                                                     <h3 class="name">{{$obj->dog->name}}</h3>
                                                                 </div>
-                                                                <div>
+                                                                <!-- <div class="flexerf">
+                                                                    <button class="no-style text-dark dogInfoBtn"
+                                                                            onclick="dogInfo('{{$obj->id}}')">
+                                                                        <i class="mdi mdi-information-slab-circle-outline big-icon"></i>
+                                                                    </button>
+                                                                </div> -->
+                                                                <div class="d-flex">
+                                                                    <button class="no-style text-dark dogInfoBtn"
+                                                                            onclick="dogInfo('{{$obj->id}}')">
+                                                                        <i class="mdi mdi-information-slab-circle-outline"></i>
+                                                                    </button>
                                                                     <button class="no-style text-danger deleteResCross"
                                                                             onclick="deleteReservation('{{$obj->id}}')">
                                                                         <i class="mdi mdi-close-circle-outline big-icon"></i>
@@ -279,22 +349,23 @@
                                                             </p>
                                                             <hr class="p-0 m-0">
                                                             @php
-                                                                $days_between = (int)(abs(strtotime($obj->checkout_date) - strtotime($obj->checkin_date)) / 86400);
-
-                                                                if($days_between == 0)
-                                                                {
-                                                                    $days_between = 1;
-                                                                }
+                                                                // Calculate days as 1 day per night (not inclusive)
+                                                                // Normalize dates to start of day for consistent calculation
+                                                                $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
+                                                                $checkoutDate = \Carbon\Carbon::parse($obj->checkout_date)->startOfDay();
+                                                                $days_between = $checkinDate->diffInDays($checkoutDate);
+                                                                $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
                                                             @endphp
                                                             <div class="flex justify-between py-2">
                                                                 <p class="tag">{{$days_between}} Tage</p>
-                                                                @if($obj->totalAmount > 0)
-                                                                    <p class="text-success">
-                                                                        {{number_format($obj->totalAmount, 2)}}&euro;</p>
-                                                                @else
-                                                                    <p class="text-danger">
-                                                                        {{number_format($obj->totalAmount, 2)}}&euro;</p>
-                                                                @endif
+                                                                @php
+                                                                    $balance = $obj->totalAmount ?? 0;
+                                                                    $balanceClass = $balance < 0 ? 'text-danger' : ($balance > 0 ? 'text-success' : '');
+                                                                    $balanceSign = $balance > 0 ? '+' : '';
+                                                                @endphp
+                                                                <p class="{{ $balanceClass }}">
+                                                                    {{ $balanceSign }}{{ number_format($balance, 2) }}&euro;
+                                                                </p>
                                                             </div>
                                                             <hr class="p-0 m-0">
                                                             <div class="flex justify-between py-2 vcheckdates">
@@ -421,6 +492,15 @@
                                                         <i class="mdi mdi-plus-box-multiple-outline big-icon"></i>
                                                     </button>
                                                 </div>
+                                                {{-- move multiple dogs to another room --}}
+                                                <div>
+                                                    <button class="no-style" style="color: #5a5fe0"
+                                                            data-toggle="tooltip"
+                                                            title="In ein anderes Zimmer verschieben"
+                                                            onclick="moveMultipleDogs('{{$obj->id}}')">
+                                                        <i class="mdi mdi-cursor-move big-icon"></i>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -472,13 +552,6 @@
                                                                         </a>
                                                                         <div>
                                                                             <h3 class="name">{{$item->dog->name}}</h3>
-                                                                            @if($item->totalAmount > 0)
-                                                                                <p class="text-success bjty">
-                                                                                    {{number_format($item->totalAmount, 2)}}&euro;</p>
-                                                                            @else
-                                                                                <p class="text-danger bjty">
-                                                                                    {{number_format($item->totalAmount, 2)}}&euro;</p>
-                                                                            @endif
                                                                         </div>
                                                                     </div>
 
@@ -492,36 +565,39 @@
                                                             </div>
                                                             <hr class="p-0 m-0">
                                                             <div class="card-body space-nill p-0 m-0">
-                                                                <p class="pb-1 px-2 py-2">
-                                                                    <a href="{{route('admin.customers.preview', ['id' => $item->dog->customer->id])}}">{{$item->dog->customer->name}}
-                                                                        ({{$item->dog->customer->id_number}})</a>
-                                                                </p>
+                                                                <div class="flex justify-between pb-2 px-2 py-2">
+                                                                    <div>
+                                                                        <a href="{{route('admin.customers.preview', ['id' => $item->dog->customer->id])}}" target="_blank">{{$item->dog->customer->name}}
+                                                                            ({{$item->dog->customer->id_number}})</a>
+                                                                    </div>
+                                                                    <div data-toggle="tooltip" title="Saldo">
+                                                                        @if($item->totalAmount < 0)
+                                                                            <p class="text-danger bjty">
+                                                                                {{number_format($item->totalAmount, 2)}}&euro;</p>
+                                                                        @elseif($item->totalAmount > 0)
+                                                                            <p class="text-success bjty">
+                                                                                +{{number_format($item->totalAmount, 2)}}&euro;</p>
+                                                                        @else
+                                                                            <p class="bjty">
+                                                                                {{number_format($item->totalAmount, 2)}}&euro;</p>
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
                                                                 <hr class="p-0 m-0">
                                                                 @php
+                                                                    // Calculate days as 1 day per night (not inclusive)
+                                                                    // Normalize dates to start of day for consistent calculation
+                                                                    $checkinDate = \Carbon\Carbon::parse($item->checkin_date)->startOfDay();
+                                                                    $checkoutDate = \Carbon\Carbon::parse($item->checkout_date)->startOfDay();
+                                                                    $days_between = $checkinDate->diffInDays($checkoutDate);
+                                                                    $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
 
-                                                                    $days_between = (int)(abs(strtotime($item->checkout_date) - strtotime($item->checkin_date)) / 86400);
+                                                                    $morning = $item->dog->eating_morning != '' ? '1' : '0';
+                                                                    $afternoon = $item->dog->eating_midday != '' ? '1' : '0';
+                                                                    $evening = $item->dog->eating_evening != '' ? '1' : '0';
+                                                                    $bf = ($item->dog->is_special_eating == 0) ? '' : 'BF ';
 
-                                                                    if($days_between == 0)
-                                                                    {
-                                                                      $days_between = 1;
-                                                                    }
-
-                                                                  //   $eating_habits = json_decode($item->dog->eating_habits, true);
-                                                                  //   if (is_array($eating_habits)) {
-                                                                        $morning = $item->dog->eating_morning != '' ? '1' : '0'; // Ensure these are strings
-                                                                        $afternoon = $item->dog->eating_midday != '' ? '1' : '0'; // Ensure these are strings
-                                                                        $evening = $item->dog->eating_evening != '' ? '1' : '0'; // Ensure these are strings
-                                                                        $bf = ($item->dog->is_special_eating == 0) ? '' : 'BF ';
-
-                                                                        $eating_habits = $bf . $morning . '-' . $afternoon . '-' . $evening;
-
-                                                                  //   } else {
-                                                                  //       $morning = 0;
-                                                                  //       $afternoon = 0;
-                                                                  //       $evening = 0;
-                                                                  //       $eating_habits = "0-0-0";
-                                                                  //       $bf = '';
-                                                                  //   }
+                                                                    $eating_habits = $bf . $morning . '-' . $afternoon . '-' . $evening;
                                                                 @endphp
                                                                 <div class="flex justify-between py-2 px-2">
                                                                     <p class="tag">{{$days_between}} Tage
@@ -579,8 +655,6 @@
                                                                             </li>
                                                                         @endif
 
-
-
                                                                         @if($item->dog->is_medication == 1)
                                                                             <li>
                                                                                 <button class="no-style"
@@ -590,6 +664,7 @@
                                                                                 </button>
                                                                             </li>
                                                                         @endif
+                                                                        
                                                                         @if($item->dog->compatibility == 'V')
                                                                             <li>
                                                                                 <button class="no-style"
@@ -665,20 +740,41 @@
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4 baris">
-                                    <select name="dog_ids[]" id="dog_id" class="select2"
-                                            data-placeholder='Wählen Sie Hunde aus' data-live-search="true" required>
+                                    <select name="initial_dog_id" id="initial_dog_id" class="select2"
+                                            data-placeholder='Wählen Sie einen Hund aus' data-live-search="true" required
+                                            onchange="loadCustomerDogs(this.value)">
                                         <option selected disabled>Hund auswählen</option>
                                         @foreach($dogs as $dog)
-                                            <option value="{{$dog->id}}">{{$dog->name}} @if($dog->compatible_breed)
+                                            <option value="{{$dog->id}}" data-customer-id="{{$dog->customer_id}}">{{$dog->name}} @if($dog->compatible_breed)
                                                     ({{$dog->compatible_breed}})
                                                 @endif - {{isset($dog->customer) ? $dog->customer->name : ''}}
                                                 ({{ isset($dog->customer) ? $dog->customer->phone : '' }})
                                             </option>
                                         @endforeach
                                     </select>
-                                    <label for="dog_id">Hund</label>
+                                    <label for="initial_dog_id">Hund auswählen</label>
                                 </div>
                                 <input type="hidden" name="is_dashboard" value="1">
+                            </div>
+                            
+                            <!-- Customer Dogs Selection Section -->
+                            <div class="col-md-12" id="customerDogsSection" style="display: none;">
+                                <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Weitere Hunde des Kunden auswählen</h5>
+                                    <small class="text-muted">Wählen Sie alle Hunde aus, die Sie einchecken möchten. Der ursprünglich ausgewählte Hund ist bereits markiert.</small>
+                                </div>
+                                    <div class="card-body">
+                                        <div class="mb-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllCustomerDogs()">Alle auswählen</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllCustomerDogs()">Alle abwählen</button>
+                                            <span id="customerDogsCount" class="badge bg-primary ms-2">0 ausgewählt</span>
+                                        </div>
+                                        <div id="customerDogsContainer" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+                                            <!-- Customer dogs will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
@@ -716,7 +812,7 @@
                     <form class="row g-3" method="POST" action="{{route('admin.reservation.delete')}}">
                         @csrf
                         <div class="col-12 d-flex justify-content-center">
-                            <input type="hidden" class="form-control" name="id" id="id"/>
+                            <input type="hidden" class="form-control" name="id" id="deleteReservationId"/>
                             <button type="submit" class="btn btn-danger me-sm-3 me-1">Ja, löschen</button>
                             <button
                                 type="reset"
@@ -791,7 +887,7 @@
                     <form class="row g-3" method="POST" action="{{route('admin.todo.delete')}}">
                         @csrf
                         <div class="col-12 d-flex justify-content-center">
-                            <input type="hidden" class="form-control" name="id" id="id"/>
+                            <input type="hidden" class="form-control" name="id" id="deleteTodoId"/>
                             <button type="submit" class="btn btn-danger me-sm-3 me-1">Ja, löschen</button>
                             <button
                                 type="reset"
@@ -872,9 +968,6 @@
                                                 </a>
 
                                                 <a href="/admin/employeetrack/monatsplan">
-                                                    {{-- <button id="monatsplan_button" class="btn btn-info btn-sm" onclick="checkEventShift({{ $obj->id }})">
-                                                      Monatsplan
-                                                    </button> --}}
                                                     <button id="monatsplan_button" class="btn btn-info btn-sm">
                                                         Monatsplan
                                                     </button>
@@ -944,7 +1037,7 @@
                                     <label for="rangepicker">Einchecken - Auschecken</label>
                                 </div>
                                 <input type="hidden" id="flatpickr-range" class="hidden"/>
-                                <input type="hidden" name="room_id" id="id" class="form-control">
+                                <input type="hidden" name="room_id" id="dogsInRoomId" class="form-control">
                                 <input type="hidden" name="is_dashboard" value="1">
 
                             </div>
@@ -957,6 +1050,59 @@
                             aria-label="Close">
                             Stornieren
                         </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Move Multiple Dogs Modal --}}
+    <div class="modal fade" id="moveMultipleDogsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-simple modal-enable-otp modal-dialog-centered modal-lg">
+            <div class="modal-content p-3 p-md-5">
+                <div class="modal-body p-md-0">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <div class="text-center">
+                        <h3 class="text-center">Mehrere Hunde verschieben</h3>
+                    </div>
+                    <hr style="border-color: grey">
+                    <form action="{{route('admin.move.multiple.dogs')}}" method="POST" id="moveMultipleDogsForm">
+                        @csrf
+                        <input type="hidden" name="source_room_id" id="source_room_id">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h5>Hunde auswählen:</h5>
+                                <div class="mb-2 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllDogs()">Alle auswählen</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllDogs()">Alle abwählen</button>
+                                    </div>
+                                    <span id="selectedCount" class="badge bg-primary">0 ausgewählt</span>
+                                </div>
+                                <div id="dogsCheckboxContainer" class="mb-4" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+                                    <!-- Dogs will be loaded here via JavaScript -->
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-floating form-floating-outline mb-4">
+                                    <select name="target_room_id" id="target_room_id" class="select2" required>
+                                        <option selected disabled>Zielzimmer auswählen</option>
+                                        @foreach($rooms as $room)
+                                            <option value="{{$room->id}}">{{$room->number}} ({{$room->type}}) - Kapazität: {{$room->capacity}}</option>
+                                        @endforeach
+                                    </select>
+                                    <label for="target_room_id">Zielzimmer</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                                Abbrechen
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="moveMultipleDogsBtn">
+                                Hunde verschieben
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -1019,7 +1165,7 @@
                         <h3 class="text-center">In ein anderes Zimmer verschieben</h3>
                     </div>
                     <hr>
-                    <form action="{{route('admin.move.dog')}}" method="POST" enctype="multipart/form-data">
+                    <form id="moveDogForm" action="{{route('admin.move.dog')}}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="row">
                             <div class="col-md-12">
@@ -1046,7 +1192,7 @@
                         <div class="card-footer">
                             <button type="submit" class="btn btn-primary">Speichern</button>
                             <button
-                                type="reset"
+                                type="button"
                                 class="btn btn-outline-secondary"
                                 data-bs-dismiss="modal"
                                 aria-label="Close">
@@ -1062,7 +1208,7 @@
     {{-- Dog Information Modal --}}
     <div class="modal fade" id="dogInfo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content p-3 p-md-5" style="overflow: hidden;">
+            <div class="modal-content p-3 p-md-5" style="overflow: hidden">
                 <div class="modal-body p-md-0" style="overflow-y: auto; overflow-x: hidden; max-height: 100vh; scrollbar-width: none; -ms-overflow-style: none;">
                     <div class="d-flex justify-content-between">
                         <div class="d-flex align-items-center">
@@ -1239,7 +1385,7 @@
                                         <td>
                                             <img
                                                 src="uploads/users/dogs/1714434169360_F_602743936_qbTuk7bb34cSYBgSDbsirlmJSbxRBUFM.jpg"
-                                                width="120" class="rounded img-fluid" alt="Friend Picture"/>
+                                                width="40" height="40" class="rounded img-fluid" alt="Friend Picture"/>
                                         </td>
                                         <td></td>
                                         <td></td>
@@ -1281,7 +1427,51 @@
                                 <button type="submit" class="btn btn-primary mt-2" id="submitNote">Aktualisieren
                                 </button>
                             </div>
-                            {{-- Dog Friends Area --}}
+                            
+                            {{-- Visit History Section --}}
+                            <h4 class="text-start mt-4">Besuchsverlauf</h4>
+                            <div class="table-responsive">
+                                <table class="table table-striped dogInfoTable" id="visitHistory">
+                                    <thead>
+                                    <tr>
+                                        <th>Zeitraum</th>
+                                        <th>Tage</th>
+                                        <th>Preis</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <!-- Visit history will be populated here -->
+                                    </tbody>
+                                    <tfoot>
+                                    <tr class="fw-bold">
+                                        <td>Gesamt:</td>
+                                        <td id="totalDays">0</td>
+                                        <td id="totalAmount">€0.00</td>
+                                    </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            {{-- Dog Documents Section --}}
+                            <h4 class="text-start mt-4">Dokumente</h4>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addDocumentModal">
+                                    <i class="mdi mdi-plus"></i> Dokument hinzufügen
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-striped dogInfoTable" id="documentsTable">
+                                    <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th class="text-end">Aktionen</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody id="documentsTableBody">
+                                    <!-- Documents will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1331,19 +1521,19 @@
                                             required>
                                         <option value="Bar">Bar</option>
                                         <option value="Bank">Banküberweisung</option>
-                                        <option value="Nicht bezahlt">Nicht bezahlt</option>
                                     </select>
                                     <label for="gateway">Zahlungsart</label>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
-                                    <select name="status" id="status" class="select2" data-live-search="true" required>
-                                        <option value="1" selected>Bezahlt</option>
+                                    <input type="hidden" name="status" id="status_value" value="1">
+                                    <select id="status_display" class="select2" data-live-search="true" disabled>
+                                        <option value="1">Bezahlt</option>
                                         <option value="0">Nicht bezahlt</option>
                                         <option value="2">Offen</option>
                                     </select>
-                                    <label for="status">Status</label>
+                                    <label for="status_display">Status</label>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -1370,37 +1560,70 @@
                             </div>
                             <div class="col-md-12 mt-3">
                                 <div class="form-floating form-floating-outline mb-4">
-                                    <input type="number" id="cost" class="form-control text-primary" value="330.00"
-                                           disabled/>
-                                    <label for="gateway">Aktueller Preis (&euro;)</label>
+                                    <input type="number" name="plan_cost" step="0.01" id="plan_cost"
+                                            class="form-control text-primary" value="0.00" readonly/>
+                                    <label for="plan_cost">Planpreis (&euro;)</label>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
-                                    <input type="number" name="total" step="0.10" id="total_amount"
-                                           class="form-control text-primary absInput" value="330.00"/>
+                                    <input type="number" name="special_cost" step="0.01" id="special_cost"
+                                            class="form-control text-primary absInput" value="0.00"/>
+                                    <label for="special_cost">Zusätzliche Kosten (&euro;)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-floating form-floating-outline mb-4">
+                                    <input type="number" name="total" step="0.01" id="total_amount"
+                                            class="form-control text-primary absInput" value="0.00"/>
                                     <label for="total_amount">Rechnungsbetrag (&euro;)</label>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
-                                    <input type="number" name="received_amount" step="0.10" id="received_amount"
-                                           class="form-control text-primary absInput" value="330.00"/>
+                                    <input type="number" name="received_amount" step="0.01" id="received_amount"
+                                            class="form-control text-primary absInput" value="0.00"/>
                                     <label for="received_amount">Betrag Erhalten (&euro;)</label>
                                 </div>
                             </div>
-                            <div class="col-md-12 mb-4 d-flex justify-content-end">
-                                <div>
-                                    <p style="font-size: 17px">
-                                        <strong>Kundenguthaben: </strong> <span id="saldo">-400</span>
-                                    </p>
+                            <div class="col-md-12">
+                                <div class="form-floating form-floating-outline mb-4">
+                                    <input type="number" name="remaining_amount" step="0.01" id="remaining_amount"
+                                            class="form-control text-primary" value="0.00" readonly/>
+                                    <label for="remaining_amount">Restbetrag (&euro;)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-12 mb-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <p style="font-size: 17px; margin: 0;">
+                                            <strong>Kundenguthaben: </strong> <span id="saldo">0.00€</span>
+                                        </p>
+                                    </div>
+                                    <div id="walletCheckboxContainer" style="display: none;">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="use_wallet" id="use_wallet" value="1">
+                                            <label class="form-check-label" for="use_wallet">
+                                                Guthaben verwenden (<span id="wallet_available">0.00€</span>)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-12 mb-4" id="walletBreakdown" style="display: none;">
+                                <div class="alert alert-info">
+                                    <strong>Aufschlüsselung:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Guthaben verwendet: <span id="wallet_used_display">0.00€</span></li>
+                                        <li>Barzahlung: <span id="cash_payment_display">0.00€</span></li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
-                        <input type="hidden" name="id" id="id"/>
+                        <input type="hidden" name="id" id="checkoutId"/>
                         <input type="hidden" name="days" id="days"/>
                         <input type="hidden" name="checkout" id="checkout_date"/>
-                        <button type="submit" class="btn btn-primary">Kassa</button>
+                        <button type="button" class="btn btn-primary" id="checkoutSubmitBtn" onclick="submitCheckoutForm()">Kassa</button>
                         <button
                             type="reset"
                             class="btn btn-outline-secondary"
@@ -1447,6 +1670,39 @@
         </div>
     </div>
 
+    {{-- Add/Edit Document Modal --}}
+    <div class="modal fade" id="addDocumentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="documentModalTitle">Dokument hinzufügen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="documentForm" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-body">
+                        <input type="hidden" id="documentDogId" name="dog_id">
+                        
+                        <div class="mb-3">
+                            <label for="documentName" class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="documentName" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3" id="documentFileField">
+                            <label for="documentFile" class="form-label">Datei <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control" id="documentFile" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt">
+                            <small class="text-muted">Max. 10MB. Erlaubte Formate: PDF, DOC, DOCX, JPG, PNG, TXT</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                        <button type="submit" class="btn btn-primary">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Event Details Modal -->
     <div class="modal fade" id="eventDetailsModal" tabindex="-1" aria-labelledby="eventDetailsModalLabel"
          aria-hidden="true">
@@ -1486,7 +1742,7 @@
     <script src="assets/vendor/libs/pickr/pickr.js"></script>
     <script src="assets/js/forms-pickers.js"></script>
     <script>
-
+        
         // Plan Modal
         document.addEventListener('DOMContentLoaded', function () {
             // Use the unique ID for the `planmodel2` modal
@@ -1576,7 +1832,7 @@
             const enteredPin = document.getElementById('pin').value;
 
             $.ajax({
-                url: '{{ route("admin.validate.pin") }}',  // Route to your Laravel controller
+                url: '{{ route("admin.validate.pin") }}',
                 method: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
@@ -1617,16 +1873,7 @@
 
         var dogs = @json($__dogjs);
         var rooms = @json($rooms);
-
-        $(window).on('load', function () {
-            document.getElementById('togglerMenuBy').click();
-
-            // $("#dogsInRoom #id_dog").select2({
-            //   dropdownCssClass: 'big-drop'
-            // });
-
-        });
-
+        var pricePlans = @json($plans);
 
         function reverseDate() {
             var dateText = $("#date_heading").text();
@@ -1719,38 +1966,8 @@
         }
 
         function deleteReservation(id) {
-            $("#deleteReservation #id").val(id);
+            $("#deleteReservation #deleteReservationId").val(id);
             $("#deleteReservation").modal('show');
-        }
-
-        //check monatsplan event
-
-        function checkEventShift(uid) {
-            $.ajax({
-                url: "{{ route('admin.check.event.shift') }}", // Backend route
-                type: "POST",
-                data: {
-                    _token: "{{ csrf_token() }}", // CSRF token
-                    uid: uid // Pass user ID
-                },
-                success: function (response) {
-                    if (response.exists) {
-                        // Close any existing modal
-                        $('.modal').modal('hide');
-
-                        // Set event details in the modal
-                        $('#eventStartTime').text(response.event.start);
-                        $('#eventEndTime').text(response.event.end);
-
-                        $('#eventDetailsModal').modal('show');
-                    } else {
-                        alert("Kein Ereignis für Sie gefunden.");
-                    }
-                },
-                error: function (xhr, status, error) {
-                    alert("An error occurred: " + error);
-                }
-            });
         }
 
         function createEventRecord(employeeId) {
@@ -1775,7 +1992,7 @@
                                 class="rounded-circle cursor-pointer"
                                 title="${response.user.name}"
                                 data-toggle="tooltip"
-                                style="width: 30px; height: 30px; border: 1px solid #007bff;">
+                                style="width: 50px; height: 50px; border: 1px solid #007bff;">
                         </div>`;
 
                             $('#profilePicturesContainer').append(profilePicElement);
@@ -1783,7 +2000,7 @@
                             const firstLetter = response.user.name.charAt(0).toUpperCase();
                             const nameElement = `
                         <div id="profile_pic_${employeeId}" class="me-2 d-flex justify-content-center align-items-center"
-                            style="width: 30px; height: 30px; border: 1px solid #007bff; border-radius: 50%; background-color: #007bff; color: white;">
+                            style="width: 50px; height: 50px; border: 1px solid #007bff; border-radius: 50%; background-color: #007bff; color: white;">
                             <span>${firstLetter}</span>
                         </div>`;
 
@@ -1826,7 +2043,7 @@
                                     class="rounded-circle cursor-pointer"
                                     title="${user.name}"
                                     data-toggle="tooltip"
-                                    style="width: 30px; height: 30px; border: 1px solid #007bff;">
+                                    style="width: 50px; height: 50px; border: 1px solid #007bff;">
                             </div>`;
 
                                 // Remove any existing profile pic and append the new one
@@ -1836,7 +2053,7 @@
                                 const firstLetter = user.name.charAt(0).toUpperCase();
                                 const nameElement = `
                             <div id="profile_pic_${uid}" class="me-2 d-flex justify-content-center align-items-center"
-                                style="width: 30px; height: 30px; border: 1px solid #007bff; border-radius: 50%; background-color: #007bff; color: white;cursor:pointer;">
+                                style="width: 50px; height: 50px; border: 1px solid #007bff; border-radius: 50%; background-color: #007bff; color: white;cursor:pointer;">
                                 <span>${firstLetter}</span>
                             </div>`;
 
@@ -1896,7 +2113,7 @@
         }
 
         function deleteTodo(id) {
-            $("#deleteTodo #id").val(id);
+            $("#deleteTodo #deleteTodoId").val(id);
             $("#deleteTodo").modal('show');
         }
 
@@ -1919,8 +2136,139 @@
         }
 
         function dogsInRoom(id) {
-            $("#dogsInRoom #id").val(id);
+            $("#dogsInRoom #dogsInRoomId").val(id);
             $("#dogsInRoom").modal('show');
+        }
+
+        function moveMultipleDogs(roomId) {
+            // Set the source room ID
+            $("#source_room_id").val(roomId);
+            
+            // Get all dogs in this room
+            var roomElement = $("#parent_" + roomId);
+            var dogsContainer = $("#dogsCheckboxContainer");
+            dogsContainer.empty();
+            
+            // Find all dogs in this room
+            var dogsInRoom = roomElement.find('.child');
+            
+            if (dogsInRoom.length === 0) {
+                dogsContainer.html('<p class="text-muted">Keine Hunde in diesem Zimmer gefunden.</p>');
+                $("#moveMultipleDogsBtn").prop('disabled', true);
+            } else {
+                dogsInRoom.each(function() {
+                    var dogElement = $(this);
+                    var resId = dogElement.data('res-id');
+                    var dogId = dogElement.attr('id').replace('child_', '');
+                    var dogName = dogElement.find('.name').text();
+                    var customerName = dogElement.find('a').text();
+                    
+                    // Create checkbox for each dog
+                    var checkboxHtml = `
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="reservation_ids[]" value="${resId}" id="dog_${dogId}">
+                            <label class="form-check-label" for="dog_${dogId}">
+                                <strong>${dogName}</strong> - ${customerName}
+                            </label>
+                        </div>
+                    `;
+                    dogsContainer.append(checkboxHtml);
+                });
+                $("#moveMultipleDogsBtn").prop('disabled', false);
+            }
+            
+            // Reset the target room selection
+            $("#target_room_id").val('').trigger('change');
+            
+            // Initialize count
+            $('#selectedCount').text('0 ausgewählt');
+            
+            // Show the modal
+            $("#moveMultipleDogsModal").modal('show');
+        }
+
+        function selectAllDogs() {
+            $('input[name="reservation_ids[]"]').prop('checked', true);
+            var selectedCount = $('input[name="reservation_ids[]"]:checked').length;
+            $('#selectedCount').text(selectedCount + ' ausgewählt');
+            $('#moveMultipleDogsBtn').prop('disabled', false);
+        }
+
+        function deselectAllDogs() {
+            $('input[name="reservation_ids[]"]').prop('checked', false);
+            $('#selectedCount').text('0 ausgewählt');
+            $('#moveMultipleDogsBtn').prop('disabled', true);
+        }
+
+        function loadCustomerDogs(selectedDogId) {
+            if (!selectedDogId) {
+                $('#customerDogsSection').hide();
+                return;
+            }
+
+            // Get the customer ID from the selected option
+            var selectedOption = $('#initial_dog_id option:selected');
+            var customerId = selectedOption.data('customer-id');
+            
+            if (!customerId) {
+                $('#customerDogsSection').hide();
+                return;
+            }
+
+            // Get all dogs for this customer
+            var customerDogs = [];
+            $('#initial_dog_id option').each(function() {
+                var option = $(this);
+                if (option.data('customer-id') == customerId) {
+                    customerDogs.push({
+                        id: option.val(),
+                        name: option.text().split(' - ')[0], // Extract dog name
+                        customer: option.text().split(' - ')[1] // Extract customer info
+                    });
+                }
+            });
+
+            // Show the section if there are multiple dogs
+            if (customerDogs.length > 1) {
+                var container = $('#customerDogsContainer');
+                container.empty();
+                
+                customerDogs.forEach(function(dog) {
+                    var isSelected = dog.id == selectedDogId;
+                    var checkboxHtml = `
+                        <div class="form-check mb-2">
+                            <input class="form-check-input customer-dog-checkbox" type="checkbox" 
+                                   name="dog_ids[]" value="${dog.id}" id="customer_dog_${dog.id}" 
+                                   ${isSelected ? 'checked' : ''}>
+                            <label class="form-check-label" for="customer_dog_${dog.id}">
+                                <strong>${dog.name}</strong> - ${dog.customer}
+                                ${isSelected ? ' <span class="badge bg-success">Ausgewählt</span>' : ''}
+                            </label>
+                        </div>
+                    `;
+                    container.append(checkboxHtml);
+                });
+
+                $('#customerDogsSection').show();
+                updateCustomerDogsCount();
+            } else {
+                $('#customerDogsSection').hide();
+            }
+        }
+
+        function selectAllCustomerDogs() {
+            $('.customer-dog-checkbox').prop('checked', true);
+            updateCustomerDogsCount();
+        }
+
+        function deselectAllCustomerDogs() {
+            $('.customer-dog-checkbox').prop('checked', false);
+            updateCustomerDogsCount();
+        }
+
+        function updateCustomerDogsCount() {
+            var selectedCount = $('.customer-dog-checkbox:checked').length;
+            $('#customerDogsCount').text(selectedCount + ' ausgewählt');
         }
 
         function isJsonArray(str) {
@@ -1939,6 +2287,8 @@
                 type: 'GET',
                 success: function (res) {
                     if (res) {
+                        // Store current dog data for document access
+                        currentDogData = res;
                         var dog = res.dog;
                         var plan = res.plan;
                         $("#dogInfo #dogPicture").attr("src", "uploads/users/dogs/" + dog.picture);
@@ -2065,7 +2415,7 @@
                             dog.friends.forEach((item, index) => {
                                 if (item.dog) {
                                     html += '<tr>';
-                                    html += `<td><img src="uploads/users/dogs/${item.dog.picture}" width="120" class="rounded img-fluid" alt="Friend Picture" /></td>`;
+                                    html += `<td><img src="uploads/users/dogs/${item.dog.picture}" width="40" height="40" class="rounded img-fluid" alt="Friend Picture" /></td>`;
                                     html += `<td>${item.dog.name}</td>`;
                                     // parse date
                                     var dateObj = new Date(item.created_at);
@@ -2086,6 +2436,26 @@
                             $("#hundeFriends tbody").html(html);
                         }
 
+                        // Show Visit History
+                        if (dog.visit_history && dog.visit_history.visits && dog.visit_history.visits.length > 0) {
+                            var visitHtml = "";
+                            dog.visit_history.visits.forEach((visit, index) => {
+                                visitHtml += '<tr>';
+                                visitHtml += `<td>${visit.checkin_date} - ${visit.checkout_date}</td>`;
+                                visitHtml += `<td>${visit.duration} Tage</td>`;
+                                visitHtml += `<td>€${visit.daily_price}/Tag = €${visit.actual_amount.toFixed(2)}</td>`;
+                                visitHtml += '</tr>';
+                            });
+                            $("#visitHistory tbody").html(visitHtml);
+                            $("#totalDays").text(dog.visit_history.total_days);
+                            $("#totalAmount").text('€' + dog.visit_history.total_amount.toFixed(2));
+                        } else {
+                            var visitHtml = "<tr><td colspan='3' class='text-center'>Keine Besuche gefunden</td></tr>";
+                            $("#visitHistory tbody").html(visitHtml);
+                            $("#totalDays").text('0');
+                            $("#totalAmount").text('€0.00');
+                        }
+
                         // Checkin/out dates
                         $("#dogInfo #rangepicker").val(res.res_date);
                         $("#dogInfo #note").val(res.dog.note);
@@ -2096,11 +2466,18 @@
                         fetchVaccinations(dog.id);
                         checkVaccinationAlerts(dog.id);
                         
+                        // Load and display documents (use already loaded data)
+                        if (dog.documents) {
+                            displayDogDocuments(dog.documents);
+                        } else {
+                            displayDogDocuments([]);
+                        }
+                        
                         // Refresh notifications after opening dog info
                         setTimeout(() => {
                             loadNotifications();
                         }, 500);
-                        
+
                         $("#dogInfo").modal('show');
                     }
                 }
@@ -2130,7 +2507,7 @@
         function moveFromRes(id, res_id) {
             var idBeingDragged = 'child_' + id;
             if ($('.scrumboard').find('#' + idBeingDragged).length > 0) {
-                alert('Dieser Hund ist bereits eingecheckt und kann nicht ein weiteres mal einchecken')
+                alert('Dieser Hund ist bereits eingecheckt und kann nicht ein weiteres mal einchecken')
                 return;
             }
 
@@ -2149,7 +2526,11 @@
                 data: {_token: "{{csrf_token()}}", id: id},
                 success: function (res) {
                     if (res) {
-                        var saldo = res.total;
+                        var saldoRaw = parseFloat(res.total);
+                        if (isNaN(saldoRaw)) {
+                            saldoRaw = 0;
+                        }
+
                         var doc = res.doc;
 
                         var checkin_date = new Date(checkin);
@@ -2179,48 +2560,141 @@
                         formatted_checkin_date = formatted_checkin_date.split('/').join(".");
                         formatted_checkout_date = formatted_checkout_date.split('/').join(".");
 
-                        if (days > 1) {
-                            var total_cost = (days * plan_price);
+                        // Store existing customer balance for cumulative calculation
+                        // saldoRaw from backend: positive = customer has credit, negative = customer owes
+                        var existingBalance = saldoRaw || 0;
+                        $('#checkoutModal').data('existingBalance', existingBalance);
+                        
+                        // Initialize saldo display with existing balance
+                        updateSaldoDisplay(existingBalance);
+                        
+                        // Show/hide wallet checkbox based on balance
+                        if (existingBalance > 0) {
+                            // Customer has credit, show wallet checkbox
+                            $('#walletCheckboxContainer').show();
+                            $('#wallet_available').text('+' + existingBalance.toFixed(2) + '€');
+                            $('#use_wallet').prop('checked', false);
                         } else {
-                            console.log(doc)
-                            var total_cost = doc.dog.day_plan_obj.price;
+                            // Customer owes or has zero balance, hide wallet checkbox
+                            $('#walletCheckboxContainer').hide();
+                            $('#use_wallet').prop('checked', false);
                         }
+                        
+                        // Hide wallet breakdown initially
+                        $('#walletBreakdown').hide();
 
-                        $('#checkoutModal #saldo').text(saldo + '€');
-                        var intSaldo = parseInt(saldo);
-                        if (intSaldo < 0) {
-                            $('#checkoutModal #saldo').addClass('text-danger')
-                            $('#checkoutModal #saldo').removeClass('text-success')
-                        } else if (intSaldo > 0) {
-                            $('#checkoutModal #saldo').removeClass('text-danger')
-                            $('#checkoutModal #saldo').addClass('text-success')
-                        } else {
-                            $('#checkoutModal #saldo').removeClass('text-danger')
-                            $('#checkoutModal #saldo').removeClass('text-success')
-                        }
-
-                        $('#checkoutModal #id').val(id);
+                        $('#checkoutModal #checkoutId').val(id);
                         $('#checkoutModal #days').val(days);
                         $('#checkoutModal #checkin').html(formatted_checkin_date);
                         $('#checkoutModal #checkout').html(formatted_checkout_date + ` (${days} Tage)`);
                         $('#checkoutModal #checkout_date').val(formatted_checkout_date);
 
-                        if (days > 1) {
-                            $('#checkoutModal #price_plan').val(doc.dog.reg_plan_obj.id).trigger('change');
-                        } else {
-                            $('#checkoutModal #price_plan').val(doc.dog.day_plan_obj.id).trigger('change');
+                        var planBasePrice = parseFloat(plan_price);
+                        if (isNaN(planBasePrice)) {
+                            planBasePrice = 0;
                         }
 
-                        $('#checkoutModal #cost').val(total_cost);
-                        $('#checkoutModal #total_amount').val(total_cost);
-                        $('#checkoutModal #received_amount').val(total_cost);
+                        var selectedPlanId = plan_id;
+                        if (days > 1 && doc.dog && doc.dog.reg_plan_obj) {
+                            selectedPlanId = doc.dog.reg_plan_obj.id;
+                        } else if (doc.dog && doc.dog.day_plan_obj) {
+                            selectedPlanId = doc.dog.day_plan_obj.id;
+                        }
+
+                        if (selectedPlanId) {
+                            $('#checkoutModal #price_plan').val(selectedPlanId).trigger('change');
+                        }
+
+                        $('#checkoutModal #special_cost').val('0.00');
+                        $('#checkoutModal #total_amount').val('0.00');
+                        $('#checkoutModal #received_amount').val('0.00');
+                        $('#checkoutModal #remaining_amount').val('0.00');
+
+                        // Fallback if the triggered change could not resolve the plan price
+                        if (!$('#checkoutModal #plan_cost').val()) {
+                            var fallbackCost = 0;
+                            if (days > 1) {
+                                fallbackCost = days * planBasePrice;
+                            } else if (doc.dog && doc.dog.day_plan_obj) {
+                                fallbackCost = doc.dog.day_plan_obj.price;
+                            } else {
+                                fallbackCost = planBasePrice;
+                            }
+                            $('#checkoutModal #plan_cost').val(parseFloat(fallbackCost).toFixed(2));
+                        }
+
+                        recalcInvoiceTotals({updateReceived: true});
+                        
+                        // After recalculating, update saldo with cumulative balance
+                        // This ensures the existing balance is shown even when amounts are reset
+                        setTimeout(function() {
+                            updateRemaining();
+                        }, 100);
 
                         $('#checkoutModal').modal('show');
+                     }
+                 }
+             });
+
+        }
+
+        function submitCheckoutForm() {
+            var form = document.querySelector('#checkoutModal form');
+            if (!form) return;
+
+            var submitBtn = document.getElementById('checkoutSubmitBtn');
+            if (!submitBtn) return;
+
+            // Prevent multiple submissions
+            if (submitBtn.disabled) {
+                return false;
+            }
+
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.classList.add('disabled');
+            var originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = 'Bitte warten...';
+
+            // Collect form data
+            var formData = new FormData(form);
+            
+            // Ensure use_wallet is included (0 if unchecked, 1 if checked)
+            if (!$('#use_wallet').is(':checked')) {
+                formData.set('use_wallet', '0');
+            }
+
+            // Submit via AJAX
+            $.ajax({
+                url: "{{route('admin.reservation.checkout')}}",
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    // Close modal
+                    $('#checkoutModal').modal('hide');
+                    // Reload page on success
+                    window.location.reload();
+                },
+                error: function(xhr, status, error) {
+                    // Re-enable button on error
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('disabled');
+                    submitBtn.innerHTML = originalText;
+
+                    // Show error message
+                    var errorMessage = 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        errorMessage = xhr.responseText;
                     }
+                    alert(errorMessage);
                 }
             });
 
-
+            return false;
         }
 
         function fetchTodos() {
@@ -2270,12 +2744,180 @@
             });
         }
 
-        fetchTodos();
+        function recalcInvoiceTotals(options) {
+            options = options || {};
+            var planCost = parseFloat($("#checkoutModal #plan_cost").val()) || 0;
+            var specialCost = parseFloat($("#checkoutModal #special_cost").val()) || 0;
+            var discount = parseInt($("#checkoutModal input[name='discount']:checked").val()) || 0;
+
+            var total = planCost + specialCost;
+            if (discount > 0) {
+                total = total * (1 - (discount / 100));
+            }
+            total = parseFloat(total.toFixed(2));
+
+            $("#checkoutModal #total_amount").val(total.toFixed(2));
+            // Cap received amount at total (to prevent overpayment in current transaction)
+            // Advance payments are handled separately through balance
+            var maxReceived = total;
+            $("#checkoutModal #received_amount").attr({
+                min: 0,
+                max: maxReceived
+            });
+
+            if (options.updateReceived) {
+                $("#checkoutModal #received_amount").val(total.toFixed(2));
+            }
+
+            updateRemaining();
+        }
+        
+        // Handle wallet checkbox change
+        $(document).on('change', '#use_wallet', function() {
+            var useWallet = $(this).is(':checked');
+            var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+            var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            
+            if (useWallet && existingBalance > 0) {
+                // Wallet is being used
+                var walletUsed = Math.min(existingBalance, total);
+                var cashNeeded = Math.max(0, total - walletUsed);
+                
+                // Set received amount to cash needed
+                $("#checkoutModal #received_amount").val(cashNeeded.toFixed(2));
+            } else {
+                // Wallet not used, set received to total
+                $("#checkoutModal #received_amount").val(total.toFixed(2));
+            }
+            
+            updateRemaining();
+        });
+        
+        // Handle received amount input change
+        $(document).on('input change', '#received_amount', function() {
+            updateRemaining();
+        });
+
+        function updateRemaining() {
+            var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            var received = parseFloat($("#checkoutModal #received_amount").val()) || 0;
+            var useWallet = $("#checkoutModal #use_wallet").is(':checked');
+            var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+
+            // Only prevent negative received amount
+            if (received < 0) {
+                received = 0;
+                $("#checkoutModal #received_amount").val('0.00');
+            }
+
+            // Handle wallet usage
+            var walletUsed = 0;
+            var cashPayment = received;
+            
+            if (useWallet && existingBalance > 0) {
+                // Use wallet balance (up to invoice total or available balance)
+                walletUsed = Math.min(existingBalance, total);
+                cashPayment = Math.max(0, total - walletUsed);
+                
+                // If wallet is used, received amount should equal total (wallet + cash)
+                // But we keep the user's input for cash payment
+                // The effective received will be wallet + cash
+                var effectiveReceived = walletUsed + cashPayment;
+                
+                // Show wallet breakdown
+                $('#walletBreakdown').show();
+                $('#wallet_used_display').text(walletUsed.toFixed(2) + '€');
+                $('#cash_payment_display').text(cashPayment.toFixed(2) + '€');
+            } else {
+                // No wallet usage
+                $('#walletBreakdown').hide();
+                walletUsed = 0;
+                cashPayment = received;
+            }
+
+            // Calculate current transaction remaining amount and advance payment
+            // Use effective received (wallet + cash) for calculations
+            var effectiveReceived = walletUsed + cashPayment;
+            var currentRemaining, advancePayment;
+            
+            if (effectiveReceived > total) {
+                // Customer paid more than invoice (advance payment)
+                currentRemaining = 0;
+                advancePayment = effectiveReceived - total;
+            } else if (effectiveReceived < total) {
+                // Customer paid less than invoice (still owes)
+                currentRemaining = total - effectiveReceived;
+                advancePayment = 0;
+            } else {
+                // Exact payment
+                currentRemaining = 0;
+                advancePayment = 0;
+            }
+            
+            // Update remaining_amount field (for backward compatibility)
+            $("#checkoutModal #remaining_amount").val(currentRemaining.toFixed(2));
+            
+            // Calculate cumulative balance: existing + (advance - remaining - wallet)
+            // Positive balance = customer has credit (GREEN) - e.g., +50€
+            // Negative balance = customer owes (RED) - e.g., -30€
+            // Current transaction: advance (positive credit) - remaining (positive debt) - wallet (deducted) = net balance
+            var currentNetBalance = advancePayment - currentRemaining - walletUsed;
+            var cumulativeBalance = existingBalance + currentNetBalance;
+            
+            // Update saldo display with cumulative balance
+            updateSaldoDisplay(cumulativeBalance);
+            
+            updateCheckoutStatus(total, effectiveReceived, currentRemaining);
+        }
+        
+        function updateSaldoDisplay(balance) {
+            var saldoElement = $("#checkoutModal #saldo");
+            
+            // Format balance with sign
+            // Positive balance = customer has credit (GREEN) - e.g., +50€
+            // Negative balance = customer owes (RED) - e.g., -30€
+            var sign = balance >= 0 ? '+' : '';
+            var formattedBalance = sign + balance.toFixed(2) + '€';
+            saldoElement.text(formattedBalance);
+            
+            // Remove previous color classes
+            saldoElement.removeClass('text-danger text-success');
+            
+            if (balance > 0) {
+                // Customer has credit (positive balance) - GREEN
+                saldoElement.addClass('text-success');
+            } else if (balance < 0) {
+                // Customer owes money (negative balance) - RED
+                saldoElement.addClass('text-danger');
+            } else {
+                // Zero balance - no special color
+                saldoElement.removeClass('text-danger text-success');
+            }
+        }
+
+        function updateCheckoutStatus(total, received, remaining) {
+            var epsilon = 0.01;
+            var statusVal;
+
+            // If invoice total is 0 (e.g., organization plan), automatically mark as paid
+            if (total < epsilon) {
+                statusVal = 1; // Bezahlt
+            } else if (Math.abs(received) <= epsilon) {
+                statusVal = 0; // Nicht bezahlt
+            } else if (remaining > epsilon) {
+                statusVal = 2; // Offen
+            } else {
+                statusVal = 1; // Bezahlt
+            }
+
+            $('#status_value').val(statusVal);
+            $('#status_display').val(String(statusVal)).trigger('change.select2');
+        }
 
         $(document).ready(function () {
             // Check vaccination alerts for all dogs on page load
             checkAllVaccinationAlerts();
-            
+
             // Update Note
             $("#submitNote").on('click', function () {
                 var note = $("#dogInfo #note").val();
@@ -2313,46 +2955,39 @@
                 })
             });
 
-            // Change negative values to postive
-            $(".absInput").on('change', function () {
-                this.value = Math.abs(this.value);
-            });
-
             // Check price change on checkout
             $("#checkoutModal #price_plan").on('change', function () {
-                var days = $("#checkoutModal #days").val();
-                var plans = @json($plans);
-                var plan_id = this.value;
-                var plan = plans.find(function (plan) {
-                    return plan.id == plan_id;
+                var days = parseInt($("#checkoutModal #days").val(), 10);
+                if (!days || days < 1) {
+                    days = 1;
+                }
+                var planId = parseInt(this.value, 10);
+                var plan = pricePlans.find(function (item) {
+                    return item.id == planId;
                 });
-                var price = plan.price;
-                var total = days * price;
-                var total_cost = total;
+                var price = plan ? parseFloat(plan.price) : 0;
+                var planCost = price * days;
+                $('#checkoutModal #plan_cost').val(planCost.toFixed(2));
+                recalcInvoiceTotals({updateReceived: true});
+             });
+ 
+             // Discount change on checkout
+             $("#checkoutModal input[name='discount']").on('change', function () {
+                 recalcInvoiceTotals({updateReceived: true});
+             });
+ 
+             // Special cost change on checkout - recalculate on input and change events
+             $("#checkoutModal #special_cost").on('input change', function () {
+                 recalcInvoiceTotals({updateReceived: true});
+             });
+ 
+             $("#checkoutModal #total_amount").on('input change', function () {
+                 updateRemaining();
+             });
 
-                // check for discounts
-                var discount = $("#checkoutModal input[name='discount']:checked").val();
-                discount = parseInt(discount);
-                if (discount > 0) {
-                    total = total * (1 - (discount / 100));
-                }
-
-                $('#checkoutModal #cost').val(total_cost);
-                $('#checkoutModal #total_amount').val(total);
-                $('#checkoutModal #received_amount').val(total);
+            $("#checkoutModal #received_amount").on('input change', function () {
+                updateRemaining();
             });
-
-            // Discount change on checkout
-            $("#checkoutModal input[name='discount']").on('change', function () {
-                var discount = parseInt(this.value);
-                var total = $("#checkoutModal #cost").val();
-                total = parseFloat(total);
-                if (discount > 0) {
-                    total = total * (1 - (discount / 100));
-                }
-                $('#checkoutModal #total_amount').val(total);
-                $('#checkoutModal #received_amount').val(total);
-            })
 
         });
 
@@ -2366,10 +3001,12 @@
             placeholder: "portlet-placeholder ui-corner-all",
             start: function (event, ui) {
                 var idBeingDragged = ui.item.attr('id');
-                console.log(idBeingDragged);
+                clearDragIndicators();
                 if (ui.item.parents().parents().parents().attr('id') === 'parent_res') {
                     if ($('.scrumboard').find('#' + idBeingDragged).length > 0) {
-                        alert('Dieser Hund ist bereits eingecheckt und kann nicht ein weiteres mal einchecken')
+                        alert('Dieser Hund ist bereits eingecheckt und kann nicht ein weiteres mal einchecken');
+                        $(this).sortable('cancel');
+                        clearDragIndicators();
                         return;
                     }
                 }
@@ -2409,6 +3046,9 @@
                 var position = ui.item.attr("data-position");
                 var getDogID = ui.item.attr("id");
                 var dogID = getDogID.split("_")[1];
+                var dragType = position === 'left' ? 'checkin' : 'move';
+                var $currentItem = ui.item;
+                var sortableInstance = $(this);
 
                 var tag = ui.placeholder.parent().parent().parent().attr("id");
                 if (tag == 'parent_res') {
@@ -2417,18 +3057,25 @@
                 }
 
                 var getRoomID = ui.item.parents().parents().parents().attr('id');
-
                 var getRoom = getRoomID.split("_")[1];
 
                 if (getRoom == "res") {
                     $(this).sortable('cancel');
                     return;
                 }
-                if (typeof dogs[dogID] === 'undefined') {
-                    // console.log(dogs[dogID])
-                    console.log("reservation");
-                    // var capacity = parseInt(rooms[getRoom]['capacity']);
-                    // var reserved = parseInt(rooms[getRoom]['reserved']);
+
+                if (dragType === 'checkin') {
+                    var duplicateCard = $(".scrumboard #child_" + dogID).filter(function () {
+                        return this !== $currentItem[0];
+                    });
+
+                    if (duplicateCard.length > 0) {
+                        alert('Dieser Hund ist bereits eingecheckt und kann nicht zweimal eingecheckt werden.');
+                        sortableInstance.sortable('cancel');
+                        clearDragIndicators();
+                        return;
+                    }
+
                     var room = rooms.find((item, index) => {
                         return item.id == getRoom;
                     });
@@ -2437,11 +3084,10 @@
                     var capacity = parseInt(room.capacity);
                     var reserved = available_dogs.length;
 
-                    // dogs[dogID] = dogsR[dogID];
-                    // delete dogsR[dogID];
-
                     if (reserved >= capacity) {
-                        $(this).sortable('cancel');
+                        alert('Der Raum ist bereits voll. Bitte wählen Sie ein anderes Zimmer.');
+                        sortableInstance.sortable('cancel');
+                        clearDragIndicators();
                     } else {
                         $.ajax({
                             url: "{{route('admin.reservation.room.update')}}",
@@ -2450,27 +3096,39 @@
                                 _token: "{{csrf_token()}}",
                                 id: reservationID,
                                 room_id: getRoom,
-                                status: 1
+                                status: 1,
+                                drag_type: dragType
                             },
                             dataType: "json",
                             success: function (data) {
-                                console.log(data)
-                                // rooms.map((itemD) => {
-                                //   itemD.reservations.find((fnd) => {
-                                //     if(fnd.id == reservationID)
-                                //     {
-                                //       fnd.room_id = getRoom;
-                                //     }
-                                //   })
-                                // });
+                                if (data && data.error) {
+                                    alert(data.message || 'Dieser Hund ist bereits eingecheckt und kann nicht zweimal eingecheckt werden.');
+                                    sortableInstance.sortable('cancel');
+                                    updateRoomsCount();
+                                    clearDragIndicators();
+                                    return;
+                                }
 
-                                // dogs[dogID].room_id = getRoom;
-                                updateRoomsCount()
-                                // $(".accept_friend").attr("data-room", getRoom)
-                                // $(".accept_friend").attr("data-dog", dogID)
-                                // if(data.become_friends){
-                                //     $("#becomeFriends").modal("show")
-                                // }
+                                updateRoomsCount();
+                                clearDragIndicators();
+
+                                $currentItem.removeAttr('data-position');
+
+                                if (data && data.showModal) {
+                                    $("#friendshipModal #dog_id").val(dogID);
+                                    $("#friendshipModal #room_id").val(getRoom);
+                                    $("#friendshipModal").modal('show');
+                                }
+                            },
+                            error: function (xhr) {
+                                var message = 'Fehler beim Verschieben der Reservierung.';
+                                if (xhr.responseJSON && xhr.responseJSON.message) {
+                                    message = xhr.responseJSON.message;
+                                }
+                                alert(message);
+                                sortableInstance.sortable('cancel');
+                                updateRoomsCount();
+                                clearDragIndicators();
                             }
                         });
                     }
@@ -2480,16 +3138,15 @@
                     });
 
                     var available_dogs = $("#parent_" + getRoom + ' .dogItems .child');
-
                     var capacity = parseInt(room.capacity);
                     var reserved = available_dogs.length - 1;
 
                     if (reserved >= capacity) {
-                        $(this).sortable('cancel');
+                        alert('Der Zielraum ist bereits voll. Bitte wählen Sie ein anderes Zimmer.');
+                        sortableInstance.sortable('cancel');
+                        clearDragIndicators();
                     } else {
                         // Update reservation room_id
-                        console.log(getRoom)
-                        console.log(dogID)
                         $.ajax({
                             url: "{{route('admin.reservation.room.update')}}",
                             type: 'POST',
@@ -2497,10 +3154,18 @@
                                 _token: "{{csrf_token()}}",
                                 id: reservationID,
                                 room_id: getRoom,
-                                dog_id: dogID
+                                dog_id: dogID,
+                                drag_type: dragType
                             },
                             dataType: "json",
                             success: function (data) {
+                                if (data && data.error) {
+                                    alert(data.message || 'Dieser Hund ist bereits eingecheckt und kann nicht zweimal eingecheckt werden.');
+                                    sortableInstance.sortable('cancel');
+                                    updateRoomsCount();
+                                    clearDragIndicators();
+                                    return;
+                                }
                                 rooms.map((itemD) => {
                                     itemD.reservations.find((fnd) => {
                                         if (fnd.id == reservationID) {
@@ -2511,17 +3176,22 @@
 
                                 dogs[dogID].room_id = getRoom;
                                 updateRoomsCount();
+                                clearDragIndicators();
                                 if (data.showModal == true) {
-                                    console.log('open')
                                     $("#friendshipModal #dog_id").val(dogID);
                                     $("#friendshipModal #room_id").val(getRoom);
                                     $("#friendshipModal").modal('show');
                                 }
-                                // $(".accept_friend").attr("data-room", getRoom)
-                                // $(".accept_friend").attr("data-dog", dogID)
-                                // if(data.become_friends){
-                                //     $("#becomeFriends").modal("show")
-                                // }
+                            },
+                            error: function (xhr) {
+                                var message = 'Fehler beim Verschieben der Reservierung.';
+                                if (xhr.responseJSON && xhr.responseJSON.message) {
+                                    message = xhr.responseJSON.message;
+                                }
+                                alert(message);
+                                sortableInstance.sortable('cancel');
+                                updateRoomsCount();
+                                clearDragIndicators();
                             }
                         });
                     }
@@ -2544,6 +3214,10 @@
                 var length = $("#" + id + ' .dogItems .child').length;
                 $(`#${id} .card-header .count`).html(length)
             });
+        }
+
+        function clearDragIndicators() {
+            $('.dogItems').removeClass('highlight');
         }
 
         function searchDogPlan(id) {
@@ -2576,6 +3250,22 @@
         function closePlanModal() {
             $("#planmodel2").addClass('d-none');
         }
+
+        // Normalize currency inputs to positive values with two decimals
+        $(".absInput").on('change blur', function () {
+            var numericValue = parseFloat(this.value);
+
+            if (isNaN(numericValue)) {
+                numericValue = 0;
+            }
+
+            numericValue = Math.abs(numericValue);
+            this.value = numericValue.toFixed(2);
+
+            if (this.id === 'received_amount' || this.id === 'total_amount') {
+                updateRemaining();
+            }
+        });
     </script>
     {{-- Script Area Starts Here --}}
     <script>
@@ -2588,6 +3278,62 @@
                     });
                     $("#selectedRoomMoveDog").val(selectedId); // Set the hidden input value
                 }
+            });
+
+            // Handle move dog form submission via AJAX
+            $('#moveDogForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                var roomId = $('#selectedRoomMoveDog').val();
+                if (!roomId) {
+                    alert('Bitte wählen Sie ein Zimmer aus!');
+                    return false;
+                }
+
+                var formData = $(this).serialize();
+                
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: formData,
+                    dataType: 'json',
+                    success: function(data) {
+                        if (data && data.error) {
+                            alert(data.message || 'Fehler beim Verschieben des Hundes.');
+                            return;
+                        }
+
+                        // Close the move modal
+                        $('#moveDog').modal('hide');
+                        
+                        // Show friendship modal if needed (before reload)
+                        if (data.showModal) {
+                            $("#friendshipModal #dog_id").val(data.dog_id);
+                            $("#friendshipModal #room_id").val(data.room_id);
+                            
+                            // Remove any existing handlers to prevent duplicates
+                            $("#friendshipModal").off('hidden.bs.modal');
+                            
+                            // Show modal and reload after it's closed
+                            $("#friendshipModal").modal('show');
+                            
+                            // Reload page when modal is hidden (user clicks Yes or No)
+                            $("#friendshipModal").on('hidden.bs.modal', function() {
+                                location.reload();
+                            });
+                        } else {
+                            // No modal needed, reload immediately
+                            location.reload();
+                        }
+                    },
+                    error: function(xhr) {
+                        var message = 'Fehler beim Verschieben des Hundes.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        alert(message);
+                    }
+                });
             });
         });
 
@@ -2608,6 +3354,73 @@
 
             $(document).on('select2:open', () => {
                 document.querySelector('.select2-search__field').focus();
+            });
+
+            // Handle multiple dogs move form submission
+            $('#moveMultipleDogsForm').on('submit', function(e) {
+                var selectedDogs = $('input[name="reservation_ids[]"]:checked').length;
+                if (selectedDogs === 0) {
+                    e.preventDefault();
+                    alert('Bitte wählen Sie mindestens einen Hund aus!');
+                    return false;
+                }
+                
+                var targetRoom = $('#target_room_id').val();
+                if (!targetRoom) {
+                    e.preventDefault();
+                    alert('Bitte wählen Sie ein Zielzimmer aus!');
+                    return false;
+                }
+            });
+
+            // Handle checkbox changes to enable/disable submit button
+            $(document).on('change', 'input[name="reservation_ids[]"]', function() {
+                var selectedCount = $('input[name="reservation_ids[]"]:checked').length;
+                $('#selectedCount').text(selectedCount + ' ausgewählt');
+                
+                if (selectedCount > 0) {
+                    $('#moveMultipleDogsBtn').prop('disabled', false);
+                } else {
+                    $('#moveMultipleDogsBtn').prop('disabled', true);
+                }
+            });
+
+            // Handle customer dog checkbox changes
+            $(document).on('change', '.customer-dog-checkbox', function() {
+                updateCustomerDogsCount();
+            });
+
+            // Handle reservation form submission
+            $('#addReservationForm').on('submit', function(e) {
+                // Ensure the initially selected dog is always included
+                var initialDogId = $('#initial_dog_id').val();
+                
+                if (!initialDogId) {
+                    e.preventDefault();
+                    alert('Bitte wählen Sie einen Hund aus!');
+                    return false;
+                }
+                
+                // Check if customer dogs section is visible (multiple dogs)
+                if ($('#customerDogsSection').is(':visible')) {
+                    // Multiple dogs case: check for selected checkboxes
+                    var selectedDogs = $('input[name="dog_ids[]"]:checked').length;
+                    if (selectedDogs === 0) {
+                        e.preventDefault();
+                        alert('Bitte wählen Sie mindestens einen Hund aus!');
+                        return false;
+                    }
+                } else {
+                    // Single dog case: add hidden input for the initial dog
+                    // Remove any existing hidden inputs first to avoid duplicates
+                    $('input[name="dog_ids[]"][type="hidden"]').remove();
+                    
+                    $('<input>').attr({
+                        type: 'hidden',
+                        name: 'dog_ids[]',
+                        value: initialDogId
+                    }).appendTo(this);
+                }
             });
 
         });
@@ -2769,6 +3582,152 @@
             }
         });
 
+        // ========== Dog Documents Functions ==========
+        
+        // Store current dog data globally for document access
+        var currentDogData = null;
+
+        // Load and display dog documents (refresh from server)
+        function loadDogDocuments(dogId) {
+            // Fetch fresh data from server
+            $.ajax({
+                url: `/admin/reservation/${dogId}/fetch/all`,
+                type: 'GET',
+                success: function(res) {
+                    currentDogData = res;
+                    if (res && res.dog && res.dog.documents) {
+                        displayDogDocuments(res.dog.documents);
+                    } else {
+                        displayDogDocuments([]);
+                    }
+                },
+                error: function() {
+                    displayDogDocuments([]);
+                }
+            });
+        }
+
+        function displayDogDocuments(documents) {
+            var tbody = $("#documentsTableBody");
+            if (!documents || documents.length === 0) {
+                tbody.html('<tr><td colspan="2" class="text-center">Keine Dokumente gefunden</td></tr>');
+                return;
+            }
+
+            var html = "";
+            documents.forEach(function(doc) {
+                var documentUrl = '/uploads/users/documents/' + doc.file_path;
+                
+                html += '<tr data-id="' + doc.id + '">';
+                html += '<td>';
+                html += '<a href="' + documentUrl + '" target="_blank" class="text-decoration-none">' + doc.name + '</a>';
+                html += '</td>';
+                html += '<td class="text-end">';
+                html += '<a href="' + documentUrl + '" download class="btn btn-sm btn-info me-1" title="Herunterladen"><i class="fa fa-download"></i></a>';
+                html += '<button class="btn btn-sm btn-danger delete-document" data-id="' + doc.id + '" title="Löschen"><i class="fa fa-trash"></i></button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+            tbody.html(html);
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return 'Unknown';
+            var units = ['B', 'KB', 'MB', 'GB'];
+            var i = 0;
+            while (bytes >= 1024 && i < units.length - 1) {
+                bytes /= 1024;
+                i++;
+            }
+            return Math.round(bytes * 100) / 100 + ' ' + units[i];
+        }
+
+        // Handle add document button click
+        $(document).on('click', '[data-bs-target="#addDocumentModal"]', function() {
+            var dogId = $('#vaccination_dog_id').val();
+            if (!dogId) {
+                alert('Bitte öffnen Sie zuerst die Hundinformationen');
+                return;
+            }
+            $('#documentDogId').val(dogId);
+            $('#documentForm')[0].reset();
+            $('#documentFileField').show();
+            $('#documentFile').prop('required', true);
+            $('#documentModalTitle').text('Dokument hinzufügen');
+        });
+
+        // Handle document form submission (create only)
+        $('#documentForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            var dogId = $('#documentDogId').val();
+            var formData = new FormData(this);
+            
+            $.ajax({
+                url: `/admin/dogs/${dogId}/documents`,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#addDocumentModal').modal('hide');
+                        loadDogDocuments(dogId);
+                        alert(response.message || 'Dokument erfolgreich gespeichert');
+                    }
+                },
+                error: function(xhr) {
+                    var message = 'Fehler beim Speichern des Dokuments';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+                    alert(message);
+                }
+            });
+        });
+
+        // Handle delete document
+        $(document).on('click', '.delete-document', function() {
+            if (!confirm('Sind Sie sicher, dass Sie dieses Dokument löschen möchten?')) {
+                return;
+            }
+            
+            var docId = $(this).data('id');
+            var dogId = $('#vaccination_dog_id').val();
+            var deleteButton = $(this);
+            
+            deleteButton.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+            
+            $.ajax({
+                url: `/admin/dogs/documents/${docId}`,
+                type: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        loadDogDocuments(dogId);
+                        alert(response.message || 'Dokument erfolgreich gelöscht');
+                    }
+                },
+                error: function(xhr) {
+                    var message = 'Fehler beim Löschen des Dokuments';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+                    alert(message);
+                },
+                complete: function() {
+                    deleteButton.prop('disabled', false).html('<i class="fa fa-trash"></i>');
+                }
+            });
+        });
+
+        // ========== End Dog Documents Functions ==========
+
         // Handle vaccination status checkbox change
         $(document).on('change', '.vaccination-status', function() {
             const vaccinationId = $(this).data('id');
@@ -2793,6 +3752,7 @@
                     if (response.success) {
                         const dogId = $('#vaccination_dog_id').val();
                         checkVaccinationAlerts(dogId);
+                        fetchVaccinations(dogId);
                         $("#vaccination_updated").show();
                         setTimeout(() => {
                             $("#vaccination_updated").hide();
@@ -2813,6 +3773,7 @@
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMessage = xhr.responseJSON.message;
                     }
+                    
                     alert(errorMessage);
                     // Revert checkbox state on error
                     checkbox.prop('checked', !isVaccinated);
@@ -2885,6 +3846,214 @@
                 }
             });
         }
+
+        // ==================== TIMER FUNCTIONALITY ====================
+        let timerInterval = null;
+        let currentTimerId = null;
+        let remainingSeconds = 0;
+
+        // Toggle dropdown visibility
+        function toggleTimerDropdown(event) {
+            event.preventDefault();
+            const dropdown = document.getElementById('timerDropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('timerDropdown');
+            const timerButton = document.getElementById('timerButton');
+            
+            if (dropdown && timerButton && 
+                !dropdown.contains(event.target) && 
+                !timerButton.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Select timer duration and start
+        function selectTimerDuration(minutes) {
+            // Hide dropdown
+            document.getElementById('timerDropdown').style.display = 'none';
+            
+            // Start timer via AJAX
+            fetch('{{ route('admin.timer.start') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    duration: minutes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentTimerId = data.timer.id;
+                    remainingSeconds = data.timer.remaining;
+                    startCountdown();
+                } else {
+                    alert(data.message || 'Failed to start timer');
+                }
+            })
+            .catch(error => {
+                console.error('Error starting timer:', error);
+                alert('Error starting timer. Please try again.');
+            });
+        }
+
+        // Start the countdown display
+        function startCountdown() {
+            // Hide timer button, show running timer
+            document.getElementById('timerButton').style.display = 'none';
+            document.getElementById('timerRunning').style.display = 'block';
+            
+            // Update display immediately
+            updateTimerDisplay();
+            
+            // Update every second
+            timerInterval = setInterval(function() {
+                remainingSeconds--;
+                updateTimerDisplay();
+                
+                if (remainingSeconds <= 0) {
+                    timerComplete();
+                }
+            }, 1000);
+        }
+
+        // Update the timer display
+        function updateTimerDisplay() {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            const display = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            document.getElementById('timerDisplay').textContent = display;
+        }
+
+        // Stop timer manually
+        function stopTimer() {
+            if (!currentTimerId) {
+                return;
+            }
+            
+            // Stop the countdown
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            // Update database
+            fetch('{{ route('admin.timer.stop') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    timer_id: currentTimerId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resetTimerUI();
+                } else {
+                    console.error('Failed to stop timer:', data.message);
+                    resetTimerUI(); // Reset UI anyway
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping timer:', error);
+                resetTimerUI(); // Reset UI anyway
+            });
+        }
+
+        // Timer completed (reached zero)
+        function timerComplete() {
+            // Stop the countdown
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            // Play bell sound
+            const bellSound = document.getElementById('timerBellSound');
+            if (bellSound) {
+                bellSound.play().catch(error => {
+                    console.error('Error playing bell sound:', error);
+                });
+            }
+            
+            // Update database
+            fetch('{{ route('admin.timer.complete') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    timer_id: currentTimerId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resetTimerUI();
+                    
+                } else {
+                    console.error('Failed to complete timer:', data.message);
+                    resetTimerUI();
+                }
+            })
+            .catch(error => {
+                console.error('Error completing timer:', error);
+                resetTimerUI();
+            });
+        }
+
+        // Reset timer UI to initial state
+        function resetTimerUI() {
+            document.getElementById('timerButton').style.display = 'block';
+            document.getElementById('timerRunning').style.display = 'none';
+            document.getElementById('timerDisplay').textContent = '00:00';
+            currentTimerId = null;
+            remainingSeconds = 0;
+        }
+
+        // Check for active timer on page load
+        function checkActiveTimer() {
+            fetch('{{ route('admin.timer.active') }}', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.timer) {
+                    currentTimerId = data.timer.id;
+                    remainingSeconds = data.timer.remaining;
+                    
+                    if (remainingSeconds > 0) {
+                        startCountdown();
+                    } else {
+                        // Timer already expired, complete it
+                        timerComplete();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking active timer:', error);
+            });
+        }
+
+        // Check for active timer when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            checkActiveTimer();
+        });
+        // ==================== END TIMER FUNCTIONALITY ====================
 
     </script>
 @endsection

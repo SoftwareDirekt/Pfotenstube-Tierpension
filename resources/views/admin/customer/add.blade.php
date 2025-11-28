@@ -129,6 +129,7 @@
                         <h5>Kundenhunde</h5>
                     </div>
                 </div>
+                
                 <div class="addDogWrapper" id="addDogWrapper">
 
                 </div>
@@ -421,6 +422,35 @@
             html += '<hr>';
             html += `<div class="addPickupWrapper" id="addPickupWrapper${counter}"></div>`;
 
+            html += '<hr>';
+            html += '<div class="row">';
+                html += '<div class="col-md-6">';
+                    html += '<h5>Impfungen</h5>';
+                html += '</div>';
+                html += '<div class="col-md-6 d-flex justify-content-end">';
+                    html += '<button type="button" class="no-style" style="color: #5a5fe0" onclick="addVaccination('+counter+')">';
+                        html += '<i class="fa fa-plus"></i>';
+                        html += 'Weitere hinzufügen';
+                    html += '</button>';
+                html += '</div>';
+            html += '</div>';
+            html += '<hr>';
+            html += `<div class="addVaccinationWrapper" id="addVaccinationWrapper${counter}"></div>`;
+
+            html += '<hr/>';
+            html += '<div class="row">';
+                html += '<div class="col-md-6">';
+                    html += '<h5>Externe Dokumente</h5>';
+                html += '</div>';
+                html += '<div class="col-md-6 d-flex justify-content-end">';
+                    html += '<button type="button" class="no-style" style="color: #5a5fe0" onclick="addDocument('+counter+')">';
+                        html += '<i class="fa fa-plus"></i>';
+                        html += 'Weitere hinzufügen';
+                    html += '</button>';
+                html += '</div>';
+            html += '</div>';
+            html += '<hr/>';
+            html += `<div class="addDocumentWrapper" id="addDocumentWrapper${counter}"></div>`;
 
         html += '</div>';
         html += '</div>';
@@ -466,6 +496,79 @@
     function removePickup(id)
     {
         $("#pickupItem"+id).remove();
+    }
+
+    function addVaccination(key)
+    {
+        var id = $('#addVaccinationWrapper'+key).children('.item').length;
+
+        let html = "<div id='vaccinationItem"+key+"_"+id+"' class='item'>";
+            html += "<div class='d-flex justify-content-end my-2'><button type='button' onclick='removeVaccination("+key+","+id+")' class='no-style text-danger'><i class='fa fa-close'></i> Weitere entfernen</button></div>";
+            html += "<div class='row'>";
+            html += "<div class='col-md-3'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="text" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][vaccine_name]" id="vaccine_name'+key+'_'+id+'" placeholder="Impfstoff Name" required />';
+                    html += '<label for="vaccine_name'+key+'_'+id+'">Impfstoff Name</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="date" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][vaccination_date]" id="vaccination_date'+key+'_'+id+'" placeholder="Impfdatum" required />';
+                    html += '<label for="vaccination_date'+key+'_'+id+'">Impfdatum</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="date" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][next_vaccination_date]" id="next_vaccination_date'+key+'_'+id+'" placeholder="Nächste Impfung" required />';
+                    html += '<label for="next_vaccination_date'+key+'_'+id+'">Nächste Impfung</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3 mt-3'>";
+                html += "<div class='form-check mb-4'>";
+                    html += '<input type="hidden" name="dogs['+key+'][vaccinations]['+id+'][is_vaccinated]" value="0" />';
+                    html += '<input type="checkbox" class="form-check-input" name="dogs['+key+'][vaccinations]['+id+'][is_vaccinated]" id="is_vaccinated'+key+'_'+id+'" value="1" />';
+                    html += '<label for="is_vaccinated'+key+'_'+id+'">Geimpft</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "</div>";
+        html += "</div>";
+
+        $("#addVaccinationWrapper"+key).append(html);
+    }
+
+    function removeVaccination(key, id)
+    {
+        $("#vaccinationItem"+key+"_"+id).remove();
+    }
+
+    function addDocument(key)
+    {
+        var id = $('#addDocumentWrapper'+key).children('.item').length;
+
+        let html = "<div id='documentItem"+key+"_"+id+"' class='item'>";
+            html += "<div class='d-flex justify-content-end my-2'><button type='button' onclick='removeDocument("+key+","+id+")' class='no-style text-danger'><i class='fa fa-close'></i> Weitere entfernen</button></div>";
+            html += "<div class='row'>";
+            html += "<div class='col-md-6'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="text" class="form-control" name="dogs['+key+'][documents]['+id+'][name]" id="document_name'+key+'_'+id+'" placeholder="Dokumentname" required />';
+                    html += '<label for="document_name'+key+'_'+id+'">Dokumentname</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-6'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="file" class="form-control" name="dogs['+key+'][documents]['+id+'][file]" id="document_file'+key+'_'+id+'" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required />';
+                    html += '<label for="document_file'+key+'_'+id+'">Datei (PDF, DOC, DOCX, JPG, PNG)</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "</div>";
+        html += "</div>";
+
+        $("#addDocumentWrapper"+key).append(html);
+    }
+
+    function removeDocument(key, id)
+    {
+        $("#documentItem"+key+"_"+id).remove();
     }
 
     function habitsCheck(i)

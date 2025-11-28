@@ -16,6 +16,7 @@ use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\TodosController;
 use App\Http\Controllers\VaccinationController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\TimerController;
 use App\Models\Room;
 /*
 |--------------------------------------------------------------------------
@@ -91,6 +92,11 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::post('/customers/dog/friend/add', [CustomersController::class, 'add_friend'])->name('dog.friends.add');
         Route::post('/customers/dog/delete', [CustomersController::class, 'delete_dog'])->name('customers.delete_dog');
 
+        //Dog Documents Management Routes
+        Route::get('/dogs/{dog_id}/documents', [CustomersController::class, 'get_dog_documents'])->name('dog.documents.index');
+        Route::post('/dogs/{dog_id}/documents', [CustomersController::class, 'store_dog_document'])->name('dog.documents.store');
+        Route::delete('/dogs/documents/{id}', [CustomersController::class, 'destroy_dog_document'])->name('dog.documents.destroy');
+
         //Vaccination Management Routes
         Route::get('/vaccinations/{dog}', [VaccinationController::class, 'index'])->name('vaccinations.index');
         Route::post('/vaccinations', [VaccinationController::class, 'store'])->name('vaccinations.store');
@@ -131,8 +137,15 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::post('/todo/delete', [TodosController::class, 'delete_todo'])->name('todo.delete');
         Route::post('/fetch-todos', [TodosController::class, 'fetch_todos'])->name('todo.fetch');
 
+        //Timer Management Routes
+        Route::post('/timer/start', [TimerController::class, 'start'])->name('timer.start');
+        Route::post('/timer/stop', [TimerController::class, 'stop'])->name('timer.stop');
+        Route::get('/timer/active', [TimerController::class, 'getActive'])->name('timer.active');
+        Route::post('/timer/complete', [TimerController::class, 'complete'])->name('timer.complete');
+
         //Reservation Management Routes
         Route::get('/reservation', [ReservationsController::class, 'reservation'])->name('reservation');
+        Route::get('/reservation/export', [ReservationsController::class, 'export'])->name('reservation.export');
         Route::get('/reservation/add', [ReservationsController::class, 'add_reservation_view'])->name('reservation.add.view');
         Route::post('/reservation/add', [ReservationsController::class, 'add_reservation'])->name('reservation.add');
         Route::post('/reservation/delete', [ReservationsController::class, 'delete_reservation'])->name('reservation.delete');
@@ -151,6 +164,7 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::post('dogs-in-rooms/checkout/update', [ReservationsController::class, 'dogs_in_rooms_update_checkout'])->name('dogs.rooms.checkout-update');
         #Moving Dog to another Room
         Route::post('/move/dog-room', [ReservationsController::class, 'move_dog'])->name('move.dog');
+        Route::post('/move/multiple-dogs', [ReservationsController::class, 'move_multiple_dogs'])->name('move.multiple.dogs');
         // Make friends on dog room change
         Route::post('/move/friendship', [ReservationsController::class, 'move_friendship'])->name('move.friendship');
 
@@ -158,12 +172,9 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         Route::post('/clean/room', [RoomsController::class,'clean_room'])->name('clean.room');
         Route::post('/reset/room', [RoomsController::class,'resetclean'])->name('reset.clean.room');
 
-
-
         //Payment Management Routes
         Route::get('/payment', [PaymentsController::class, 'payment'])->name('payment');
-        Route::post('/payment/update', [PaymentsController::class, 'update_payment'])->name('payment.update');
-        Route::post('/payment/delete', [PaymentsController::class, 'delete_payment'])->name('payment.delete');
+        Route::get('/payment/{id}/settlement-details', [PaymentsController::class, 'settlementDetails'])->name('payment.settlement.details');
 
         // Dog Ranking Routes
         Route::get('/rankings', [CustomersController::class, 'dog_ranks_view'])->name('dog.ranks');
@@ -171,15 +182,12 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         //Working Time Measurement Routes
         Route::get('/employeetrack', [EmployeeTrackController::class, 'index'])->name('employee.track');
 
-        //monatsplan
-
+        // Monatsplan (Monthly Shift Plan)
         Route::get('/employeetrack/monatsplan', [EmployeeTrackController::class, 'monatsplanShow'])->name('employee.track.monatsplan');
-        Route::get('/employees/monatsplan', [EmployeeTrackController::class, 'getEmployeesMonatsplan'])->name('getEmployees.monatsplan');
-        Route::post('/employees/save/monatsplan', [EmployeeTrackController::class, 'storeEvent'])->name('storeEmployees.monatsplan');
-
-        //check monatsplan
-
-        Route::post('/check-event-shift', [EmployeeTrackController::class, 'checkEventShift'])->name('check.event.shift');
+        Route::post('/monatsplan/store', [EmployeeTrackController::class, 'storeEvent'])->name('monatsplan.store');
+        Route::put('/monatsplan/{id}', [EmployeeTrackController::class, 'updateEvent'])->name('monatsplan.update');
+        Route::delete('/monatsplan/{id}', [EmployeeTrackController::class, 'destroyEvent'])->name('monatsplan.destroy');
+        Route::post('/monatsplan/check-shift', [EmployeeTrackController::class, 'checkEventShift'])->name('monatsplan.check-shift');
 
 
         //room plan model
@@ -197,25 +205,22 @@ Route::group(['prefix'=>'admin','as'=>'admin.'], function(){
         //report
         Route::get('/sales', [ReportController::class, 'sales'])->name('sales');
         // Dogs Calendar
-//        Route::get('/dogs/calendar', [CalendarController::class, 'index'])->name('dog.calendar');
         Route::get('/dogs/calendar', [CalendarController::class, 'dogsCalendar'])->name('dog.calendar');
         Route::get('/calendar', [CalendarController::class, 'showCalendar'])->name('calendar');
 
         //V&V Page Routes
         Route::get('/died/dogs', [CustomersController::class, 'v_v_view'])->name('v_v');
         Route::post('/died/dogs', [CustomersController::class, 'v_v_dieddog'])->name('v_v.dieddog');
+        Route::get('/died/dogs/search', [CustomersController::class, 'v_v_search'])->name('v_v.search');
         Route::post('/adopted/dogs', [CustomersController::class, 'v_v_adopteddog'])->name('v_v.adopteddog');
 
         //Events Routes
-        Route::group([
-            'prefix'=>'events'
-        ],function (){
-            Route::get('/', [EventController::class, 'fetchEvents']);
-            Route::post('/', [EventController::class, 'store']);
-            Route::post('/update', [EventController::class, 'update']);
-            Route::post('/edit/{id}', [EventController::class, 'edit']);
-            Route::delete('/delete', [EventController::class, 'destroy']);
-            Route::get('/{id}', [EventController::class, 'show']);
+        Route::group(['prefix' => 'events','as' => 'events.'], function () {
+            Route::get('/', [EventController::class, 'fetchEvents'])->name('index');
+            Route::post('/', [EventController::class, 'store'])->name('store');
+            Route::get('/{id}', [EventController::class, 'show'])->name('show');
+            Route::put('/{id}', [EventController::class, 'update'])->name('update');
+            Route::delete('/{id}', [EventController::class, 'destroy'])->name('destroy');
         });
     });
 

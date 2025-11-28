@@ -321,6 +321,51 @@
                             
                             </div>
                         </div>
+
+                        <hr/>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Impfungen</h5>
+                            </div>
+                            <div class="col-md-6 d-flex justify-content-end">
+                                <button type="button" class="no-style" style="color: #5a5fe0" onclick="addVaccination()">
+                                    <i class="fa fa-plus"></i>
+                                    Weitere hinzufügen
+                                </button>
+                            </div>
+                        </div>
+
+                        <hr/>
+                        
+                        <div class="addVaccinationWrapper" id="addVaccinationWrapper">
+                            <div id="vaccinationItem0" class="item">
+                            
+                            </div>
+                        </div>
+
+                        <hr/>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Externe Dokumente</h5>
+                            </div>
+                            <div class="col-md-6 d-flex justify-content-end">
+                                <button type="button" class="no-style" style="color: #5a5fe0" onclick="addDocument()">
+                                    <i class="fa fa-plus"></i>
+                                    Weitere hinzufügen
+                                </button>
+                            </div>
+                        </div>
+
+                        <hr/>
+                        
+                        <div class="addDocumentWrapper" id="addDocumentWrapper">
+                            <div id="documentItem0" class="item">
+                            
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary">Speichern</button>
                         <a href="{{ route('admin.customers.preview', ['id' => $customer_id]) }}">
                             <button type="button" class="btn btn-outline-secondary">Stornieren</button>
@@ -439,6 +484,75 @@
     }
     function removePickup(id) {
     $("#pickupItem" + id).remove();
+    }
+
+    function addVaccination()
+    {
+        var id = $('#addVaccinationWrapper').children('.item').length;
+
+        let html = "<div id='vaccinationItem"+id+"' class='item'>";
+            html += "<div class='d-flex justify-content-end my-2'><button type='button' onclick='removeVaccination("+id+")' class='no-style text-danger'><i class='fa fa-close'></i> Weitere entfernen</button></div>";
+
+            html += "<div class='row'>";
+            html += "<div class='col-md-3'>";
+            html += "<div class='form-floating form-floating-outline mb-4'>";
+            html += '<input type="text" class="form-control" name="vaccine_name[]" id="vaccine_name' + id +
+                '" placeholder="Impfstoff Name" required/><label for="vaccine_name' + id + '">Impfstoff Name</label>';
+            html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3'>";
+            html += "<div class='form-floating form-floating-outline mb-4'>";
+            html += '<input type="date" class="form-control" name="vaccination_date[]" id="vaccination_date' + id +
+                '" placeholder="Impfdatum" required/><label for="vaccination_date' + id + '">Impfdatum</label>';
+            html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3'>";
+            html += "<div class='form-floating form-floating-outline mb-4'>";
+            html += '<input type="date" class="form-control" name="next_vaccination_date[]" id="next_vaccination_date' + id +
+                '" placeholder="Nächste Impfung" required/><label for="next_vaccination_date' + id + '">Nächste Impfung</label>';
+            html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-3'>";
+            html += "<div class='form-check mb-4 mt-3'>";
+            html += '<input type="hidden" name="is_vaccinated[' + id + ']" value="0"/>';
+            html += '<input type="checkbox" class="form-check-input" name="is_vaccinated[' + id + ']" id="is_vaccinated' + id +
+                '" value="1"/><label for="is_vaccinated' + id + '">Geimpft</label>';
+            html += "</div>";
+            html += "</div>";
+        html += "</div></div>";
+
+        $("#addVaccinationWrapper").append(html)
+    }
+
+    function removeVaccination(id) {
+        $("#vaccinationItem" + id).remove();
+    }
+
+    function addDocument()
+    {
+        var id = $('#addDocumentWrapper').children('.item').length;
+
+        let html = "<div id='documentItem"+id+"' class='item'>";
+            html += "<div class='d-flex justify-content-end my-2'><button type='button' onclick='removeDocument("+id+")' class='no-style text-danger'><i class='fa fa-close'></i> Weitere entfernen</button></div>";
+            html += "<div class='row'>";
+            html += "<div class='col-md-6'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="text" class="form-control" name="document_name[]" id="document_name' + id + '" placeholder="Dokumentname" required/><label for="document_name' + id + '">Dokumentname</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "<div class='col-md-6'>";
+                html += "<div class='form-floating form-floating-outline mb-4'>";
+                    html += '<input type="file" class="form-control" name="document_file[]" id="document_file' + id + '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required/><label for="document_file' + id + '">Datei (PDF, DOC, DOCX, JPG, PNG)</label>';
+                html += "</div>";
+            html += "</div>";
+            html += "</div>";
+        html += "</div>";
+
+        $("#addDocumentWrapper").append(html);
+    }
+
+    function removeDocument(id) {
+        $("#documentItem" + id).remove();
     }
 
 </script>

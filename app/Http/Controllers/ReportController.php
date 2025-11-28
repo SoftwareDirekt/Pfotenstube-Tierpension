@@ -134,91 +134,75 @@ class ReportController extends Controller
 
     public function sales(Request $request)
     {
-        // Determine the current month based on the request
-        if ($request->has('month') && $request->has('action')) {
-            $month = $request->month;
-            $action = $request->action;
-
-            // Move forward or backward a month based on the action
-            $currentMonth = ($action === 'next')
-                ? Carbon::parse($month)->addMonth()->format('F Y')
-                : Carbon::parse($month)->subMonth()->format('F Y');
-        } else {
-            // Default to the current month
-            $currentMonth = Carbon::now()->format('F Y');
+        if(!General::permissions('Verkaufsbericht'))
+        {
+            return to_route('admin.settings');
         }
 
+        $request->validate([
+            'year' => 'nullable|integer|min:2000|max:' . (int) now()->addYears(5)->year,
+            'month' => 'nullable|integer|min:1|max:12',
+            'direction' => 'nullable|in:prev,next'
+        ]);
 
-        // Calculate the start and end dates of the selected month
-        $startOfMonth = Carbon::parse($currentMonth)->startOfMonth();
-        $endOfMonth = Carbon::parse($currentMonth)->endOfMonth();
+        $baseYear = (int) $request->input('year', now()->year);
+        $baseMonth = (int) $request->input('month', now()->month);
+        $currentDate = Carbon::create($baseYear, $baseMonth, 1);
 
-        // Initialize variables
+        $direction = $request->input('direction');
+        if ($direction === 'next') {
+            $currentDate = $currentDate->copy()->addMonthNoOverflow();
+        } elseif ($direction === 'prev') {
+            $currentDate = $currentDate->copy()->subMonthNoOverflow();
+        }
+
+        $startOfMonth = $currentDate->copy()->startOfMonth();
+        $endOfMonth = $currentDate->copy()->endOfMonth();
+
+        $paymentsByDate = Payment::selectRaw('DATE(created_at) as payment_date, SUM(received_amount) as total_amount')
+            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+            ->where('received_amount', '>', 0)
+            ->where('status', '!=', 0)
+            ->groupBy('payment_date')
+            ->orderBy('payment_date')
+            ->get()
+            ->pluck('total_amount', 'payment_date');
+
         $salesData = [];
         $weeklyTotals = [];
-        $monthlyTotal = 0;
-        $weekData = [];
-        $weeklyTotal = 0;
+        $monthlyTotal = 0.0;
 
-        // Loop through each day in the month
-        $rest = false;
-        for ($date = $startOfMonth; $date < $endOfMonth; $date->addDay()) {
-            $currentWeek = Carbon::parse($date)->weekOfYear;
-            $formattedDate = date('d.m.Y', strtotime($date));
-            $dbDate = date('Y-m-d', strtotime($date));
+        $dateCursor = $startOfMonth->copy();
+        while ($dateCursor->lte($endOfMonth)) {
+            $weekLabel = 'KW ' . $dateCursor->isoWeek();
+            $dateKey = $dateCursor->toDateString();
+            $amount = (float) ($paymentsByDate[$dateKey] ?? 0);
 
-            $dailySales = 0;
-
-            $dailySales_raw = Reservation::with('plan')->whereDate('checkout_date', $dbDate)
-                ->where('status', '!=', 4)
-                ->get();
-
-            if(count($dailySales_raw) > 0)
-            {
-                foreach($dailySales_raw as $obj)
-                {
-                    $checkin = Carbon::parse($obj->checkin_date);
-                    $checkout = Carbon::parse($obj->checkout_date);
-
-                    $diffInDays = $checkout->diffInDays($checkin);
-                    $dailySales += $diffInDays * $obj->plan->price;
-                }
+            if (!isset($salesData[$weekLabel])) {
+                $salesData[$weekLabel] = [];
+                $weeklyTotals[$weekLabel] = 0.0;
             }
 
-            // Add daily sales to the current week's data
-            $weekData[] = [
-                'date' => $formattedDate,
-                'amount' => $dailySales,
+            $salesData[$weekLabel][] = [
+                'date' => $dateCursor->format('d.m.Y'),
+                'amount' => $amount,
             ];
-            $weeklyTotal += $dailySales;
 
-            // Check if it's the end of the week or month
-            $parsed_start_date = Carbon::parse($date);
-            $endOfMonth = Carbon::parse($endOfMonth);
+            $weeklyTotals[$weekLabel] += $amount;
+            $monthlyTotal += $amount;
 
-            if ($parsed_start_date->isSunday() || $parsed_start_date->isSameDay($endOfMonth)) {
-                $salesData["KW $currentWeek"] = $weekData;
-                $weeklyTotals["KW $currentWeek"] = $weeklyTotal;
-
-                $monthlyTotal += $weeklyTotal;
-                $currentWeek++;
-                $weekData = [];
-                $weeklyTotal = 0;
-            }
+            $dateCursor->addDay();
         }
 
-        // Pass data to the view
-        $date = Carbon::parse($currentMonth);
-        $date->locale('de');
-
-        $deMonth = $date->monthName;
+        $displayMonth = $currentDate->copy()->locale('de')->translatedFormat('F Y');
 
         return view('admin.reports.maintwo', [
-            'currentMonth' => $currentMonth,
+            'currentYear' => $currentDate->year,
+            'currentMonth' => $currentDate->month,
             'salesData' => $salesData,
             'weeklyTotals' => $weeklyTotals,
             'monthlyTotal' => $monthlyTotal,
-            'deMonth' => $deMonth
+            'deMonth' => $displayMonth,
         ]);
     }
 

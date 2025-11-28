@@ -304,14 +304,41 @@ class UsersController extends Controller
 
         foreach($records as $obj)
         {
+            // Calculate remaining_amount and advance_payment
+            $cost = (float)($obj->cost ?? 0);
+            $received = (float)($obj->amount ?? 0);
+            $remainingAmount = 0;
+            $advancePayment = 0;
+            
+            if ($received > $cost) {
+                $remainingAmount = 0;
+                $advancePayment = round($received - $cost, 2);
+            } else {
+                $remainingAmount = round($cost - $received, 2);
+                $advancePayment = 0;
+            }
+            
+            // Round to zero if very close (within 0.01)
+            if (abs($remainingAmount) < 0.01) {
+                $remainingAmount = 0;
+            }
+            if (abs($advancePayment) < 0.01) {
+                $advancePayment = 0;
+            }
+            
             \App\Models\Payment::create([
                 'id' => $obj->id,
                 'res_id' => $obj->res_id,
                 'type' => $obj->type,
+                'plan_cost' => $obj->plan_cost ?? null,
+                'special_cost' => $obj->special_cost ?? null,
                 'cost' => $obj->cost,
                 'received_amount' => $obj->amount,
-                'discount' => $obj->discount,
-                'discount_amount' => $obj->discountAmount,
+                'discount' => $obj->discount ?? 0,
+                'discount_amount' => $obj->discountAmount ?? 0,
+                'remaining_amount' => $remainingAmount,
+                'advance_payment' => $advancePayment,
+                'wallet_amount' => 0, // Legacy payments don't have wallet usage
                 'status' => $obj->status,
                 'created_at' => $obj->created,
                 'updated_at' => $obj->updated,

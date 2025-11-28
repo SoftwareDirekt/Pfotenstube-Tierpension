@@ -81,6 +81,14 @@
                                     @else
                                         @php
                                             $res = $row[$d];
+                                            
+                                            // Check if dog exists (handle deleted dogs)
+                                            if (!$res->dog) {
+                                                // Skip this reservation if dog is deleted - show as free
+                                                $d++;
+                                                continue;
+                                            }
+                                            
                                             // Determine span
                                             $startDay = $d;
                                             $endDay   = $d;
@@ -89,7 +97,7 @@
                                             }
                                             $length = $endDay - $startDay + 1;
                                             // Color by compatibility
-                                            switch($res->dog->compatibility) {
+                                            switch($res->dog->compatibility ?? '') {
                                                 case 'UV': $bg = 'red'; break;
                                                 case 'V':  $bg = 'green'; break;
                                                 case 'VJ': $bg = 'blue'; break;
@@ -108,7 +116,7 @@
                                             style="background-color: {{ $bg }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                                             @if($isCont) class="text-start" @endif
                                             data-bs-toggle="tooltip"
-                                            title="{{ $res->dog->name }} ({{ $res->dog->id }}) - {{ $res->dog->compatibility }}">
+                                            title="{{ $res->dog->name ?? 'Gelöschter Hund' }} ({{ $res->dog->id ?? 'N/A' }}) - {{ $res->dog->compatibility ?? 'N/A' }}">
                                             {{ $symbol }}
                                         </td>
                                         @php $d = $endDay + 1; @endphp

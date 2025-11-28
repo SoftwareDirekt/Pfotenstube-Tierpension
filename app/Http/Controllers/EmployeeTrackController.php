@@ -4,181 +4,269 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Event;
+use App\Support\EventColor;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use SebastianBergmann\Type\NullType;
-use DB;
 
 class EmployeeTrackController extends Controller
 {
+    /**
+     * Working time measurement index
+     */
     public function index(Request $request)
     {
-        $selected_month = Carbon::now()->month;
-        $selected_year = Carbon::now()->year;
+        $selectedMonth = $request->month ?? Carbon::now()->month;
+        $selectedYear = $request->year ?? Carbon::now()->year;
 
-        if (isset($request->month) && isset($request->year)){
-            $selected_month = $request->month;
-            $selected_year = $request->year;
-        }
+        $startDate = Carbon::create($selectedYear, $selectedMonth, 1)->startOfDay();
+        $endDate = $startDate->copy()->endOfMonth()->endOfDay();
 
-        $first_day = Carbon::create($selected_year, $selected_month, 1)->toDateString();
-        $last_day = Carbon::create($selected_year, $selected_month, 1)->endOfMonth()->toDateString();
-
-        $employees = User::with(['events' => function ($query) use ($first_day, $last_day) {
-            $query->whereBetween('start', [$first_day, $last_day]);
+        $employees = User::with(['events' => function ($query) use ($startDate, $endDate) {
+            $query->where('start', '>=', $startDate)
+                  ->where('start', '<=', $endDate);
         }])
-            ->where('role', 2)
-            ->get();
+        ->where('role', 2)
+        ->get();
 
-        foreach($employees as $obj)
-        {
-            foreach($obj->events  as $event)
-            {
-                $start = new \DateTime($event->start);
-                $end = new \DateTime($event->end);
-                $interval = $start->diff($end);
-                $hoursWorked = $interval->h + ($interval->days * 24) + ($interval->i / 60);
-                $event->hours_worked = $hoursWorked;
+        foreach ($employees as $employee) {
+            foreach ($employee->events as $event) {
+                $start = Carbon::parse($event->start);
+                $end = Carbon::parse($event->end);
+                $event->hours_worked = $start->floatDiffInHours($end);
             }
         }
 
-        return view('admin.workingtimemeasurement.index', compact('employees', 'selected_month', 'selected_year'));
+        return view('admin.workingtimemeasurement.index', [
+            'employees' => $employees,
+            'selected_month' => $selectedMonth,
+            'selected_year' => $selectedYear,
+        ]);
     }
 
+    /**
+     * Monatsplan (Monthly shift plan) view
+     */
     public function monatsplanShow(Request $request)
     {
+        $currentMonth = $this->resolveMonth($request);
+        
+        // Parse month string and get proper date boundaries
+        $monthDate = Carbon::parse($currentMonth);
+        $startOfMonth = $monthDate->copy()->startOfMonth()->startOfDay();
+        $endOfMonth = $monthDate->copy()->endOfMonth()->endOfDay();
+        $daysInMonth = $startOfMonth->daysInMonth;
 
-        if(isset($request->month) && isset($request->action))
-        {
-            $month = $request->month;
-            $action = $request->action;
-
-            $currentMonth = ($action == 'next') ? Carbon::parse($month)->addMonth()->format('F Y') : Carbon::parse($month)->subMonth()->format('F Y');
-        }
-        else{
-            $currentMonth = Carbon::now()->format('F Y');
-        }
-
-
-        $startOfMonth = Carbon::parse($currentMonth)->startOfMonth()->format('Y-m-d');
-        $endOfMonth = Carbon::parse($currentMonth)->endOfMonth()->format('Y-m-d');
-
-        $events = Event::whereIn('shift', ['morning', 'evening'])
-            ->whereBetween('start', [$startOfMonth, $endOfMonth])
+        // Fetch all Arbeit events for this month with shifts (only morning/evening)
+        // Use proper date range with start/end of day boundaries
+        $events = Event::where('status', 'Arbeit')
+            ->whereIn('shift', ['morning', 'evening'])
+            ->where('start', '>=', $startOfMonth)
+            ->where('start', '<=', $endOfMonth)
             ->with('user:id,name')
             ->orderBy('start')
-            ->get()
-            ->groupBy(function ($event) {
-                return Carbon::parse($event->start)->format('F Y');
-            });
-        $employees = User::where('role', 2)->select('id', 'name')->get();
+            ->get();
 
+        // Group events by day and shift for easy access in view
+        $eventsByDayAndShift = [];
+        foreach ($events as $event) {
+            // Ensure event is within the current month and has valid shift
+            if (!$event->shift || !in_array($event->shift, ['morning', 'evening'])) {
+                continue;
+            }
+            
+            $eventDate = Carbon::parse($event->start);
+            $day = $eventDate->day;
+            $shift = $event->shift;
+            
+            // Double-check event is in the correct month
+            if ($eventDate->month === $startOfMonth->month && $eventDate->year === $startOfMonth->year) {
+                $eventsByDayAndShift[$day][$shift][] = $event;
+            }
+        }
 
-        // Pass data to the view
-        $date = Carbon::parse($currentMonth);
-        $date->locale('de');
+        $employees = User::where('role', 2)->orderBy('name')->get(['id', 'name']);
 
-        $deMonth = $date->monthName;
+        // German month name
+        $germanMonth = $startOfMonth->locale('de')->translatedFormat('F Y');
 
-        return view('admin.employee_monatsplan', compact('employees', 'events', 'currentMonth', 'deMonth'));
+        return view('admin.employee_monatsplan', [
+            'employees' => $employees,
+            'eventsByDayAndShift' => $eventsByDayAndShift,
+            'currentMonth' => $currentMonth,
+            'germanMonth' => $germanMonth,
+            'daysInMonth' => $daysInMonth,
+            'startOfMonth' => $startOfMonth,
+        ]);
     }
 
-
-    private function getRandomColorFromList()
-    {
-        $colorCodes = [
-            ['backgroundColor' => '#FF0000', 'color' => '#FFFFFF'],
-            ['backgroundColor' => '#00FF00', 'color' => '#000000'],
-            ];
-        return $colorCodes[array_rand($colorCodes)];
-    }
-
-
+    /**
+     * Store a new shift event
+     */
     public function storeEvent(Request $request)
     {
         $validated = $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i',
+            'shift' => 'required|in:morning,evening',
             'employees' => 'required|array|min:1',
             'employees.*' => 'exists:users,id',
-            'startDateTime' => 'required|date',
-            'endDateTime' => 'required|date|after:startDateTime',
-            'shiftType' => 'required|string|in:morning,evening',
-            'title' => 'nullable|string',
         ]);
 
-        $employees = $validated['employees'];
-        $randomColor = $this->getRandomColorFromList();
+        // Validate that end time is after start time
+        $start = Carbon::parse("{$validated['date']} {$validated['start_time']}");
+        $end = Carbon::parse("{$validated['date']} {$validated['end_time']}");
+        if ($end <= $start) {
+            return back()->withErrors(['end_time' => 'Die Endzeit muss nach der Startzeit liegen.'])->withInput();
+        }
+
+        // Validate that all selected employees have role = 2 (employee)
+        $employees = User::whereIn('id', $validated['employees'])
+            ->where('role', 2)
+            ->pluck('id');
+        
+        if ($employees->count() !== count($validated['employees'])) {
+            return back()->withErrors(['employees' => 'Ungültige Mitarbeiter ausgewählt. Nur Mitarbeiter können hinzugefügt werden.'])->withInput();
+        }
+
+        $colors = EventColor::forStatus('Arbeit');
 
         foreach ($employees as $employeeId) {
-            $event = Event::create([
-                'title' => $validated['title'] ?? null,
-                'start' => $validated['startDateTime'],
-                'end' => $validated['endDateTime'],
+            Event::create([
+                'title' => null,
+                'start' => $start,
+                'end' => $end,
                 'uid' => $employeeId,
                 'status' => 'Arbeit',
-                'backgroundColor' => $randomColor['backgroundColor'],
-                'textColor' => $randomColor['color'],
-                'shift' => $validated['shiftType'],
+                'backgroundColor' => $colors['backgroundColor'],
+                'textColor' => $colors['textColor'],
+                'shift' => $validated['shift'],
             ]);
         }
 
-        return back()->with('success', 'Schicht erfolgreich hinzugefügt');
+        return back()->with('success', 'Schicht erfolgreich hinzugefügt.');
     }
 
-    //check monatsplan
+    /**
+     * Update an existing shift event
+     */
+    public function updateEvent(Request $request, $id)
+    {
+        $event = Event::findOrFail($id);
 
+        $validated = $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i',
+            'shift' => 'required|in:morning,evening',
+            'uid' => 'required|exists:users,id',
+        ]);
+
+        $colors = EventColor::forStatus('Arbeit');
+        $start = Carbon::parse("{$validated['date']} {$validated['start_time']}");
+        $end = Carbon::parse("{$validated['date']} {$validated['end_time']}");
+
+        $event->update([
+            'start' => $start,
+            'end' => $end,
+            'uid' => $validated['uid'],
+            'status' => 'Arbeit',
+            'backgroundColor' => $colors['backgroundColor'],
+            'textColor' => $colors['textColor'],
+            'shift' => $validated['shift'],
+        ]);
+
+        return back()->with('success', 'Schicht erfolgreich aktualisiert.');
+    }
+
+    /**
+     * Delete a shift event
+     */
+    public function destroyEvent($id)
+    {
+        $event = Event::findOrFail($id);
+        $event->delete();
+
+        return back()->with('success', 'Schicht erfolgreich gelöscht.');
+    }
+
+    /**
+     * Check if user has existing shift (for prefilling times)
+     */
     public function checkEventShift(Request $request)
     {
-        $userId = $request->uid;
-
-        // Query the events table to fetch the first event with 'morning' or 'evening' shift
-        $event = Event::where('uid', $userId)
+        $event = Event::where('uid', $request->uid)
             ->whereIn('shift', ['morning', 'evening'])
+            ->latest('start')
             ->first();
 
         if ($event) {
             return response()->json([
                 'exists' => true,
                 'event' => [
-                    'start' => Carbon::parse($event->start)->format('h:i A'),  // 12-hour format with AM/PM
-                    'end' => Carbon::parse($event->end)->format('h:i A')  // 12-hour format with AM/PM
-
+                    'start' => Carbon::parse($event->start)->format('H:i'),
+                    'end' => Carbon::parse($event->end)->format('H:i'),
                 ]
             ]);
-        } else {
-            return response()->json([
-                'exists' => false
-            ]);
         }
+
+        return response()->json(['exists' => false]);
     }
+
+    /**
+     * Generate working record PDF
+     */
     public function workingRecordPdf(Request $request)
     {
-        $selected_month = $request->month ?? Carbon::now()->month;
-        $selected_year  = $request->year  ?? Carbon::now()->year;
+        $selectedMonth = $request->month ?? Carbon::now()->month;
+        $selectedYear = $request->year ?? Carbon::now()->year;
 
-        $start  = Carbon::createFromDate($selected_year, $selected_month, 1);
-        $end    = $start->copy()->endOfMonth();
-        $period = CarbonPeriod::create($start, $end);
-        $days   = iterator_to_array($period);
+        $start = Carbon::createFromDate($selectedYear, $selectedMonth, 1);
+        $end = $start->copy()->endOfMonth();
+        $days = iterator_to_array(CarbonPeriod::create($start, $end));
 
         $employee = User::findOrFail($request->employee);
 
-        $pdf = PDF::loadView(
-            'admin.workingrecord.pdf',
-            compact('days', 'employee', 'selected_month', 'selected_year')
-        )
-            ->setPaper('a4', 'portrait')
-            ->setOptions([
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled'      => true,
-            ]);
+        $pdf = Pdf::loadView('admin.workingrecord.pdf', [
+            'days' => $days,
+            'employee' => $employee,
+            'selected_month' => $selectedMonth,
+            'selected_year' => $selectedYear,
+        ])
+        ->setPaper('a4', 'portrait')
+        ->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+        ]);
 
-        return $pdf->download("Arbeitszeit_{$selected_year}_{$selected_month}.pdf");
+        return $pdf->download("Arbeitszeit_{$selectedYear}_{$selectedMonth}.pdf");
     }
 
+    /**
+     * Resolve current month from request
+     */
+    private function resolveMonth(Request $request): string
+    {
+        if ($request->filled('month') && $request->filled('action')) {
+            // Parse the month string (e.g., "October 2025")
+            // Use copy() to avoid mutating the original Carbon instance
+            $month = Carbon::parse($request->month);
+            
+            // Apply the action (next or prev) using copy() to avoid mutation
+            if ($request->action === 'next') {
+                $month = $month->copy()->addMonth();
+            } else {
+                $month = $month->copy()->subMonth();
+            }
+            
+            return $month->format('F Y');
+        }
 
-
-
+        return Carbon::now()->format('F Y');
+    }
 }
+
+
+

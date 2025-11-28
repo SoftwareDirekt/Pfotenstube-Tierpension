@@ -46,15 +46,17 @@
     <div class="month-navigation">
 
         <form action="{{route('admin.sales')}}" method="GET">
+          <input type="hidden" name="year" value="{{ $currentYear }}">
           <input type="hidden" name="month" value="{{ $currentMonth }}">
-          <input type="hidden" name="action" value="prev">
+          <input type="hidden" name="direction" value="prev">
 
           <button type="submit" class="btn-arrow"><i class="fas fa-arrow-left"></i></button>
         </form>
         <span id="monthDisplay "class="month-display text-danger">{{$deMonth}}</span>
         <form action="{{ route('admin.sales') }}" method="GET">
+          <input type="hidden" name="year" value="{{ $currentYear }}">
           <input type="hidden" name="month" value="{{ $currentMonth }}">
-          <input type="hidden" name="action" value="next">
+          <input type="hidden" name="direction" value="next">
           <button type="submit" class="btn-arrow"><i class="fas fa-arrow-right"></i></button>
       </form>
     </div>

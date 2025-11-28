@@ -12,6 +12,8 @@ use App\Models\Pickup;
 use App\Models\Friend;
 use App\Models\Reservation;
 use App\Models\Payment;
+use App\Models\Vaccination;
+use App\Models\DogDocument;
 use App\Helpers\General;
 use DB;
 
@@ -24,10 +26,12 @@ class CustomersController extends Controller
             return to_route('admin.settings');
         }
 
+        $order = $request->input('order', 'desc');
+        $sortBy = $request->input('sort_by', 'id_number');
+
         if($request->ajax())
         {
             $keyword = isset($request->keyword) ? $request->keyword :"";
-            $order = isset($request->order) ? $request->order : 'asc';
 
             $where = [];
             $where = function ($query) {};
@@ -59,18 +63,65 @@ class CustomersController extends Controller
                 });
             }
 
-            $customers = $customersQuery->orderBy('id', $order)->limit(30)->get();
+            // Apply natural sorting for id_number (handles K1, KW1, 1, 100, etc.)
+            if ($sortBy === 'id_number') {
+                // Extract numeric part: for "K1" or "KW1" get "1", for "100" get "100"
+                $customers = $customersQuery
+                    ->orderByRaw("CASE 
+                        WHEN id_number IS NULL OR id_number = '' THEN 1 
+                        ELSE 0 
+                    END")
+                    ->orderByRaw("CAST(
+                        CASE 
+                            WHEN id_number REGEXP '^[0-9]+$' 
+                            THEN id_number
+                            WHEN id_number REGEXP '^[A-Za-z]+[0-9]+$' 
+                            THEN REGEXP_REPLACE(id_number, '^[A-Za-z]+', '')
+                            ELSE '0'
+                        END 
+                    AS UNSIGNED) " . strtoupper($order))
+                    ->orderBy('id_number', $order)
+                    ->limit(30)
+                    ->get();
+            } else {
+                $customers = $customersQuery->orderBy($sortBy, $order)->limit(30)->get();
+            }
 
             return $customers;
         }
 
-        $customers = Customer::with(['dogs' => function($query){
+        $customersQuery = Customer::with(['dogs' => function($query){
             $query->where('status', 1);
             $query->with('reg_plan_obj','day_plan_obj');
-        }])->orderBy('id', 'DESC')->paginate(30);
+        }]);
 
+        // Apply natural sorting for id_number (handles K1, KW1, 1, 100, etc.)
+        if ($sortBy === 'id_number') {
+            // Extract numeric part: for "K1" or "KW1" get "1", for "100" get "100"
+            $customersQuery->orderByRaw("CASE 
+                WHEN id_number IS NULL OR id_number = '' THEN 1 
+                ELSE 0 
+            END")
+            ->orderByRaw("CAST(
+                CASE 
+                    WHEN id_number REGEXP '^[0-9]+$' 
+                    THEN id_number
+                    WHEN id_number REGEXP '^[A-Za-z]+[0-9]+$' 
+                    THEN REGEXP_REPLACE(id_number, '^[A-Za-z]+', '')
+                    ELSE '0'
+                END 
+            AS UNSIGNED) " . strtoupper($order))
+            ->orderBy('id_number', $order);
+        } else {
+            $customersQuery->orderBy($sortBy, $order);
+        }
 
-        return view('admin.customer.list', compact('customers'));
+        $customers = $customersQuery->paginate(30);
+
+        // Preserve all query parameters in pagination links
+        $customers->appends($request->query());
+
+        return view('admin.customer.list', compact('customers', 'order', 'sortBy'));
     }
 
     public function add_customers()
@@ -99,10 +150,26 @@ class CustomersController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users'), $picture_name);
-            $photo = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $photo = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('Customer picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $customer = Customer::create([
@@ -135,10 +202,26 @@ class CustomersController extends Controller
 
             if(isset($dog['picture']) && $dog['picture'] != null)
             {
-                $picture = $dog['picture'];
-                $picture_name = time().$picture->getClientOriginalName();
-                $picture->move(public_path('uploads/users/dogs'), $picture_name);
-                $photo = $picture_name;
+                try {
+                    $picture = $dog['picture'];
+                    $originalName = $picture->getClientOriginalName();
+                    $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                    $picture_name = uniqid() . '_' . $sanitizedName;
+                    
+                    $uploadPath = public_path('uploads/users/dogs');
+                    if (!file_exists($uploadPath)) {
+                        if (!mkdir($uploadPath, 0755, true)) {
+                            throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                        }
+                    }
+                    
+                    $picture->move($uploadPath, $picture_name);
+                    $photo = $picture_name;
+                } catch (\Exception $e) {
+                    \Log::error('Dog picture upload failed: ' . $e->getMessage());
+                    Session::flash('error', 'Fehler beim Hochladen des Hundebildes: ' . $e->getMessage());
+                    return back();
+                }
             }
 
             $is_medication = isset($dog['is_medication']) ? 1 : 0;
@@ -179,15 +262,11 @@ class CustomersController extends Controller
                 'day_plan' => $dog['daily_rate'],
             ]);
 
-            // Saving dog vists to db
-            $visits = (isset($dog['visits']) && $dog['visits'] != null) ? $dog['visits'] : 0;
-            $stay = (isset($dog['days']) && $dog['days'] != null) ? $dog['days'] : 0;
-
-            Visit::create([
-                'dog_id' => $dog_db->id,
-                'visits' => $visits,
-                'stay' => $stay
-            ]);
+            // Saving dog visits to db (initial values)
+            $visitCounter = new \App\Services\VisitCounterService();
+            $visits = (isset($dog['visits']) && $dog['visits'] != null) ? (int)$dog['visits'] : 0;
+            $stay = (isset($dog['days']) && $dog['days'] != null) ? (int)$dog['days'] : 0;
+            $visitCounter->setInitialCounts($dog_db->id, $visits, $stay);
 
             // Save Pickups
             if(isset($dog['picks']) && count($dog['picks']) > 0)
@@ -198,9 +277,25 @@ class CustomersController extends Controller
                     $picture = isset($pick['file']) ? $pick['file'] : false;
                     if($picture)
                     {
-                        $picture_name = time().$picture->getClientOriginalName();
-                        $picture->move(public_path('uploads/users/pickup'), $picture_name);
-                        $filename = $picture_name;
+                        try {
+                            $originalName = $picture->getClientOriginalName();
+                            $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                            $picture_name = uniqid() . '_' . $sanitizedName;
+                            
+                            $uploadPath = public_path('uploads/users/pickup');
+                            if (!file_exists($uploadPath)) {
+                                if (!mkdir($uploadPath, 0755, true)) {
+                                    throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                                }
+                            }
+                            
+                            $picture->move($uploadPath, $picture_name);
+                            $filename = $picture_name;
+                        } catch (\Exception $e) {
+                            \Log::error('Pickup picture upload failed: ' . $e->getMessage());
+                            // Continue without picture rather than failing entire operation
+                            $filename = null;
+                        }
                     }
 
                     Pickup::create([
@@ -213,15 +308,111 @@ class CustomersController extends Controller
                 }
             }
 
+            if(isset($dog['vaccinations']) && count($dog['vaccinations']) > 0)
+            {
+                foreach($dog['vaccinations'] as $vaccination)
+                {
+                    if(
+                        empty($vaccination['vaccine_name'] ?? null) ||
+                        empty($vaccination['vaccination_date'] ?? null) ||
+                        empty($vaccination['next_vaccination_date'] ?? null)
+                    ) {
+                        continue;
+                    }
+
+                    $is_vaccinated = isset($vaccination['is_vaccinated']) && (int)$vaccination['is_vaccinated'] === 1 ? 1 : 0;
+
+                    Vaccination::create([
+                        'dog_id' => $dog_db->id,
+                        'vaccine_name' => $vaccination['vaccine_name'],
+                        'vaccination_date' => $vaccination['vaccination_date'],
+                        'next_vaccination_date' => $vaccination['next_vaccination_date'],
+                        'is_vaccinated' => $is_vaccinated,
+                    ]);
+                }
+            }
+
+            // Save Documents
+            if(isset($dog['documents']) && count($dog['documents']) > 0)
+            {
+                foreach($dog['documents'] as $document)
+                {
+                    if(empty($document['name'] ?? null) || empty($document['file'] ?? null)) {
+                        continue;
+                    }
+
+                    try {
+                        $file = $document['file'];
+                        
+                        // Validate file size before processing (max 10MB)
+                        $maxSize = 10 * 1024 * 1024; // 10MB
+                        if ($file->getSize() > $maxSize) {
+                            \Log::warning('Document file too large: ' . $file->getSize() . ' bytes');
+                            continue; // Skip this file
+                        }
+                        
+                        $fileType = $file->getClientMimeType();
+                        $fileSize = $file->getSize();
+                        
+                        $originalName = $file->getClientOriginalName();
+                        $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                        $filename = uniqid() . '_' . $sanitizedName;
+                        
+                        $uploadPath = public_path('uploads/users/documents');
+                        if (!file_exists($uploadPath)) {
+                            if (!mkdir($uploadPath, 0755, true)) {
+                                throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                            }
+                        }
+                        
+                        $file->move($uploadPath, $filename);
+                        
+                        // Verify file was moved successfully
+                        $fullPath = $uploadPath . '/' . $filename;
+                        if (!file_exists($fullPath)) {
+                            throw new \Exception('Datei wurde nicht erfolgreich hochgeladen');
+                        }
+                        
+                        DogDocument::create([
+                            'dog_id' => $dog_db->id,
+                            'name' => $document['name'],
+                            'file_path' => $filename,
+                            'file_type' => $fileType,
+                            'file_size' => $fileSize,
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('Document upload failed: ' . $e->getMessage(), [
+                            'dog_id' => $dog_db->id,
+                            'document_name' => $document['name'] ?? 'unknown',
+                        ]);
+                        // Continue with other documents rather than failing entire operation
+                        continue;
+                    }
+                }
+            }
+
             //saving dog friends to db
             if(isset($dog['dog_friends']) && count($dog['dog_friends']) > 0)
             {
                 foreach($dog['dog_friends'] as $friend_id)
                 {
-                    Friend::create([
-                        'dog_id' => $dog_db->id,
-                        'friend_id' => $friend_id
-                    ]);
+                    // Check if friendship already exists to prevent duplicates
+                    $existing = Friend::where(function($query) use ($dog_db, $friend_id) {
+                        $query->where([
+                            ['dog_id', '=', $dog_db->id],
+                            ['friend_id', '=', $friend_id],
+                        ])->orWhere([
+                            ['dog_id', '=', $friend_id],
+                            ['friend_id', '=', $dog_db->id],
+                        ]);
+                    })->first();
+                    
+                    if (!$existing) {
+                        Friend::create([
+                            'dog_id' => $dog_db->id,
+                            'friend_id' => $friend_id
+                        ]);
+                    }
                 }
             }
         }
@@ -230,6 +421,7 @@ class CustomersController extends Controller
         return back();
 
     }
+    
     public function edit_customers($id)
     {
         if(!General::permissions('Kunde'))
@@ -265,10 +457,26 @@ class CustomersController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users'), $picture_name);
-            $customer->picture = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $customer->picture = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('Customer picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $customer->save();
@@ -306,41 +514,75 @@ class CustomersController extends Controller
         $dogs = Dog::where('customer_id', $id)->orderBy('id' , 'desc')->get();
         if(count($dogs) > 0)
         {
-            foreach($dogs as $item)
+            // Limit to prevent memory issues - only process first 50 dogs
+            $dogsLimited = $dogs->take(50);
+            
+            foreach($dogsLimited as $item)
             {
-                $reservations = Reservation::where('dog_id', $item->id)->get();
+                // Limit reservations per dog to prevent memory issues
+                $reservations = Reservation::where('dog_id', $item->id)
+                    ->orderBy('checkin_date', 'desc')
+                    ->limit(100)
+                    ->get();
                 if(count($reservations) > 0)
                 {
                     foreach($reservations as $reservation)
                     {
-                        $payments_raw = Payment::where('res_id', $reservation->id)->get();
+                        // Limit payments per reservation to prevent memory issues
+                        $payments_raw = Payment::where('res_id', $reservation->id)
+                            ->with('settlementsReceived')
+                            ->orderBy('created_at', 'desc')
+                            ->limit(50)
+                            ->get();
                         if(count($payments_raw) > 0)
                         {
                             foreach($payments_raw as $payment)
                             {
-                                $payment->dog = $item->name;
-                                $payment->dog_id = $item->id;
-                                $payment->checkin = $reservation->checkin_date;
-                                $payment->checkout = $reservation->checkout_date;
+                                $paymentData = $payment->toArray();
+                                $paymentData['dog'] = $item->name;
+                                $paymentData['dog_id'] = $item->id;
+                                $paymentData['checkin'] = $reservation->checkin_date;
+                                $paymentData['checkout'] = $reservation->checkout_date;
 
-                                // Get Remaining Amount
-                                // $records = \DB::select("select payments.received_amount as amount,payments.cost as cost, payments.discount as discount from payments,dogs,customers,reservations WHERE reservations.id=payments.res_id and reservations.dog_id=dogs.id and customers.id=dogs.customer_id and customers.id=$id");
-                                // $totalAmount = 0;
-                                // foreach($records as $record)
-                                // {
-                                //     $amount         = abs($record->amount);
-                                //     $cost           = abs($record->cost);
+                                // Calculate remaining_amount and advance_payment if not set
+                                $cost = isset($paymentData['cost']) ? (float)$paymentData['cost'] : 0.0;
+                                $received = isset($paymentData['received_amount']) ? (float)$paymentData['received_amount'] : 0.0;
+                                
+                                if (!isset($paymentData['remaining_amount']) || $paymentData['remaining_amount'] === null) {
+                                    if ($received > $cost) {
+                                        $paymentData['remaining_amount'] = 0;
+                                        $paymentData['advance_payment'] = $received - $cost;
+                                    } else {
+                                        $paymentData['remaining_amount'] = $cost - $received;
+                                        $paymentData['advance_payment'] = 0;
+                                    }
+                                } else {
+                                    $paymentData['remaining_amount'] = (float)$paymentData['remaining_amount'];
+                                    if (!isset($paymentData['advance_payment']) || $paymentData['advance_payment'] === null) {
+                                        if ($received > $cost) {
+                                            $paymentData['advance_payment'] = $received - $cost;
+                                        } else {
+                                            $paymentData['advance_payment'] = 0;
+                                        }
+                                    }
+                                }
 
-                                //     $remaining = $amount - $cost;
+                                // Calculate effective remaining (accounting for settlements)
+                                $originalRemaining = (float)($paymentData['remaining_amount'] ?? 0);
+                                $settledAmount = (float) $payment->settlementsReceived->sum('amount_settled');
+                                $paymentData['effective_remaining'] = max(0, round($originalRemaining - $settledAmount, 2));
+                                $paymentData['original_remaining'] = $originalRemaining;
+                                $paymentData['settled_amount'] = $settledAmount;
 
-                                //     $totalAmount = $totalAmount+$remaining;
-                                //     $payment->remaining_amount = $totalAmount;
-                                // }
+                                $paymentData['plan_cost'] = isset($paymentData['plan_cost']) ? (float)$paymentData['plan_cost'] : 0.0;
+                                $paymentData['special_cost'] = isset($paymentData['special_cost']) ? (float)$paymentData['special_cost'] : 0.0;
+                                $paymentData['cost'] = isset($paymentData['cost']) ? (float)$paymentData['cost'] : 0.0;
+                                $paymentData['received_amount'] = isset($paymentData['received_amount']) ? (float)$paymentData['received_amount'] : 0.0;
+                                $paymentData['discount'] = isset($paymentData['discount']) ? (float)$paymentData['discount'] : 0.0;
+                                $paymentData['discount_amount'] = isset($paymentData['discount_amount']) ? (float)$paymentData['discount_amount'] : 0.0;
 
-
+                                $payments[] = $paymentData;
                             }
-                            $payment = $payment->toArray();
-                            array_push($payments, $payment);
                         }
                     }
                 }
@@ -362,9 +604,18 @@ class CustomersController extends Controller
             }
         }
 
-        // return $payments;
+        // Sort payments by created_at descending (newest first)
+        usort($payments, function($a, $b) {
+            $dateA = isset($a['created_at']) ? strtotime($a['created_at']) : 0;
+            $dateB = isset($b['created_at']) ? strtotime($b['created_at']) : 0;
+            return $dateB - $dateA; // Descending order (newest first)
+        });
 
-        return view('admin.customer.preview', compact('customer' , 'dogs', 'payments'));
+        // Use customer balance column directly (accounts for settlements and wallet)
+        $balanceService = new \App\Services\CustomerBalanceService();
+        $customerBalance = $balanceService->getBalance($id);
+
+        return view('admin.customer.preview', compact('customer' , 'dogs', 'payments', 'customerBalance'));
     }
 
     public function add_dog_view(Request $request, $customer_id)
@@ -398,10 +649,26 @@ class CustomersController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users/dogs'), $picture_name);
-            $photo = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users/dogs');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $photo = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('Dog picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Hundebildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $is_medication = isset($request->is_medication) ? 1 : 0;
@@ -442,15 +709,11 @@ class CustomersController extends Controller
             'day_plan' => $request->daily_rate,
         ]);
 
-        // Saving dog vists to db
-        $visits = (isset($request->visits) && $request->visits != null) ? $request->visits : 0;
-        $stay = (isset($request->days) && $request->days != null) ? $request->days : 0;
-
-        Visit::create([
-            'dog_id' => $dog->id,
-            'visits' => $visits,
-            'stay' => $stay
-        ]);
+        // Saving dog visits to db (initial values)
+        $visitCounter = new \App\Services\VisitCounterService();
+        $visits = (isset($request->visits) && $request->visits != null) ? (int)$request->visits : 0;
+        $stay = (isset($request->days) && $request->days != null) ? (int)$request->days : 0;
+        $visitCounter->setInitialCounts($dog->id, $visits, $stay);
 
         // Saving Pickups data to db
         $count = isset($request->pick_name) && is_array($request->pick_name) ? count($request->pick_name) : 0;
@@ -467,9 +730,25 @@ class CustomersController extends Controller
 
                 if($picture)
                 {
-                    $picture_name = time().$picture->getClientOriginalName();
-                    $picture->move(public_path('uploads/users/pickup'), $picture_name);
-                    $filename = $picture_name;
+                    try {
+                        $originalName = $picture->getClientOriginalName();
+                        $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                        $picture_name = uniqid() . '_' . $sanitizedName;
+                        
+                        $uploadPath = public_path('uploads/users/pickup');
+                        if (!file_exists($uploadPath)) {
+                            if (!mkdir($uploadPath, 0755, true)) {
+                                throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                            }
+                        }
+                        
+                        $picture->move($uploadPath, $picture_name);
+                        $filename = $picture_name;
+                    } catch (\Exception $e) {
+                        \Log::error('Pickup picture upload failed: ' . $e->getMessage());
+                        // Continue without picture rather than failing entire operation
+                        $filename = null;
+                    }
                 }
 
                 Pickup::create([
@@ -494,6 +773,90 @@ class CustomersController extends Controller
             }
         }
 
+        // Saving vaccinations to db
+        if(isset($request->vaccine_name) && is_array($request->vaccine_name) && count($request->vaccine_name) > 0)
+        {
+            for($i = 0; $i < count($request->vaccine_name); $i++)
+            {
+                // Skip empty entries
+                if(empty($request->vaccine_name[$i]) || empty($request->vaccination_date[$i]) || empty($request->next_vaccination_date[$i]))
+                {
+                    continue;
+                }
+
+                // Check if this vaccination is marked as vaccinated
+                // The checkbox sends the last value (1 if checked, 0 from hidden if not checked)
+                $is_vaccinated = isset($request->is_vaccinated[$i]) && $request->is_vaccinated[$i] == 1 ? 1 : 0;
+
+                Vaccination::create([
+                    'dog_id' => $dog->id,
+                    'vaccine_name' => $request->vaccine_name[$i],
+                    'vaccination_date' => $request->vaccination_date[$i],
+                    'next_vaccination_date' => $request->next_vaccination_date[$i],
+                    'is_vaccinated' => $is_vaccinated
+                ]);
+            }
+        }
+
+        // Saving documents to db
+        if(isset($request->document_name) && is_array($request->document_name) && count($request->document_name) > 0)
+        {
+            for($i = 0; $i < count($request->document_name); $i++)
+            {
+                if(empty($request->document_name[$i]) || !isset($request->document_file[$i])) {
+                    continue;
+                }
+
+                try {
+                    $file = $request->document_file[$i];
+                    
+                    // Validate file size before processing (max 10MB)
+                    $maxSize = 10 * 1024 * 1024; // 10MB
+                    if ($file->getSize() > $maxSize) {
+                        \Log::warning('Document file too large: ' . $file->getSize() . ' bytes');
+                        continue; // Skip this file
+                    }
+                    
+                    $fileType = $file->getClientMimeType();
+                    $fileSize = $file->getSize();
+                    
+                    $originalName = $file->getClientOriginalName();
+                    $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                    $filename = uniqid() . '_' . $sanitizedName;
+                    
+                    $uploadPath = public_path('uploads/users/documents');
+                    if (!file_exists($uploadPath)) {
+                        if (!mkdir($uploadPath, 0755, true)) {
+                            throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                        }
+                    }
+                    
+                    $file->move($uploadPath, $filename);
+                    
+                    // Verify file was moved successfully
+                    $fullPath = $uploadPath . '/' . $filename;
+                    if (!file_exists($fullPath)) {
+                        throw new \Exception('Datei wurde nicht erfolgreich hochgeladen');
+                    }
+                    
+                    DogDocument::create([
+                        'dog_id' => $dog->id,
+                        'name' => $request->document_name[$i],
+                        'file_path' => $filename,
+                        'file_type' => $fileType,
+                        'file_size' => $fileSize,
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('Document upload failed: ' . $e->getMessage(), [
+                        'dog_id' => $dog->id,
+                        'document_name' => $request->document_name[$i] ?? 'unknown',
+                    ]);
+                    // Continue with other documents rather than failing entire operation
+                    continue;
+                }
+            }
+        }
+
         Session::flash('success' , 'Hund wurde erfolgreich hinzugefügt');
         return back();
     }
@@ -509,7 +872,7 @@ class CustomersController extends Controller
         $plans = Plan::get();
         $dogs = Dog::with('customer')->get();
 
-        $dog = Dog::with(['visit' , 'pickups', 'reg_plan_obj', 'customer'])->find($id);
+        $dog = Dog::with(['visit' , 'pickups', 'reg_plan_obj', 'customer', 'vaccinations', 'documents'])->find($id);
 
         $dog->eating_habits = json_decode($dog->eating_habits);
 
@@ -590,22 +953,35 @@ class CustomersController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            $picture = $request->picture;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users/dogs'), $picture_name);
-            $dog->picture = $picture_name;
+            try {
+                $picture = $request->picture;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users/dogs');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $dog->picture = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('Dog picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Hundebildes: ' . $e->getMessage());
+                return back();
+            }
         }
 
         $dog->save();
 
-        //Updating Visits info
-        $visit = Visit::where('dog_id', $request->id)->first();
-        if($visit)
-        {
-            $visit->visits = $request->visits;
-            $visit->stay = $request->days;
-            $visit->save();
-        }
+        //Updating Visits info (initial values - these are the base counts)
+        $visitCounter = new \App\Services\VisitCounterService();
+        $visits = (isset($request->visits) && $request->visits != null) ? (int)$request->visits : 0;
+        $days = (isset($request->days) && $request->days != null) ? (int)$request->days : 0;
+        $visitCounter->setInitialCounts($request->id, $visits, $days);
 
         Session::flash('success', 'Die Hundeinformationen wurden erfolgreich aktualisiert');
         return to_route('admin.customers.preview' , ['id' => $dog->customer_id]);
@@ -635,15 +1011,51 @@ class CustomersController extends Controller
 
     public function delete_dog(Request $request)
     {
-        $reservations = Reservation::where('dog_id', $request->id)->get();
-        foreach($reservations as $obj)
-        {
-            $obj->delete();
+        try {
+            $dog = Dog::find($request->id);
+            if (!$dog) {
+                Session::flash('error', 'Hund nicht gefunden');
+                return back();
+            }
+
+            // Get all reservations for this dog
+            $reservations = Reservation::where('dog_id', $request->id)->with('payments')->get();
+            
+            foreach($reservations as $reservation)
+            {
+                // If reservation has payments: soft delete
+                // If reservation has no payments: hard delete
+                if($reservation->payments && $reservation->payments->count() > 0)
+                {
+                    $reservation->delete(); // Soft delete
+                    
+                    // Soft delete all payments for this reservation
+                    foreach($reservation->payments as $payment)
+                    {
+                        $payment->delete(); // Soft delete
+                    }
+                }
+                else
+                {
+                    $reservation->forceDelete(); // Hard delete (no payments)
+                }
+            }
+
+            // Hard delete dog documents
+            $dog->documents()->delete(); // This will hard delete since documents don't have soft deletes
+
+            // Soft delete the dog
+            $dog->delete();
+
+            Session::flash('error','Hund wurde erfolgreich gelöscht');
+        } catch (\Exception $e) {
+            \Log::error('Error deleting dog: ' . $e->getMessage(), [
+                'dog_id' => $request->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            Session::flash('error', 'Fehler beim Löschen des Hundes. Bitte versuchen Sie es erneut.');
         }
-
-        Dog::where('id', $request->id)->delete();
-
-        Session::flash('error','Hund wurde erfolgreich gelöscht');
+        
         return back();
     }
 
@@ -662,10 +1074,25 @@ class CustomersController extends Controller
             $pickup->id_number = $request->pick_id[$i];
             if(isset($request->pick_file[$i] ) && $request->pick_file[$i] != null)
             {
-                $picture = $request->pick_file[$i];
-                $picture_name = time().$picture->getClientOriginalName();
-                $picture->move(public_path('uploads/users/pickup'), $picture_name);
-                $pickup->picture = $picture_name;
+                try {
+                    $picture = $request->pick_file[$i];
+                    $originalName = $picture->getClientOriginalName();
+                    $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                    $picture_name = uniqid() . '_' . $sanitizedName;
+                    
+                    $uploadPath = public_path('uploads/users/pickup');
+                    if (!file_exists($uploadPath)) {
+                        if (!mkdir($uploadPath, 0755, true)) {
+                            throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                        }
+                    }
+                    
+                    $picture->move($uploadPath, $picture_name);
+                    $pickup->picture = $picture_name;
+                } catch (\Exception $e) {
+                    \Log::error('Pickup picture upload failed: ' . $e->getMessage());
+                    // Continue without picture rather than failing entire operation
+                }
             }
 
             $pickup->save();
@@ -701,10 +1128,26 @@ class CustomersController extends Controller
         $pickup->id_number = $request->id_number;
         if(isset($request->file) && $request->file != null)
         {
-            $picture = $request->file;
-            $picture_name = time().$picture->getClientOriginalName();
-            $picture->move(public_path('uploads/users/pickup'), $picture_name);
-            $pickup->picture = $picture_name;
+            try {
+                $picture = $request->file;
+                $originalName = $picture->getClientOriginalName();
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+                $picture_name = uniqid() . '_' . $sanitizedName;
+                
+                $uploadPath = public_path('uploads/users/pickup');
+                if (!file_exists($uploadPath)) {
+                    if (!mkdir($uploadPath, 0755, true)) {
+                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    }
+                }
+                
+                $picture->move($uploadPath, $picture_name);
+                $pickup->picture = $picture_name;
+            } catch (\Exception $e) {
+                \Log::error('Pickup picture upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Pickup-Bildes: ' . $e->getMessage());
+                return back();
+            }
         }
         $pickup->save();
 
@@ -766,6 +1209,50 @@ class CustomersController extends Controller
         $dogsVermittelt = Dog::with('customer')->where('status',2)->orderBy('id' , 'desc')->get();
         $dogsVerstorben = Dog::with('customer')->where('status',3)->orderBy('id' , 'desc')->get();
         return view("admin.vandv.index" , compact("dogsVermittelt", "dogsVerstorben"));
+    }
+
+    public function v_v_search(Request $request)
+    {
+        if(!General::permissions('Verstorbene Hunde'))
+        {
+            return response()->json([]);
+        }
+
+        $keyword = $request->input('keyword', '');
+        $type = $request->input('type', 'both'); // 'adopted', 'died', or 'both'
+
+        $query = Dog::with('customer')
+            ->where(function($q) use ($keyword) {
+                $q->where('name', 'like', '%' . $keyword . '%')
+                  ->orWhere('chip_number', 'like', '%' . $keyword . '%')
+                  ->orWhere('compatible_breed', 'like', '%' . $keyword . '%')
+                  ->orWhere('health_problems', 'like', '%' . $keyword . '%')
+                  ->orWhere('medication', 'like', '%' . $keyword . '%')
+                  ->orWhere('allergy', 'like', '%' . $keyword . '%')
+                  ->orWhereHas('customer', function($customerQuery) use ($keyword) {
+                      $customerQuery->where('name', 'like', '%' . $keyword . '%')
+                                   ->orWhere('id_number', 'like', '%' . $keyword . '%')
+                                   ->orWhere('phone', 'like', '%' . $keyword . '%')
+                                   ->orWhere('email', 'like', '%' . $keyword . '%')
+                                   ->orWhere('city', 'like', '%' . $keyword . '%');
+                  })
+                  ->orWhereHas('pickups', function($pickupQuery) use ($keyword) {
+                      $pickupQuery->where('name', 'like', '%' . $keyword . '%')
+                                 ->orWhere('phone', 'like', '%' . $keyword . '%');
+                  });
+            });
+
+        if ($type === 'adopted') {
+            $query->where('status', 2);
+        } elseif ($type === 'died') {
+            $query->where('status', 3);
+        } else {
+            $query->whereIn('status', [2, 3]);
+        }
+
+        $dogs = $query->orderBy('id', 'desc')->get();
+
+        return response()->json($dogs);
     }
 
     public function v_v_dieddog(Request $request)
@@ -871,5 +1358,126 @@ class CustomersController extends Controller
             $dog->save();
         }
         return true;
+    }
+
+    /**
+     * Get all documents for a dog
+     */
+    public function get_dog_documents($dog_id)
+    {
+        $dog = Dog::findOrFail($dog_id);
+        $documents = $dog->documents()->orderBy('created_at', 'desc')->get();
+        return response()->json($documents);
+    }
+
+    /**
+     * Store a new dog document
+     */
+    public function store_dog_document(Request $request)
+    {
+        $request->validate([
+            'dog_id' => 'required|exists:dogs,id',
+            'name' => 'required|string|max:255',
+            'file' => 'required|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:10240', // Max 10MB, specific file types
+        ]);
+
+        $dog = Dog::findOrFail($request->dog_id);
+
+        $file = $request->file('file');
+        
+        // Get file properties BEFORE moving the file
+        $fileType = $file->getClientMimeType();
+        $fileSize = $file->getSize();
+        
+        // Sanitize filename to prevent path traversal attacks
+        $originalName = $file->getClientOriginalName();
+        $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+        $filename = uniqid() . '_' . $sanitizedName;
+        
+        // Ensure the directory exists
+        $uploadPath = public_path('uploads/users/documents');
+        if (!file_exists($uploadPath)) {
+            if (!mkdir($uploadPath, 0755, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Fehler beim Erstellen des Upload-Verzeichnisses',
+                ], 500);
+            }
+        }
+        
+        // Move the file and handle failure
+        try {
+            $file->move($uploadPath, $filename);
+        } catch (\Exception $e) {
+            \Log::error('File upload failed: ' . $e->getMessage(), [
+                'filename' => $filename,
+                'path' => $uploadPath,
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Fehler beim Hochladen der Datei: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        // Verify file was moved successfully before creating database record
+        $fullPath = $uploadPath . '/' . $filename;
+        if (!file_exists($fullPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datei wurde nicht erfolgreich hochgeladen',
+            ], 500);
+        }
+
+        $document = DogDocument::create([
+            'dog_id' => $dog->id,
+            'name' => $request->name,
+            'file_path' => $filename,
+            'file_type' => $fileType,
+            'file_size' => $fileSize,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dokument erfolgreich hochgeladen',
+            'document' => $document,
+        ]);
+    }
+
+    /**
+     * Delete a dog document
+     */
+    public function destroy_dog_document($id)
+    {
+        $document = DogDocument::findOrFail($id);
+        
+        // Delete the file from storage FIRST, then the record
+        // This ensures if file deletion fails, we don't lose the record
+        $filePath = public_path('uploads/users/documents/' . $document->file_path);
+        $fileDeleted = false;
+        
+        if (file_exists($filePath)) {
+            try {
+                $fileDeleted = unlink($filePath);
+            } catch (\Exception $e) {
+                \Log::error('File deletion failed: ' . $e->getMessage(), [
+                    'file_path' => $filePath,
+                    'document_id' => $id,
+                ]);
+            }
+        } else {
+            // File doesn't exist, but we'll still delete the record
+            $fileDeleted = true;
+        }
+
+        // Delete the database record
+        $document->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => $fileDeleted 
+                ? 'Dokument erfolgreich gelöscht' 
+                : 'Dokument-Eintrag gelöscht, aber Datei konnte nicht entfernt werden',
+        ]);
     }
 }
