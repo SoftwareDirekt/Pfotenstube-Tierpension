@@ -54,11 +54,13 @@ HELLOCASH_TEST_MODE=true  # Set to false for production
 **Required for HelloCash customer sync job:**
 
 ```bash
-# Production queue configuration
-QUEUE_CONNECTION=database  # Use 'sync' for local development, 'database' for production
+# Production queue configuration (will be set to 'redis' in Step 4)
+QUEUE_CONNECTION=database  # Use 'sync' for local development
 ```
 
-**Note:** The `database` queue driver requires the `jobs` table, which will be created in Step 2.
+**Note:** 
+- For production, this will be changed to `redis` in Step 4 after supervisor is configured
+- The `database` queue driver requires the `jobs` table, which will be created in Step 2
 
 ### 1.3 VAT Percentage Preference
 
@@ -169,36 +171,33 @@ php artisan events:update-legacy-colors
 
 The queue worker is **required** for the HelloCash customer sync job to process in the background.
 
-### 4.1 Cloudways Supervisor Configuration
-
-**Method: Via Cloudways Platform**
+### 4.1 Enable Supervisor from Cloudways Server
 
 1. Log in to Cloudways Platform
 2. Navigate to **Application Management** → **Application Settings**
-3. Go to **Cron Job Manager** or **Supervisor** section
-4. Add a new supervisor process with:
-   - **Command:** `php /home/master/applications/[APP_ID]/public_html/artisan queue:work database --sleep=3 --tries=3 --max-time=3600`
-     - Replace `[APP_ID]` with your actual Cloudways application ID
-     - Replace `/home/master/applications/` with your actual application path if different
-   - **Process Name:** `laravel-worker`
-   - **Number of Processes:** `1`
-   - **Auto Start:** `Yes`
-   - **Auto Restart:** `Yes`
-   - **User:** `master` (or your application user)
+3. Go to **Supervisord Jobs** section
+4. Click **Add New Job** (use default settings)
+5. Change **Tries** to `3`
+6. Create the job without changing any other settings
 
-**⚠️ Important:** The queue worker must be running before dispatching the customer sync job in Step 5.
+### 4.2 Configure Queue Connection
 
-### 4.2 Verify Queue Worker Status
+Update your `.env` file to use Redis for queue processing:
+
+```bash
+# Change queue connection to Redis
+QUEUE_CONNECTION=redis
+```
+
+**⚠️ Important:** 
+- The queue worker must be running before dispatching the customer sync job in Step 5
+- After creating the supervisor job and updating `.env`, the job will be automatically handled by supervisor when dispatched via Postman
+
+### 4.3 Verify Queue Worker Status
 
 **Via Cloudways Platform:**
-- Check supervisor process status in Cloudways Platform → Application Settings → Supervisor section
+- Check supervisor process status in Cloudways Platform → Application Settings → Supervisord Jobs section
 - Verify the process shows as "Running" status
-
-**Via Logs (if SSH access available):**
-```bash
-# View worker logs
-tail -f storage/logs/worker.log
-```
 
 **Via Database:**
 ```sql
@@ -242,7 +241,8 @@ curl -X POST https://your-domain.com/api/hellocash/sync-customers \
 **Note:** 
 - The endpoint will return a JSON response confirming the job has been dispatched
 - Monitor the logs to track sync progress
-- The job processes customers at a rate of 10 per minute
+- The job processes customers in batches of 30 (configurable) at a rate of 10 per minute
+- The job automatically continues processing remaining customers in subsequent batches
 
 ### 5.2 Monitor Sync Progress
 
@@ -275,9 +275,11 @@ WHERE hellocash_customer_id IS NULL;
 ```
 
 **Note:** 
-- The sync job processes customers at a rate of 10 per minute (configurable)
+- The sync job processes customers in batches of 30 (configurable) at a rate of 10 per minute
+- Each batch processes within timeout limits and automatically dispatches the next batch
 - Failed customers will be logged and can be retried
 - New customers created after deployment are automatically synced on creation
+- The job will automatically resume from where it left off if interrupted (skips already-synced customers)
 
 ---
 
@@ -430,11 +432,11 @@ SELECT * FROM failed_jobs ORDER BY failed_at DESC LIMIT 10;
 **Symptoms:** Jobs remain in `jobs` table, not being processed
 
 **Solutions:**
-1. Check queue worker status via Cloudways Platform → Application Settings → Supervisor section
-2. Restart worker via Cloudways Platform UI (stop and start the supervisor process)
-3. Check worker logs: `tail -f storage/logs/worker.log` (if SSH access available) or via Cloudways log viewer
-4. Verify `QUEUE_CONNECTION=database` in `.env`
-5. Verify supervisor process is configured correctly in Cloudways Platform
+1. Check queue worker status via Cloudways Platform → Application Settings → Supervisord Jobs section
+2. Restart worker via Cloudways Platform UI (stop and start the supervisor job)
+3. Verify `QUEUE_CONNECTION=redis` in `.env`
+4. Verify supervisor job is configured correctly in Cloudways Platform (tries set to 3)
+5. Clear config cache: `php artisan config:clear` after changing queue connection
 
 ### HelloCash API Errors
 
