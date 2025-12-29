@@ -17,6 +17,7 @@ use App\Models\DogDocument;
 use App\Helpers\General;
 use App\Services\HelloCashService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use DB;
 
 class CustomersController extends Controller
@@ -455,7 +456,12 @@ class CustomersController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:Stammkunde,Organisation',
-            'email' => 'nullable|email|unique:customers,email,' . $request->id . '|max:255',
+            'email' => [
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique('customers', 'email')->ignore($request->id),
+            ],
             'phone' => 'nullable|string|max:50',
             'id_number' => 'nullable|string|max:255|unique:customers,id_number,' . $request->id,
             'title' => 'nullable|string|max:50',
@@ -486,7 +492,7 @@ class CustomersController extends Controller
         $customer->title = $request->title;
         $customer->profession = $request->profession;
         $customer->name = $request->name;
-        $customer->email = $request->email;
+        $customer->email = !empty($request->email) ? trim($request->email) : null;
         $customer->street = $request->street;
         $customer->city = $request->city;
         $customer->zipcode = $request->postcode;

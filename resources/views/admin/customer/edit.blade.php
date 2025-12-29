@@ -63,7 +63,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" id="email" value="{{ $customer->email }}" placeholder="Email" disabled />
+                            <input type="email" class="form-control" name="email" id="email" value="{{ old('email', $customer->email) }}" placeholder="Email" />
                             <label for="email">Email</label>
                             @error('email')
                                 <small class="text-danger">{{$message}}</small>
