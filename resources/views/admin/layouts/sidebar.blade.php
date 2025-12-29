@@ -156,6 +156,15 @@
       </li>
       @endif
 
+      @if($permissions['payments'] && Session::has('lock'))
+      <li class="menu-item">
+        <a href="{{route('admin.invoices')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
+          <div data-i18n="Rechnungen">Rechnungen</div>
+        </a>
+      </li>
+      @endif
+
       @if($permissions['report'] && Session::has('lock'))
       <li class="menu-item">
         <a href="{{route('admin.sales', ['year' => now()->year, 'month' => now()->month])}}" class="menu-link">

@@ -33,6 +33,11 @@ class PaymentsController extends Controller
             $paymentsQuery->whereMonth('created_at', $request->input('month'));
         }
 
+        if ($request->filled('id') || $request->filled('payment_id')) {
+            $paymentId = $request->input('id') ?? $request->input('payment_id');
+            $paymentsQuery->where('id', $paymentId);
+        }
+
         $status = $request->input('st', $request->input('status'));
         if (!is_null($status) && $status !== 'alle') {
             $paymentsQuery->where('status', $status);

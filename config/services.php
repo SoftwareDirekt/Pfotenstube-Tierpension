@@ -31,4 +31,19 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | HelloCash API Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for HelloCash cash register integration.
+    |
+    */
+    
+    'hellocash' => [
+        'api_key' => env('HELLOCASH_API_KEY', ''),
+        'base_url' => env('HELLOCASH_BASE_URL', 'https://api.hellocash.business/api/v1'),
+        'test_mode' => env('HELLOCASH_TEST_MODE', true),
+    ],
+
 ];

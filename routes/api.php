@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Jobs\SyncCustomersToHelloCash;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+// Sync customers to HelloCash (Hit via POSTMAN or similar)
+Route::post('/hellocash/sync-customers', function () {
+    SyncCustomersToHelloCash::dispatch(10);
+    return response()->json(['message' => 'HelloCash customer sync job has been dispatched. Check logs for progress.']);
 });

@@ -67,7 +67,7 @@
                     <td>
                         <div class="d-flex justify-content-end">
                             <div>
-                                <a href="{{route('admin.room.edit',['id' => $obj->id])}}">
+                                <a href="{{route('admin.rooms.edit',['id' => $obj->id])}}">
                                     <i class="fa fa-edit"></i>
                                 </a>
                             </div>
@@ -96,7 +96,7 @@
             <h3 class="mb-2 pb-1">Raum löschen</h3>
           </div>
           <p class="text-center">Möchten Sie diesen Raum wirklich löschen?</p>
-          <form class="row g-3" method="POST" action="{{route('admin.room.delete')}}">
+          <form class="row g-3" method="POST" action="{{route('admin.rooms.delete')}}">
             @csrf
             <div class="col-12 d-flex justify-content-center">
                 <input type="hidden" class="form-control" name="id" id="id" />
@@ -185,7 +185,7 @@
     function updateOrder(order)
     {
         $.ajax({
-            url: "{{route('admin.room.order.update')}}",
+            url: "{{route('admin.rooms.order.update')}}",
             method: 'POST',
             data: {
                 order: order,

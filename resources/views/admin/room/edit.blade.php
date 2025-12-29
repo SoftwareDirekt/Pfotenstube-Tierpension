@@ -13,7 +13,7 @@
               <h5 class="mb-0">Raum aktualisieren</h5>
             </div>
             <div class="card-body">
-              <form action="{{route('admin.room.update')}}" method="POST" enctype="multipart/form-data">
+              <form action="{{route('admin.rooms.update')}}" method="POST" enctype="multipart/form-data">
                 @csrf
                 <div class="row">
                     <div class="col-md-6">

@@ -35,10 +35,13 @@
                         @enderror
                     </div>
                     <div class="col-md-12">
-                        <div class="form-floating form-floating-outline mb-4">
+                        <div class="form-floating form-floating-outline mb-2">
                             <input type="text" class="form-control" name="price" id="price" placeholder="Preis" required />
-                            <label for="price">Preis</label>
+                            <label for="price">Preis (Netto)</label>
                         </div>
+                        <small class="text-muted mb-4 d-block">
+                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird nur hinzugefügt, wenn die Rechnung an HelloCash gesendet wird.
+                        </small>
                         @error('price')
                             <p class="formError">*{{$message}}</p>
                         @enderror

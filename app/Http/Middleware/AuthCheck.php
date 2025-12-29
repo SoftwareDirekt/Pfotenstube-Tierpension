@@ -18,7 +18,7 @@ class AuthCheck
     {
         if(!Auth::check())
         {
-            return to_route('user.login.view');
+            return to_route('admin.login.view');
         }
         return $next($request);
     }

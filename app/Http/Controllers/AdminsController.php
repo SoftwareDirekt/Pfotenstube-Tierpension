@@ -20,6 +20,7 @@ use App\Models\Event;
 use App\Models\Reservation;
 use App\Models\Plan;
 use App\Models\Payment;
+use App\Models\Preference;
 use Carbon\Carbon;
 use Log;
 
@@ -234,27 +235,56 @@ class AdminsController extends Controller
         return view('admin.auth.settings');
     }
 
+    public function admin_preferences_post(Request $request)
+    {
+        $request->validate([
+            'vat_percentage' => 'required|numeric|min:0|max:100',
+        ]);
+
+        try {
+            Preference::set('vat_percentage', $request->vat_percentage, 'float', 'Mehrwertsteuer-Satz in Prozent');
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Präferenzen erfolgreich gespeichert',
+                ]);
+            }
+
+            Session::flash('success', 'Präferenzen erfolgreich gespeichert');
+            return redirect()->back();
+        } catch (\Exception $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Fehler beim Speichern: ' . $e->getMessage(),
+                ], 500);
+            }
+
+            Session::flash('error', 'Fehler beim Speichern der Präferenzen');
+            return redirect()->back();
+        }
+    }
+
     public function admin_settings_post(Request $request)
     {
         $request->validate([
-            'currentPassword' => 'required|min:8|max:100',
+            'currentPassword' => 'required|max:100',
             'newPassword' => [
                 'required',
                 'different:currentPassword',
                 'string',
-                'min:5',             // must be at least 8 characters in length
-                // 'regex:/[A-Z]/',      // must contain at least one uppercase letter
-                // 'regex:/[0-9]/',      // must contain at least one digit
+                'min:8',            
             ],
             'confirmPassword' => 'required|same:newPassword',
         ]);
 
-        // $admin = Auth::guard('admin')->user();
         $admin = Auth::user();
 
         if (!password_verify($request->currentPassword, $admin->password))
         {
-            return redirect()->back()->withErrors([Session::flash('error' , 'Das aktuelle Passwort ist falsch.')])->withInput();
+            Session::flash('error', 'Das aktuelle Passwort ist falsch.');
+            return redirect()->back()->withInput();
         }
 
         // Hashing the new password
@@ -265,8 +295,10 @@ class AdminsController extends Controller
         $admin->password = $hashedPassword;
         $admin->save();
 
-        return redirect()->back()->withErrors([Session::flash('success' , 'Passwort erfolgreich aktualisiert.')])->withInput();
+        Session::flash('success', 'Passwort erfolgreich aktualisiert.');
+        return redirect()->back();
     }
+
     public function admin_logout(Request $request)
     {
         Auth::logout();
@@ -274,6 +306,7 @@ class AdminsController extends Controller
         Session::flash('success' , 'Du hast dich erfolgreich abgemeldet.');
         return redirect('/admin/login');
     }
+    
     public function employees(Request $request)
     {
         if(!General::permissions('Mitarbeiter'))
