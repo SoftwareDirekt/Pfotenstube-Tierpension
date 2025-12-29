@@ -2623,7 +2623,15 @@
                         $('#checkoutModal').data('existingBalance', existingBalance);
                         
                         // Store VAT settings from backend (prices are always VAT inclusive)
-                        var vatPercentage = parseFloat(res.vat_percentage) || 20;
+                        // Handle 0% VAT correctly - use nullish coalescing to only default when null/undefined
+                        var vatPercentage = (res.vat_percentage !== null && res.vat_percentage !== undefined) 
+                            ? parseFloat(res.vat_percentage) 
+                            : 20;
+                        // If parseFloat returns NaN, default to 20
+                        if (isNaN(vatPercentage)) {
+                            vatPercentage = 20;
+                        }
+                        
                         $('#checkoutModal').data('vatPercentage', vatPercentage);
                         
                         // Initialize saldo display with existing balance
@@ -2953,7 +2961,15 @@
         
         function calculateVATBreakdown(netAmount) {
             // Get VAT settings from data attributes
-            var vatPercentage = parseFloat($('#checkoutModal').data('vatPercentage')) || 20;
+            // Handle 0% VAT correctly - use nullish coalescing to only default when null/undefined
+            var vatPercentageData = $('#checkoutModal').data('vatPercentage');
+            var vatPercentage = (vatPercentageData !== null && vatPercentageData !== undefined) 
+                ? parseFloat(vatPercentageData) 
+                : 20;
+            // If parseFloat returns NaN, default to 20
+            if (isNaN(vatPercentage)) {
+                vatPercentage = 20;
+            }
             
             if (netAmount <= 0) {
                 $('#vatBreakdown').hide();
