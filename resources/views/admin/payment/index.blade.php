@@ -88,6 +88,7 @@
                     <th>Plan €</th>
                     <th>Extra €</th>
                     <th>Rabatt</th>
+                    <th>MwSt. €</th>
                     <th>R.Betrag €</th>
                     <th>Erh.Betrag €</th>
                     <th>Rest.Betrag €</th>
@@ -101,6 +102,7 @@
                         $planCost = isset($obj->plan_cost) ? (float)$obj->plan_cost : 0.0;
                         $specialCost = isset($obj->special_cost) ? (float)$obj->special_cost : 0.0;
                         $invoiceTotal = isset($obj->cost) ? (float)$obj->cost : 0.0;
+                        $vatAmount = isset($obj->vat_amount) ? (float)$obj->vat_amount : 0.0;
                         $receivedAmount = isset($obj->received_amount) ? (float)$obj->received_amount : 0.0;
                         $discountPercent = isset($obj->discount) ? (float)$obj->discount : 0.0;
                         $discountAmount = isset($obj->discount_amount) ? (float)$obj->discount_amount : 0.0;
@@ -152,6 +154,7 @@
                         <td>{{ number_format($planCost, 2) }}&euro;</td>
                         <td>{{ number_format($specialCost, 2) }}&euro;</td>
                         <td>{{ number_format($discountAmount, 2) }}&euro;</td>
+                        <td>{{ number_format($vatAmount, 2) }}&euro;</td>
                         <td>{{ number_format($invoiceTotal, 2) }}&euro;</td>
                         <td>{{ number_format($receivedAmount, 2) }}&euro;</td>
                         <td>

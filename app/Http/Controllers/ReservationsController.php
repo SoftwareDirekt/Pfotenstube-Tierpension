@@ -15,7 +15,9 @@ use App\Helpers\General;
 use App\Services\VisitCounterService;
 use Illuminate\Support\Facades\DB;
 use App\Models\Customer;
+use App\Models\Preference;
 use App\Services\CustomerBalanceService;
+use App\Services\HelloCashService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -23,6 +25,13 @@ use function PHPSTORM_META\type;
 
 class ReservationsController extends Controller
 {
+    protected $hellocashService;
+
+    public function __construct(HelloCashService $hellocashService)
+    {
+        $this->hellocashService = $hellocashService;
+    }
+
     public function reservation(Request $request)
     {
         if (!General::permissions('Reservierung')) {
@@ -30,6 +39,7 @@ class ReservationsController extends Controller
         }
 
         $keyword = $request->input('keyword', '');
+        $reservationId = $request->input('id') ?? $request->input('reservation_id');
         $status  = $request->input('status', [3]);
         $order   = $request->input('order', 'desc');
         $perPage = $request->input('per_page', '30');
@@ -54,14 +64,21 @@ class ReservationsController extends Controller
         }
 
         $query = Reservation::with(['plan', 'dog.customer'])
-            ->when($keyword, function ($q) use ($keyword) {
-                $q->whereHas('dog', function ($q2) use ($keyword) {
-                    $q2->where('name', 'like', "%{$keyword}%")
-                        ->orWhereHas('customer', function ($q3) use ($keyword) {
-                            $q3->where('name', 'like', "%{$keyword}%")
-                                ->orWhere('phone', 'like', "%{$keyword}%");
-                        });
-                });
+            ->when($reservationId, function ($q) use ($reservationId) {
+                $q->where('id', $reservationId);
+            })
+            ->when($keyword && !$reservationId, function ($q) use ($keyword) {
+                if (is_numeric($keyword)) {
+                    $q->where('id', $keyword);
+                } else {
+                    $q->whereHas('dog', function ($q2) use ($keyword) {
+                        $q2->where('name', 'like', "%{$keyword}%")
+                            ->orWhereHas('customer', function ($q3) use ($keyword) {
+                                $q3->where('name', 'like', "%{$keyword}%")
+                                    ->orWhere('phone', 'like', "%{$keyword}%");
+                            });
+                    });
+                }
             })
             ->when($status && !in_array('all', (array)$status), function ($q) use ($status) {
                 $q->whereIn('status', (array)$status);
@@ -695,15 +712,36 @@ class ReservationsController extends Controller
 
         $special_cost = isset($request->special_cost) ? (float)$request->special_cost : 0.0;
         $discountPercentage = (int)$request->discount;
+        $sendToHelloCash = $request->has('send_to_hellocash') && $request->send_to_hellocash == '1';
+        
+        // Calculate discount amount
         $discount_amount = 0.0;
-
         if ($discountPercentage > 0) {
-            $discount_amount = ($discountPercentage / 100) * ($planCost + $special_cost);
+            if ($sendToHelloCash) {
+                // For HelloCash: discount is applied on gross total (after VAT is added to items)
+                $vatPercentage = Preference::get('vat_percentage', 20);
+                $grossTotal = ($planCost + $special_cost) * (1 + ($vatPercentage / 100));
+                $discount_amount = ($discountPercentage / 100) * $grossTotal;
+                $discount_amount = round($discount_amount, 2);
+            } else {
+                // For normal payments: discount is applied on net total
+                $discount_amount = ($discountPercentage / 100) * ($planCost + $special_cost);
+                $discount_amount = round($discount_amount, 2);
+            }
         }
 
         $invoiceTotal = (float)$request->total;
-        $receivedAmount = (float)$request->received_amount; // This is the cash payment when wallet is used
+        $receivedAmount = (float)$request->received_amount;
         $useWallet = $request->has('use_wallet') && $request->use_wallet == '1';
+        
+        // Calculate VAT amount if HelloCash is used
+        $vatAmount = 0.0;
+        if ($sendToHelloCash) {
+            $vatPercentage = Preference::get('vat_percentage', 20);
+            $netAfterDiscount = $invoiceTotal / (1 + ($vatPercentage / 100));
+            $vatAmount = $invoiceTotal - $netAfterDiscount;
+            $vatAmount = round(max(0, $vatAmount), 2);
+        }
         
         // Load reservation first to get customer ID (before transaction)
         $reservation = Reservation::with('dog')->find($request->id);
@@ -813,6 +851,7 @@ class ReservationsController extends Controller
                 'plan_cost' => $planCost,
                 'special_cost' => $special_cost,
                 'cost' => $invoiceTotal,
+                'vat_amount' => round($vatAmount, 2),
                 'discount' => $discountPercentage,
                 'discount_amount' => $discount_amount,
                 'received_amount' => $cashReceived + $walletAmount,
@@ -877,17 +916,49 @@ class ReservationsController extends Controller
             // Commit transaction
             DB::commit();
             
+            $reservation->refresh();
+            $payment->refresh();
+            
+            // Handle HelloCash API call if requested
+            $hellocashResponse = $this->handleHelloCashIntegration(
+                $request,
+                $plan,
+                $planCost,
+                $special_cost,
+                $days,
+                $discountPercentage,
+                $reservation->id,
+                $payment->id,
+            );
+            
             Session::flash('success', 'Kaufabwicklung erfolgreich');
+            
+            // If AJAX request, return JSON with HelloCash data
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Kaufabwicklung erfolgreich',
+                    'hellocash' => $hellocashResponse,
+                ]);
+            }
         } catch (\Exception $e) {
             // Rollback transaction on error
             DB::rollBack();
             
             Session::flash('error', 'Fehler bei der Kaufabwicklung: ' . $e->getMessage());
-            \Log::error('Checkout error: ' . $e->getMessage(), [
+            Log::error('Checkout error: ' . $e->getMessage(), [
                 'reservation_id' => $request->id,
                 'customer_id' => $customerId,
                 'trace' => $e->getTraceAsString()
             ]);
+            
+            // If AJAX request, return JSON error
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Fehler bei der Kaufabwicklung: ' . $e->getMessage(),
+                ], 500);
+            }
         }
         
         return back();
@@ -1122,13 +1193,14 @@ class ReservationsController extends Controller
                 $balanceService = new CustomerBalanceService();
                 $walletAmount = 0; // Bulk checkout doesn't support wallet usage
             
-                // Create payment record
+                // Create payment record (bulk checkout doesn't use HelloCash, so VAT is 0)
                 $payment = Payment::create([
                     "res_id" => $res_id,
                     "type" => $request->payment_method[$key],
                     "plan_cost" => $plan_cost,
                     "special_cost" => $special_cost,
                     "cost" => $invoiceTotal,
+                    "vat_amount" => 0.0,
                     "received_amount" => $receivedAmount,
                     "discount" => $request->discount[$key],
                     "discount_amount" => $discount_amount,
@@ -1263,6 +1335,9 @@ class ReservationsController extends Controller
             $query->with('day_plan_obj', 'reg_plan_obj');
         }])->find($id);
         
+        // Get VAT settings from preferences (prices are always VAT inclusive)
+        $vatPercentage = Preference::get('vat_percentage', 20);
+        
         if($res && $res->dog && $res->dog->customer_id)
         {
             $customer_id = $res->dog->customer_id;
@@ -1273,11 +1348,16 @@ class ReservationsController extends Controller
 
             return [
                 'total' => round($balance, 2),
-                'doc' => $res
+                'doc' => $res,
+                'vat_percentage' => $vatPercentage,
             ];
         }
 
-        return false;
+        return [
+            'total' => 0,
+            'doc' => $res,
+            'vat_percentage' => $vatPercentage,
+        ];
     }
 
     public function export(Request $request)
@@ -1429,5 +1509,70 @@ class ReservationsController extends Controller
         
         $writer->save('php://output');
         exit;
+    }
+
+    /**
+     * Handle HelloCash API integration for checkout
+     */
+    private function handleHelloCashIntegration(
+        Request $request,
+        Plan $plan,
+        float $planCost,
+        float $specialCost,
+        int $days,
+        int $discountPercentage,
+        int $reservationId,
+        int $paymentId
+    ): ?array {
+        if (!$request->has('send_to_hellocash') || $request->send_to_hellocash != '1') {
+            return null;
+        }
+
+        try {
+            $plan->refresh();
+            
+            $reservation = Reservation::with('dog.customer')->find($reservationId);
+            $hellocashCustomerId = $reservation?->dog?->customer?->hellocash_customer_id ?? null;
+            
+            $hellocashResponse = $this->hellocashService->createInvoice([
+                'plan' => $plan,
+                'plan_cost' => $planCost,
+                'days' => $days,
+                'special_cost' => $specialCost,
+                'discount_percent' => $discountPercentage,
+                'payment_method' => $request->gateway ?? 'Bar',
+                'reservation_id' => $reservationId,
+                'payment_id' => $paymentId,
+                'hellocash_customer_id' => $hellocashCustomerId,
+            ]);
+            
+            if (!$hellocashResponse['success']) {
+                $errorMessage = $hellocashResponse['error'] ?? 'Unknown error';
+                Log::error('HelloCash API call failed', [
+                    'reservation_id' => $request->id,
+                    'error' => $errorMessage,
+                ]);
+
+                Session::flash(
+                    'warning',
+                    'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein Fehler bei der HelloCash-Verarbeitung auf. Bitte versuchen Sie es erneut.'
+                );
+            }
+            
+            return $hellocashResponse;
+        } catch (\Exception $e) {
+            Log::error('HelloCash Service Exception', [
+                'reservation_id' => $request->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            Session::flash(
+                'warning',
+                'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein technischer Fehler bei der HelloCash-Kommunikation auf. Bitte versuchen Sie es erneut.'
+            );
+            
+            return null;
+        }
     }
 }

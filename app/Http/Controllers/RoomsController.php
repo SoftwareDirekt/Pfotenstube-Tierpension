@@ -122,6 +122,7 @@ class RoomsController extends Controller
         }
         return response()->json(['success' => true]);
     }
+    
     public function clean_room(Request $request)
     {
             $request->validate([
@@ -151,4 +152,9 @@ class RoomsController extends Controller
         return response()->json(['message' => 'All rooms cleaning status reset to Uncleaned']);
     }
 
+    public function resetRoomCondition()
+    {
+        Room::query()->update(['room_condition' => 0]);
+        return response()->json(['success' => true]);
+    }
 }

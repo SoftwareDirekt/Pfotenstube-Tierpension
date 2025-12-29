@@ -723,6 +723,8 @@
             </div>
         </div>
     </div>
+    {{-- End of Dashboard --}}
+    
     {{-- Modal Area Starts Here --}}
     {{-- Add Reservation Modal --}}
     <div class="modal fade" id="addReservation" tabindex="-1" aria-hidden="true">
@@ -1109,7 +1111,7 @@
         </div>
     </div>
 
-    {{----plan model---}}
+    {{----Plan model---}}
     <div id="planmodel2" class="custom-plan-modal d-none">
         <div class="modal-content p-3 p-md-5">
             <div class="modal-body p-md-0">
@@ -1504,7 +1506,7 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-6">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <select name="price_plan" id="price_plan" class="select2" data-live-search="true"
                                             required>
@@ -1515,7 +1517,7 @@
                                     <label for="price_plan">Preisplan</label>
                                 </div>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-6">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <select name="gateway" id="gateway" class="select2" data-live-search="true"
                                             required>
@@ -1558,14 +1560,14 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-12 mt-3">
+                            <div class="col-md-6 mt-3">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <input type="number" name="plan_cost" step="0.01" id="plan_cost"
                                             class="form-control text-primary" value="0.00" readonly/>
                                     <label for="plan_cost">Planpreis (&euro;)</label>
                                 </div>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-6 mt-3">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <input type="number" name="special_cost" step="0.01" id="special_cost"
                                             class="form-control text-primary absInput" value="0.00"/>
@@ -1577,6 +1579,26 @@
                                     <input type="number" name="total" step="0.01" id="total_amount"
                                             class="form-control text-primary absInput" value="0.00"/>
                                     <label for="total_amount">Rechnungsbetrag (&euro;)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-12 mb-4" id="vatBreakdown" style="display: none;">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-0" style="background-color: #f8f9fa;">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-center" style="width: 33.33%;">Netto</th>
+                                                <th class="text-center" style="width: 33.33%;">MwSt (<span id="vat_percentage_display">20</span>%)</th>
+                                                <th class="text-center" style="width: 33.33%;">Brutto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td class="text-center"><span id="vat_net_amount" class="fw-bold">0.00€</span></td>
+                                                <td class="text-center"><span id="vat_amount" class="fw-bold">0.00€</span></td>
+                                                <td class="text-center"><span id="vat_gross_amount" class="fw-bold text-primary">0.00€</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -1619,6 +1641,18 @@
                                     </ul>
                                 </div>
                             </div>
+                            <div class="col-md-12 mb-4" id="hellocashSection">
+                                <div class="card border-primary" style="background-color: #f8f9fa;">
+                                    <div class="card-body p-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="send_to_hellocash" id="send_to_hellocash" value="1">
+                                            <label class="form-check-label" for="send_to_hellocash">
+                                                <strong>An HelloCash senden</strong> <span class="text-muted">(Kassensystem)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <input type="hidden" name="id" id="checkoutId"/>
                         <input type="hidden" name="days" id="days"/>
@@ -1637,7 +1671,33 @@
         </div>
     </div>
 
-    {{-- friendshipModal --}}
+    {{-- HelloCash Confirmation Modal --}}
+    <div class="modal fade" id="hellocashConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">HelloCash Bestätigung</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Möchten Sie diese Rechnung wirklich an HelloCash senden?</strong></p>
+                    <div class="alert alert-warning">
+                        <strong>Wichtig:</strong> Nach dem Senden an HelloCash wird die Rechnung an die Steuerbehörde übermittelt. 
+                        Diese Aktion kann nicht rückgängig gemacht werden.
+                    </div>
+                    <div class="mb-3">
+                        <strong>Rechnungsbetrag:</strong> <span id="confirmInvoiceAmount" class="fw-bold fs-5 text-primary">0.00€</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="button" class="btn btn-primary" id="confirmHelloCashBtn">Ja, an HelloCash senden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- FriendshipModal --}}
     <div class="modal fade" id="friendshipModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-simple modal-enable-otp modal-dialog-centered">
             <div class="modal-content p-3 p-md-5">
@@ -1709,24 +1769,21 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="eventDetailsModalLabel">Ereignisdetails</h5> <!-- Event Details -->
+                    <h5 class="modal-title" id="eventDetailsModalLabel">Ereignisdetails</h5> 
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
-                    <!-- Close -->
                 </div>
                 <div class="modal-body">
-                    <p><strong>Startzeit:</strong> <span id="eventStartTime"></span></p> <!-- Start Time -->
-                    <p><strong>Endzeit:</strong> <span id="eventEndTime"></span></p> <!-- End Time -->
+                    <p><strong>Startzeit:</strong> <span id="eventStartTime"></span></p> 
+                    <p><strong>Endzeit:</strong> <span id="eventEndTime"></span></p> 
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-                    <!-- Close -->
                 </div>
             </div>
         </div>
     </div>
-
-
-    {{-- Modal Area Ends Here --}}
+    {{-- End of Modal Area --}}
+    
 @endsection
 @section('extra_js')
     {{-- Script Area Starts Here --}}
@@ -2565,6 +2622,10 @@
                         var existingBalance = saldoRaw || 0;
                         $('#checkoutModal').data('existingBalance', existingBalance);
                         
+                        // Store VAT settings from backend (prices are always VAT inclusive)
+                        var vatPercentage = parseFloat(res.vat_percentage) || 20;
+                        $('#checkoutModal').data('vatPercentage', vatPercentage);
+                        
                         // Initialize saldo display with existing balance
                         updateSaldoDisplay(existingBalance);
                         
@@ -2650,6 +2711,45 @@
                 return false;
             }
 
+            // Check if HelloCash is selected
+            var sendToHelloCash = $('#send_to_hellocash').is(':checked');
+            
+            if (sendToHelloCash) {
+                // Show confirmation modal with invoice amount
+                var invoiceTotal = parseFloat($('#total_amount').val()) || 0;
+                $('#confirmInvoiceAmount').text(invoiceTotal.toFixed(2) + '€');
+                
+                // Store form data for later submission
+                $('#checkoutModal').data('pendingFormData', new FormData(form));
+                
+                $('#hellocashConfirmModal').modal('show');
+                return false;
+            } else {
+                // Proceed with normal checkout
+                processCheckout(form, submitBtn);
+            }
+
+            return false;
+        }
+
+        // Handle HelloCash confirmation
+        $('#confirmHelloCashBtn').on('click', function() {
+            var form = document.querySelector('#checkoutModal form');
+            var submitBtn = document.getElementById('checkoutSubmitBtn');
+            var formData = $('#checkoutModal').data('pendingFormData');
+            
+            if (!formData) {
+                formData = new FormData(form);
+            }
+            
+            // Close confirmation modal
+            $('#hellocashConfirmModal').modal('hide');
+            
+            // Process checkout with HelloCash
+            processCheckoutWithHelloCash(formData, submitBtn);
+        });
+
+        function processCheckout(form, submitBtn) {
             // Disable button and show loading state
             submitBtn.disabled = true;
             submitBtn.classList.add('disabled');
@@ -2693,8 +2793,73 @@
                     alert(errorMessage);
                 }
             });
+        }
 
-            return false;
+        function processCheckoutWithHelloCash(formData, submitBtn) {
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.classList.add('disabled');
+            var originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = 'Sende an HelloCash...';
+
+            // Ensure use_wallet is included
+            if (!$('#use_wallet').is(':checked')) {
+                formData.set('use_wallet', '0');
+            }
+            formData.set('send_to_hellocash', '1');
+
+            // Submit via AJAX
+            $.ajax({
+                url: "{{route('admin.reservation.checkout')}}",
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.hellocash && response.hellocash.success && response.hellocash.invoice_pdf_base64) {
+                        try {
+                            var binaryString = atob(response.hellocash.invoice_pdf_base64);
+                            var bytes = new Uint8Array(binaryString.length);
+                            for (var i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            
+                            var blob = new Blob([bytes], { type: 'application/pdf' });
+                            var pdfUrl = URL.createObjectURL(blob);
+                            window.open(pdfUrl, '_blank');
+                            
+                            setTimeout(function() {
+                                URL.revokeObjectURL(pdfUrl);
+                            }, 1000);
+                        } catch (e) {
+                            console.error('Error opening PDF:', e);
+                        }
+                        
+                        $('#checkoutModal').modal('hide');
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        $('#checkoutModal').modal('hide');
+                        window.location.reload();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Re-enable button on error
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('disabled');
+                    submitBtn.innerHTML = originalText;
+
+                    // Show error message
+                    var errorMessage = 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        errorMessage = xhr.responseText;
+                    }
+                    alert(errorMessage);
+                }
+            });
         }
 
         function fetchTodos() {
@@ -2750,27 +2915,90 @@
             var specialCost = parseFloat($("#checkoutModal #special_cost").val()) || 0;
             var discount = parseInt($("#checkoutModal input[name='discount']:checked").val()) || 0;
 
-            var total = planCost + specialCost;
+            // Calculate net total (prices are VAT exclusive)
+            var netTotal = planCost + specialCost;
             if (discount > 0) {
-                total = total * (1 - (discount / 100));
+                netTotal = netTotal * (1 - (discount / 100));
             }
-            total = parseFloat(total.toFixed(2));
+            netTotal = parseFloat(netTotal.toFixed(2));
 
-            $("#checkoutModal #total_amount").val(total.toFixed(2));
-            // Cap received amount at total (to prevent overpayment in current transaction)
-            // Advance payments are handled separately through balance
-            var maxReceived = total;
+            // Check if HelloCash is selected
+            var sendToHelloCash = $('#send_to_hellocash').is(':checked');
+            
+            if (sendToHelloCash) {
+                // Calculate VAT and show gross total
+                calculateVATBreakdown(netTotal);
+                var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
+                $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
+            } else {
+                // No VAT, just show net total
+                $("#checkoutModal #total_amount").val(netTotal.toFixed(2));
+                $('#vatBreakdown').hide();
+            }
+            
+            var displayTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            
+            // Cap received amount at total
             $("#checkoutModal #received_amount").attr({
                 min: 0,
-                max: maxReceived
+                max: displayTotal
             });
 
             if (options.updateReceived) {
-                $("#checkoutModal #received_amount").val(total.toFixed(2));
+                $("#checkoutModal #received_amount").val(displayTotal.toFixed(2));
             }
 
             updateRemaining();
         }
+        
+        function calculateVATBreakdown(netAmount) {
+            // Get VAT settings from data attributes
+            var vatPercentage = parseFloat($('#checkoutModal').data('vatPercentage')) || 20;
+            
+            if (netAmount <= 0) {
+                $('#vatBreakdown').hide();
+                return;
+            }
+            
+            // Prices are VAT exclusive (net), calculate VAT and gross
+            var vatAmount = netAmount * (vatPercentage / 100);
+            var grossAmount = netAmount + vatAmount;
+            
+            // Round to 2 decimal places
+            netAmount = parseFloat(netAmount.toFixed(2));
+            vatAmount = parseFloat(vatAmount.toFixed(2));
+            grossAmount = parseFloat(grossAmount.toFixed(2));
+            
+            // Update display
+            $('#vat_percentage_display').text(vatPercentage);
+            $('#vat_net_amount').text(netAmount.toFixed(2) + '€');
+            $('#vat_amount').text(vatAmount.toFixed(2) + '€');
+            $('#vat_gross_amount').text(grossAmount.toFixed(2) + '€');
+            
+            // Show VAT breakdown
+            $('#vatBreakdown').show();
+        }
+        
+        // Show/hide VAT breakdown when HelloCash checkbox changes
+        $(document).on('change', '#send_to_hellocash', function() {
+            var sendToHelloCash = $(this).is(':checked');
+            var currentReceived = parseFloat($("#checkoutModal #received_amount").val()) || 0;
+            var currentTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            
+            // Recalculate totals (this will update the total amount)
+            recalcInvoiceTotals();
+            
+            // Get the new total after recalculation
+            var newTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            
+            // If received amount was equal to old total, update it to new total
+            // This ensures the received amount stays in sync when VAT is added/removed
+            if (Math.abs(currentReceived - currentTotal) < 0.01) {
+                $("#checkoutModal #received_amount").val(newTotal.toFixed(2));
+            }
+            
+            updateRemaining();
+        });
         
         // Handle wallet checkbox change
         $(document).on('change', '#use_wallet', function() {
@@ -2812,17 +3040,13 @@
 
             // Handle wallet usage
             var walletUsed = 0;
-            var cashPayment = received;
+            var cashPayment = received; // Actual cash received from customer
             
             if (useWallet && existingBalance > 0) {
                 // Use wallet balance (up to invoice total or available balance)
                 walletUsed = Math.min(existingBalance, total);
-                cashPayment = Math.max(0, total - walletUsed);
-                
-                // If wallet is used, received amount should equal total (wallet + cash)
-                // But we keep the user's input for cash payment
-                // The effective received will be wallet + cash
-                var effectiveReceived = walletUsed + cashPayment;
+                // cashPayment is the actual received amount (user input)
+                // Don't override it - use the actual cash the customer pays
                 
                 // Show wallet breakdown
                 $('#walletBreakdown').show();
@@ -2954,6 +3178,7 @@
                     }
                 })
             });
+
 
             // Check price change on checkout
             $("#checkoutModal #price_plan").on('change', function () {

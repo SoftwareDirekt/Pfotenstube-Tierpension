@@ -57,10 +57,18 @@
                     <table class="table table-hover bluetd">
                       <tbody>
                         <tr>
-                          <th>ID-Nummer</th>
-                          <td>{{$customer->id_number}}</td>
-                          <th>Titel</th>
+                          <th>Typ</th>
+                          <td>{{$customer->type}}</td>
+                          <th>Anrede</th>
                           <td>{{$customer->title}}</td>
+                          <th>Vollständiger Name</th>
+                          <td>{{$customer->name}}</td>
+                        </tr>
+                        <tr>
+                          <th>ID-Number</th>
+                          <td>{{$customer->id_number}}</td>
+                          <th>Organisation / Beruf</th>
+                          <td>{{$customer->profession ?? '-'}}</td>
                           <th>Email</th>
                           <td>{{$customer->email}}</td>
                         </tr>
@@ -68,23 +76,25 @@
                           <th>Telefonnummer</th>
                           <td>{{$customer->phone}}</td>
                           <th>Notfallkontakt</th>
-                          <td>{{$customer->emergency_contact}}</td>
-                          <th>Straße</th>
-                          <td>{{$customer->street}}</td>
-                        </tr>
-                        <tr>
-                          <th>Stadt</th>
-                          <td>{{$customer->city}}</td>
-                          <th>PLZ</th>
-                          <td>{{$customer->zipcode}}</td>
-                          <th>Land</th>
-                          <td>{{$customer->country}}</td>
-                        </tr>
-                        <tr>
+                          <td>{{$customer->emergency_contact ?? '-'}}</td>
                           <th>Hauseigener Tierarzt</th>
-                          <td>{{$customer->veterinarian}}</td>
+                          <td>{{$customer->veterinarian ?? '-'}}</td>
+                        </tr>
+                        <tr>
+                          <th>Straße</th>
+                          <td>{{$customer->street ?? '-'}}</td>
+                          <th>Stadt</th>
+                          <td>{{$customer->city ?? '-'}}</td>
+                          <th>PLZ</th>
+                          <td>{{$customer->zipcode ?? '-'}}</td>
+                        </tr>
+                        <tr>
+                          <th>Land</th>
+                          <td>{{$customer->country ?? '-'}}</td>
                           <th>Kunde seit</th>
                           <td>{{date('d M, Y', strtotime($customer->created_at))}}</td>
+                          <th></th>
+                          <td></td>
                         </tr>
 
                       </tbody>
@@ -229,8 +239,8 @@
                           </tr>
                       @endforeach
                       @else
-                          <tr>
-                            <td colspan="13">Keine Aufzeichnungen gefunden</td>
+                          <tr class="text-center">
+                            <td colspan="10">Keine Aufzeichnungen gefunden</td>
                           </tr>
                       @endif
                       </tbody>
@@ -262,6 +272,7 @@
                   <th class="text-nowrap">Planpreis (&euro;)</th>
                   <th class="text-nowrap">Zusatzkosten (&euro;)</th>
                   <th>Rabatt</th>
+                  <th>MwSt. (&euro;)</th>
                   <th>Rechnungsbetrag (&euro;)</th>
                   <th class="text-nowrap">Betrag erhalten (&euro;)</th>
                   <th class="text-nowrap">Restbetrag (&euro;)</th>
@@ -275,6 +286,7 @@
                     $planCost = isset($pay['plan_cost']) ? (float)$pay['plan_cost'] : 0.0;
                     $specialCost = isset($pay['special_cost']) ? (float)$pay['special_cost'] : 0.0;
                     $invoiceTotal = isset($pay['cost']) ? (float)$pay['cost'] : 0.0;
+                    $vatAmount = isset($pay['vat_amount']) ? (float)$pay['vat_amount'] : 0.0;
                     $receivedAmount = isset($pay['received_amount']) ? (float)$pay['received_amount'] : 0.0;
                     $discountPercent = isset($pay['discount']) ? (float)$pay['discount'] : 0.0;
                     $discountAmount = isset($pay['discount_amount']) ? (float)$pay['discount_amount'] : 0.0;
@@ -293,6 +305,7 @@
                     <td>{{ number_format($planCost, 2) }}&euro;</td>
                     <td>{{ number_format($specialCost, 2) }}&euro;</td>
                     <td>{{ number_format($discountPercent, 0) }}% / {{ number_format($discountAmount, 2) }}&euro;</td>
+                    <td>{{ number_format($vatAmount, 2) }}&euro;</td>
                     <td>{{ number_format($invoiceTotal, 2) }}&euro;</td>
                     <td>{{ number_format($receivedAmount, 2) }}&euro;</td>
                     <td>
@@ -327,7 +340,7 @@
                 @endforeach
                 @else
                 <tr>
-                    <td colspan="12" class="">Keine Aufzeichnungen gefunden</td>
+                    <td colspan="12" class="text-center">Keine Aufzeichnungen gefunden</td>
                 </tr>
                 @endif
               </tbody>

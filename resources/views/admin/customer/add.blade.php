@@ -20,105 +20,105 @@
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <select name="type" id="type" class="form-control" required>
-                                <option selected value="Stammkunde">Stammkunde</option>
-                                <option value="Organisation">Organisation</option>
+                                <option value="Stammkunde" {{ old('type', 'Stammkunde') == 'Stammkunde' ? 'selected' : '' }}>Stammkunde</option>
+                                <option value="Organisation" {{ old('type') == 'Organisation' ? 'selected' : '' }}>Organisation</option>
                             </select>
-                            <label for="type">Typ</label>
-
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" name="profession" id="profession" class="form-control" />
-                            <label for="profession">Titel</label>
+                            <label for="type">Typ <span class="text-danger">*</span></label>
+                            @error('type')
+                                <small class="text-danger">{{$message}}</small>
+                            @enderror
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <select name="title" id="title" class="form-control" required>
-                                <option selected value="Mr.">Herr</option>
-                                <option value="Mrs.">Frau</option>
+                                <option value="Mr." {{ old('title', 'Mr.') == 'Mr.' ? 'selected' : '' }}>Herr</option>
+                                <option value="Mrs." {{ old('title') == 'Mrs.' ? 'selected' : '' }}>Frau</option>
                             </select>
                             <label for="title">Anrede</label>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="name" id="name" placeholder="Vollständiger Name" required />
-                            <label for="name">Vollständiger Name</label>
+                            <input type="text" class="form-control" name="name" id="name" placeholder="Vollständiger Name" value="{{ old('name') }}" required />
+                            <label for="name">Vollständiger Name <span class="text-danger">*</span></label>
+                            @error('name')
+                                <small class="text-danger">{{$message}}</small>
+                            @enderror
                         </div>
-                        @error('name')
-                            <p class="formError">*{{$message}}</p>
-                        @enderror
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="email" id="email" placeholder="Email" />
+                            <input type="text" class="form-control" name="id_number" id="id_number" placeholder="ID-Number" value="{{ old('id_number') }}"/>
+                            <label for="id_number">ID-Number</label>
+                            @error('id_number')
+                                <small class="text-danger">{{$message}}</small>
+                            @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="text" name="profession" id="profession" class="form-control" value="{{ old('profession') }}" />
+                            <label for="profession">Organisation / Beruf</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="text" class="form-control" name="email" id="email" placeholder="Email" value="{{ old('email') }}" />
                             <label for="email">Email</label>
-                        </div>
-                        @error('email')
-                            <p class="formError">*{{$message}}</p>
-                        @enderror
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="street" id="street" placeholder="Straße" />
-                            <label for="street">Straße</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="city" id="city" placeholder="Stadt" />
-                            <label for="city">Stadt</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="postcode" id="postcode" placeholder="PLZ" />
-                            <label for="postcode">PLZ</label>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="country" id="country" placeholder="Land" value="Österreich" />
-                            <label for="country">Land</label>
+                            @error('email')
+                                <small class="text-danger">{{$message}}</small>
+                            @enderror
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="phone" id="phone" placeholder="Telefonnummer" />
+                            <input type="text" class="form-control" name="phone" id="phone" placeholder="Telefonnummer" value="{{ old('phone') }}" />
                             <label for="phone">Telefonnummer</label>
+                            @error('phone')
+                                <small class="text-danger">{{$message}}</small>
+                            @enderror
                         </div>
-                        @error('phone')
-                            <p class="formError">*{{$message}}</p>
-                        @enderror
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="emergency_contact" id="emergency_contact" placeholder="Notfallkontakt" />
+                            <input type="text" class="form-control" name="emergency_contact" id="emergency_contact" placeholder="Notfallkontakt" value="{{ old('emergency_contact') }}" />
                             <label for="emergency_contact">Notfallkontakt</label>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="veterinarian" id="veterinarian" placeholder="Hauseigener Tierarzt"/>
+                            <input type="text" class="form-control" name="veterinarian" id="veterinarian" placeholder="Hauseigener Tierarzt" value="{{ old('veterinarian') }}"/>
                             <label for="veterinarian">Hauseigener Tierarzt</label>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="id_number" id="id_number" placeholder="ID-Number"/>
-                            <label for="id_number">ID-Number</label>
-                        </div>
-                        @error('id_number')
-                            <p class="formError">*{{$message}}</p>
-                        @enderror
-                    </div>
-                </div>
-                <div class="row">
                     <div class="col-md-12">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="file" class="form-control" name="picture" id="picture" placeholder="Bild"   />
+                            <input type="text" class="form-control" name="street" id="street" placeholder="Straße" value="{{ old('street') }}" />
+                            <label for="street">Straße & Hausnummer</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="text" class="form-control" name="city" id="city" placeholder="Stadt" value="{{ old('city') }}" />
+                            <label for="city">Stadt</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="text" class="form-control" name="postcode" id="postcode" placeholder="PLZ" value="{{ old('postcode') }}" />
+                            <label for="postcode">PLZ</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="text" class="form-control" name="country" id="country" placeholder="Land" value="{{ old('country', 'Österreich') }}" />
+                            <label for="country">Land</label>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <input type="file" class="form-control" name="picture" id="picture" placeholder="Bild" />
                             <label for="picture">Bild</label>
                         </div>
                     </div>

@@ -15,10 +15,19 @@ use App\Models\Payment;
 use App\Models\Vaccination;
 use App\Models\DogDocument;
 use App\Helpers\General;
+use App\Services\HelloCashService;
+use Illuminate\Support\Facades\Log;
 use DB;
 
 class CustomersController extends Controller
 {
+    protected $hellocashService;
+
+    public function __construct(HelloCashService $hellocashService)
+    {
+        $this->hellocashService = $hellocashService;
+    }
+
     public function customers(Request $request)
     {
         if(!General::permissions('Kunde'))
@@ -140,286 +149,294 @@ class CustomersController extends Controller
     public function post_customers(Request $request)
     {
         $request->validate([
-            'name' => 'required',
-            'email' => 'nullable|email|unique:customers',
-            'phone' => 'nullable|max:50',
-            'id_number' => 'nullable|unique:customers',
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:Stammkunde,Organisation',
+            'email' => 'nullable|email|unique:customers|max:255',
+            'phone' => 'nullable|string|max:50',
+            'id_number' => 'nullable|string|unique:customers|max:255',
+            'title' => 'nullable|string|max:50',
+            'profession' => 'nullable|string|max:255',
+            'street' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'postcode' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:100',
+            'emergency_contact' => 'nullable|string|max:50',
+            'veterinarian' => 'nullable|string|max:255',
+        ], [
+            'name.required' => 'Der Name ist erforderlich.',
+            'name.string' => 'Der Name muss ein Text sein.',
+            'type.required' => 'Der Typ ist erforderlich.',
+            'type.in' => 'Der Typ muss entweder Stammkunde oder Organisation sein.',
+            'email.email' => 'Die E-Mail-Adresse muss gültig sein.',
+            'email.unique' => 'Diese E-Mail-Adresse wird bereits verwendet.',
+            'id_number.unique' => 'Diese ID-Nummer wird bereits verwendet.',
         ]);
 
         $photo = 'no-user-picture.gif';
 
         if(isset($request->picture) && $request->picture != null)
         {
-            try {
-                $picture = $request->picture;
-                $originalName = $picture->getClientOriginalName();
-                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                $picture_name = uniqid() . '_' . $sanitizedName;
-                
-                $uploadPath = public_path('uploads/users');
-                if (!file_exists($uploadPath)) {
-                    if (!mkdir($uploadPath, 0755, true)) {
-                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
-                    }
-                }
-                
-                $picture->move($uploadPath, $picture_name);
-                $photo = $picture_name;
-            } catch (\Exception $e) {
-                \Log::error('Customer picture upload failed: ' . $e->getMessage());
-                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $e->getMessage());
+            $uploadResult = $this->handleFileUpload($request->picture, '');
+            if (!$uploadResult['success']) {
+                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $uploadResult['error']);
                 return back();
             }
+            $photo = $uploadResult['filename'];
         }
 
-        $customer = Customer::create([
-            'type' => $request->type,
-            'title' => $request->title,
-            'profession' => $request->profession,
-            'name' => $request->name,
-            'email' => $request->email,
-            'street' => $request->street,
-            'city' => $request->city,
-            'zipcode' => $request->postcode,
-            'country' => $request->country,
-            'phone' => $request->phone,
-            'emergency_contact' => $request->emergency_contact,
-            'veterinarian' => $request->veterinarian,
-            'id_number' => $request->id_number,
-            'picture' => $photo,
-        ]);
-
-        // Add Dogs
-        if(!isset($request->dogs))
-        {
-            Session::flash('success', 'Der Kunde wurde erfolgreich hinzugefügt');
-            return back();
-        }
-
-        foreach($request->dogs as $dog)
-        {
-            $photo = 'no-user-picture.gif';
-
-            if(isset($dog['picture']) && $dog['picture'] != null)
-            {
-                try {
-                    $picture = $dog['picture'];
-                    $originalName = $picture->getClientOriginalName();
-                    $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                    $picture_name = uniqid() . '_' . $sanitizedName;
-                    
-                    $uploadPath = public_path('uploads/users/dogs');
-                    if (!file_exists($uploadPath)) {
-                        if (!mkdir($uploadPath, 0755, true)) {
-                            throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
-                        }
-                    }
-                    
-                    $picture->move($uploadPath, $picture_name);
-                    $photo = $picture_name;
-                } catch (\Exception $e) {
-                    \Log::error('Dog picture upload failed: ' . $e->getMessage());
-                    Session::flash('error', 'Fehler beim Hochladen des Hundebildes: ' . $e->getMessage());
-                    return back();
-                }
-            }
-
-            $is_medication = isset($dog['is_medication']) ? 1 : 0;
-            $is_eating_habits = isset($dog['is_eating_habits']) ? 1 : 0;
-            $is_special_eating = isset($dog['is_special_eating']) ? 1 : 0;
-            $is_allergy = isset($dog['is_allergy']) ? 1 : 0;
-            $water_lover = isset($dog['water_lover']) ? 1 : 0;
-
-            $dog_db = Dog::create([
-                'customer_id'=> $customer->id,
-                'name'=> $dog['name'],
+        try {
+            DB::beginTransaction();
+            
+            // Create customer
+            $customer = Customer::create([
+                'type' => $request->type,
+                'title' => $request->title,
+                'profession' => $request->profession,
+                'name' => $request->name,
+                'email' => $request->email,
+                'street' => $request->street,
+                'city' => $request->city,
+                'zipcode' => $request->postcode,
+                'country' => $request->country,
+                'phone' => $request->phone,
+                'emergency_contact' => $request->emergency_contact,
+                'veterinarian' => $request->veterinarian,
+                'id_number' => $request->id_number,
                 'picture' => $photo,
-                'age' => $dog['age'],
-                'neutered' => (int)$dog['neutered'],
-                'compatible_breed' => $dog['race'],
-                'is_allergy' => $is_allergy,
-                'allergy' => $dog['allergy'],
-                'chip_number' => $dog['chip_number'],
-                'is_medication' => $is_medication,
-                'medication' => $dog['medication'],
-                'health_problems' => $dog['health_problems'],
-                'morgen' => $dog['morgen'],
-                'mittag' => $dog['mittag'],
-                'abend' => $dog['abend'],
-                'compatibility' => $dog['compatibility'],
-                'water_lover' => $water_lover,
-                'is_eating_habits' => $is_eating_habits,
-                'eating_morning' => $dog['eating_morning'],
-                'eating_midday' => $dog['eating_midday'],
-                'eating_evening' => $dog['eating_evening'],
-                'is_special_eating' => $is_special_eating,
-                'special_morning' => $dog['special_morning'],
-                'special_midday' => $dog['special_midday'],
-                'special_evening' => $dog['special_evening'],
-                'gender' => $dog['gender'],
-                'weight' => $dog['gender'],
-                'reg_plan' => $dog['price_plan'],
-                'day_plan' => $dog['daily_rate'],
             ]);
 
-            // Saving dog visits to db (initial values)
-            $visitCounter = new \App\Services\VisitCounterService();
-            $visits = (isset($dog['visits']) && $dog['visits'] != null) ? (int)$dog['visits'] : 0;
-            $stay = (isset($dog['days']) && $dog['days'] != null) ? (int)$dog['days'] : 0;
-            $visitCounter->setInitialCounts($dog_db->id, $visits, $stay);
+            // Sync customer to HelloCash
+            $result = $this->hellocashService->createUser($customer);
+            
+            if (!$result['success'] || empty($result['user_id'])) {
+                // HelloCash sync failed - rollback transaction
+                DB::rollBack();
+                $errorMessage = $result['error'] ?? 'Unknown error during HelloCash synchronization';
+                Log::error('HelloCash sync failed during customer creation', [
+                    'customer_name' => $request->name ?? 'Unknown',
+                    'error' => $errorMessage,
+                ]);
+                Session::flash('error', 'Der Kunde konnte nicht erstellt werden: ' . $errorMessage);
+                return redirect()->back()->withInput($request->except('picture', 'dogs'));
+            }
 
-            // Save Pickups
-            if(isset($dog['picks']) && count($dog['picks']) > 0)
-            {
-                foreach($dog['picks'] as $pick)
+            // Set HelloCash ID
+            $customer->hellocash_customer_id = (int)$result['user_id'];
+            $customer->save();
+
+            // Commit transaction
+            DB::commit();
+            
+        } catch (\Exception $e) {
+            // Exception occurred - rollback transaction if transaction was started
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::error('Exception while creating customer with HelloCash sync', [
+                'customer_name' => $request->name ?? 'Unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            Session::flash('error', 'Fehler beim Erstellen des Kunden. Bitte versuchen Sie es erneut.');
+            return redirect()->back()->withInput($request->except('picture', 'dogs'));
+        }
+
+        // Second Transaction: Dog Creation
+        if(isset($request->dogs) && is_array($request->dogs) && count($request->dogs) > 0)
+        {
+            try {
+                DB::beginTransaction();
+                
+                foreach($request->dogs as $dog)
                 {
-                    $filename = null;
-                    $picture = isset($pick['file']) ? $pick['file'] : false;
-                    if($picture)
+                    $photo = 'no-user-picture.gif';
+
+                    if(isset($dog['picture']) && $dog['picture'] != null)
                     {
-                        try {
-                            $originalName = $picture->getClientOriginalName();
-                            $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                            $picture_name = uniqid() . '_' . $sanitizedName;
-                            
-                            $uploadPath = public_path('uploads/users/pickup');
-                            if (!file_exists($uploadPath)) {
-                                if (!mkdir($uploadPath, 0755, true)) {
-                                    throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                        $uploadResult = $this->handleFileUpload($dog['picture'], 'dogs');
+                        if (!$uploadResult['success']) {
+                            Session::flash('error', 'Fehler beim Hochladen des Hundebildes: ' . $uploadResult['error']);
+                            return back();
+                        }
+                        $photo = $uploadResult['filename'];
+                    }
+
+                    $is_medication = isset($dog['is_medication']) ? 1 : 0;
+                    $is_eating_habits = isset($dog['is_eating_habits']) ? 1 : 0;
+                    $is_special_eating = isset($dog['is_special_eating']) ? 1 : 0;
+                    $is_allergy = isset($dog['is_allergy']) ? 1 : 0;
+                    $water_lover = isset($dog['water_lover']) ? 1 : 0;
+
+                    $dog_db = Dog::create([
+                        'customer_id'=> $customer->id,
+                        'name'=> $dog['name'],
+                        'picture' => $photo,
+                        'age' => $dog['age'],
+                        'neutered' => (int)$dog['neutered'],
+                        'compatible_breed' => $dog['race'],
+                        'is_allergy' => $is_allergy,
+                        'allergy' => $dog['allergy'],
+                        'chip_number' => $dog['chip_number'],
+                        'is_medication' => $is_medication,
+                        'medication' => $dog['medication'],
+                        'health_problems' => $dog['health_problems'],
+                        'morgen' => $dog['morgen'],
+                        'mittag' => $dog['mittag'],
+                        'abend' => $dog['abend'],
+                        'compatibility' => $dog['compatibility'],
+                        'water_lover' => $water_lover,
+                        'is_eating_habits' => $is_eating_habits,
+                        'eating_morning' => $dog['eating_morning'],
+                        'eating_midday' => $dog['eating_midday'],
+                        'eating_evening' => $dog['eating_evening'],
+                        'is_special_eating' => $is_special_eating,
+                        'special_morning' => $dog['special_morning'],
+                        'special_midday' => $dog['special_midday'],
+                        'special_evening' => $dog['special_evening'],
+                        'gender' => $dog['gender'],
+                        'weight' => $dog['weight'],
+                        'reg_plan' => $dog['price_plan'],
+                        'day_plan' => $dog['daily_rate'],
+                    ]);
+
+                    // Saving dog visits to db (initial values)
+                    $visitCounter = new \App\Services\VisitCounterService();
+                    $visits = (isset($dog['visits']) && $dog['visits'] != null) ? (int)$dog['visits'] : 0;
+                    $stay = (isset($dog['days']) && $dog['days'] != null) ? (int)$dog['days'] : 0;
+                    $visitCounter->setInitialCounts($dog_db->id, $visits, $stay);
+
+                    // Save Pickups
+                    if(isset($dog['picks']) && count($dog['picks']) > 0)
+                    {
+                        foreach($dog['picks'] as $pick)
+                        {
+                            $filename = null;
+                            $picture = isset($pick['file']) ? $pick['file'] : false;
+                            if($picture)
+                            {
+                                $uploadResult = $this->handleFileUpload($picture, 'pickup');
+                                if ($uploadResult['success']) {
+                                    $filename = $uploadResult['filename'];
+                                } else {
+                                    // Continue without picture rather than failing entire operation
+                                    Log::warning('Pickup picture upload failed, continuing without picture: ' . $uploadResult['error']);
+                                    $filename = null;
                                 }
                             }
+
+                            Pickup::create([
+                                'dog_id' => $dog_db->id,
+                                'name' => $pick['name'],
+                                'phone' => $pick['phone'],
+                                'id_number'=> $pick['id'],
+                                'picture'=> $filename,
+                            ]);
+                        }
+                    }
+
+                    // Save Vaccinations
+                    if(isset($dog['vaccinations']) && count($dog['vaccinations']) > 0)
+                    {
+                        foreach($dog['vaccinations'] as $vaccination)
+                        {
+                            if(
+                                empty($vaccination['vaccine_name'] ?? null) ||
+                                empty($vaccination['vaccination_date'] ?? null) ||
+                                empty($vaccination['next_vaccination_date'] ?? null)
+                            ) {
+                                continue;
+                            }
+
+                            $is_vaccinated = isset($vaccination['is_vaccinated']) && (int)$vaccination['is_vaccinated'] === 1 ? 1 : 0;
+
+                            Vaccination::create([
+                                'dog_id' => $dog_db->id,
+                                'vaccine_name' => $vaccination['vaccine_name'],
+                                'vaccination_date' => $vaccination['vaccination_date'],
+                                'next_vaccination_date' => $vaccination['next_vaccination_date'],
+                                'is_vaccinated' => $is_vaccinated,
+                            ]);
+                        }
+                    }
+
+                    // Save Documents
+                    if(isset($dog['documents']) && count($dog['documents']) > 0)
+                    {
+                        foreach($dog['documents'] as $document)
+                        {
+                            if(empty($document['name'] ?? null) || empty($document['file'] ?? null)) {
+                                continue;
+                            }
+
+                            $file = $document['file'];
+                            $maxSize = 10 * 1024 * 1024; // 10MB
+                            $uploadResult = $this->handleFileUpload($file, 'documents', $maxSize);
                             
-                            $picture->move($uploadPath, $picture_name);
-                            $filename = $picture_name;
-                        } catch (\Exception $e) {
-                            \Log::error('Pickup picture upload failed: ' . $e->getMessage());
-                            // Continue without picture rather than failing entire operation
-                            $filename = null;
+                            if (!$uploadResult['success']) {
+                                Log::warning('Document upload failed, skipping: ' . $uploadResult['error'], [
+                                    'dog_id' => $dog_db->id,
+                                    'document_name' => $document['name'] ?? 'unknown',
+                                ]);
+                                continue; 
+                            }
+                            
+                            DogDocument::create([
+                                'dog_id' => $dog_db->id,
+                                'name' => $document['name'],
+                                'file_path' => $uploadResult['filename'],
+                                'file_type' => $file->getClientMimeType(),
+                                'file_size' => $file->getSize(),
+                            ]);
                         }
                     }
 
-                    Pickup::create([
-                        'dog_id' => $dog_db->id,
-                        'name' => $pick['name'],
-                        'phone' => $pick['phone'],
-                        'id_number'=> $pick['id'],
-                        'picture'=> $filename,
-                    ]);
-                }
-            }
-
-            if(isset($dog['vaccinations']) && count($dog['vaccinations']) > 0)
-            {
-                foreach($dog['vaccinations'] as $vaccination)
-                {
-                    if(
-                        empty($vaccination['vaccine_name'] ?? null) ||
-                        empty($vaccination['vaccination_date'] ?? null) ||
-                        empty($vaccination['next_vaccination_date'] ?? null)
-                    ) {
-                        continue;
-                    }
-
-                    $is_vaccinated = isset($vaccination['is_vaccinated']) && (int)$vaccination['is_vaccinated'] === 1 ? 1 : 0;
-
-                    Vaccination::create([
-                        'dog_id' => $dog_db->id,
-                        'vaccine_name' => $vaccination['vaccine_name'],
-                        'vaccination_date' => $vaccination['vaccination_date'],
-                        'next_vaccination_date' => $vaccination['next_vaccination_date'],
-                        'is_vaccinated' => $is_vaccinated,
-                    ]);
-                }
-            }
-
-            // Save Documents
-            if(isset($dog['documents']) && count($dog['documents']) > 0)
-            {
-                foreach($dog['documents'] as $document)
-                {
-                    if(empty($document['name'] ?? null) || empty($document['file'] ?? null)) {
-                        continue;
-                    }
-
-                    try {
-                        $file = $document['file'];
-                        
-                        // Validate file size before processing (max 10MB)
-                        $maxSize = 10 * 1024 * 1024; // 10MB
-                        if ($file->getSize() > $maxSize) {
-                            \Log::warning('Document file too large: ' . $file->getSize() . ' bytes');
-                            continue; // Skip this file
-                        }
-                        
-                        $fileType = $file->getClientMimeType();
-                        $fileSize = $file->getSize();
-                        
-                        $originalName = $file->getClientOriginalName();
-                        $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                        $filename = uniqid() . '_' . $sanitizedName;
-                        
-                        $uploadPath = public_path('uploads/users/documents');
-                        if (!file_exists($uploadPath)) {
-                            if (!mkdir($uploadPath, 0755, true)) {
-                                throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                    // Save Dog Friends
+                    if(isset($dog['dog_friends']) && count($dog['dog_friends']) > 0)
+                    {
+                        foreach($dog['dog_friends'] as $friend_id)
+                        {
+                            // Check if friendship already exists to prevent duplicates
+                            $existing = Friend::where(function($query) use ($dog_db, $friend_id) {
+                                $query->where([
+                                    ['dog_id', '=', $dog_db->id],
+                                    ['friend_id', '=', $friend_id],
+                                ])->orWhere([
+                                    ['dog_id', '=', $friend_id],
+                                    ['friend_id', '=', $dog_db->id],
+                                ]);
+                            })->first();
+                            
+                            if (!$existing) {
+                                Friend::create([
+                                    'dog_id' => $dog_db->id,
+                                    'friend_id' => $friend_id
+                                ]);
                             }
                         }
-                        
-                        $file->move($uploadPath, $filename);
-                        
-                        // Verify file was moved successfully
-                        $fullPath = $uploadPath . '/' . $filename;
-                        if (!file_exists($fullPath)) {
-                            throw new \Exception('Datei wurde nicht erfolgreich hochgeladen');
-                        }
-                        
-                        DogDocument::create([
-                            'dog_id' => $dog_db->id,
-                            'name' => $document['name'],
-                            'file_path' => $filename,
-                            'file_type' => $fileType,
-                            'file_size' => $fileSize,
-                        ]);
-                    } catch (\Exception $e) {
-                        \Log::error('Document upload failed: ' . $e->getMessage(), [
-                            'dog_id' => $dog_db->id,
-                            'document_name' => $document['name'] ?? 'unknown',
-                        ]);
-                        // Continue with other documents rather than failing entire operation
-                        continue;
                     }
                 }
-            }
 
-            //saving dog friends to db
-            if(isset($dog['dog_friends']) && count($dog['dog_friends']) > 0)
-            {
-                foreach($dog['dog_friends'] as $friend_id)
-                {
-                    // Check if friendship already exists to prevent duplicates
-                    $existing = Friend::where(function($query) use ($dog_db, $friend_id) {
-                        $query->where([
-                            ['dog_id', '=', $dog_db->id],
-                            ['friend_id', '=', $friend_id],
-                        ])->orWhere([
-                            ['dog_id', '=', $friend_id],
-                            ['friend_id', '=', $dog_db->id],
-                        ]);
-                    })->first();
-                    
-                    if (!$existing) {
-                        Friend::create([
-                            'dog_id' => $dog_db->id,
-                            'friend_id' => $friend_id
-                        ]);
-                    }
+                // All Operations Successful - Commit Transaction
+                DB::commit();
+            } catch (\Exception $e) {
+                // Exception Occurred During Dog Creation - Rollback Transaction
+                if (DB::transactionLevel() > 0) {
+                    DB::rollBack();
                 }
+                Log::error('Exception while creating dogs for customer', [
+                    'customer_id' => $customer->id,
+                    'customer_name' => $customer->name,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Customer is already saved, so we show a warning but don't fail the entire operation
+                Session::flash('warning', 'Der Kunde wurde erfolgreich erstellt, aber es gab Fehler beim Hinzufügen der Hunde: ' . $e->getMessage());
+                return redirect()->route('admin.customers.preview', ['id' => $customer->id]);
             }
         }
 
         Session::flash('success', 'Der Kunde wurde erfolgreich hinzugefügt');
         return back();
-
     }
     
     public function edit_customers($id)
@@ -436,16 +453,40 @@ class CustomersController extends Controller
     public function update_customers(Request $request)
     {
         $request->validate([
-            'name' => 'required',
-            'phone' => 'required',
-            'id_number' => 'required',
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:Stammkunde,Organisation',
+            'email' => 'nullable|email|unique:customers,email,' . $request->id . '|max:255',
+            'phone' => 'nullable|string|max:50',
+            'id_number' => 'nullable|string|max:255|unique:customers,id_number,' . $request->id,
+            'title' => 'nullable|string|max:50',
+            'profession' => 'nullable|string|max:255',
+            'street' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'postcode' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:100',
+            'emergency_contact' => 'nullable|string|max:50',
+            'veterinarian' => 'nullable|string|max:255',
+        ], [
+            'name.required' => 'Der Name ist erforderlich.',
+            'name.string' => 'Der Name muss ein Text sein.',
+            'type.required' => 'Der Typ ist erforderlich.',
+            'type.in' => 'Der Typ muss entweder Stammkunde oder Organisation sein.',
+            'email.email' => 'Die E-Mail-Adresse muss gültig sein.',
+            'email.unique' => 'Diese E-Mail-Adresse wird bereits verwendet.',
+            'id_number.unique' => 'Diese ID-Nummer wird bereits verwendet.',
         ]);
 
         $customer = Customer::find($request->id);
+        if (!$customer) {
+            Session::flash('error', 'Kunde nicht gefunden.');
+            return redirect()->back();
+        }
+        
         $customer->type = $request->type;
         $customer->title = $request->title;
         $customer->profession = $request->profession;
         $customer->name = $request->name;
+        $customer->email = $request->email;
         $customer->street = $request->street;
         $customer->city = $request->city;
         $customer->zipcode = $request->postcode;
@@ -457,30 +498,77 @@ class CustomersController extends Controller
 
         if(isset($request->picture) && $request->picture != null)
         {
-            try {
-                $picture = $request->picture;
-                $originalName = $picture->getClientOriginalName();
-                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                $picture_name = uniqid() . '_' . $sanitizedName;
-                
-                $uploadPath = public_path('uploads/users');
-                if (!file_exists($uploadPath)) {
-                    if (!mkdir($uploadPath, 0755, true)) {
-                        throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
-                    }
-                }
-                
-                $picture->move($uploadPath, $picture_name);
-                $customer->picture = $picture_name;
-            } catch (\Exception $e) {
-                \Log::error('Customer picture upload failed: ' . $e->getMessage());
-                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $e->getMessage());
+            $uploadResult = $this->handleFileUpload($request->picture, '');
+            if (!$uploadResult['success']) {
+                Session::flash('error', 'Fehler beim Hochladen des Kundenbildes: ' . $uploadResult['error']);
                 return back();
             }
+            $customer->picture = $uploadResult['filename'];
         }
 
-        $customer->save();
+        try {
+            DB::beginTransaction();
+            
+            // Save customer updates
+            $customer->save();
 
+            // Sync customer update to HelloCash
+            if (!empty($customer->hellocash_customer_id)) {
+                // Update existing customer in HelloCash
+                $result = $this->hellocashService->updateUser($customer->hellocash_customer_id, $customer);
+                
+                if (!$result['success']) {
+                    // HelloCash Update Failed - Rollback Transaction
+                    DB::rollBack();
+                    $errorMessage = $result['error'] ?? 'Unknown error during HelloCash update';
+                    Log::error('HelloCash update failed during customer update', [
+                        'customer_id' => $customer->id,
+                        'customer_name' => $customer->name,
+                        'hellocash_customer_id' => $customer->hellocash_customer_id,
+                        'error' => $errorMessage,
+                    ]);
+                    Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
+                    return redirect()->back()->withInput($request->except('picture'));
+                }
+            } else {
+                // Create new customer in HelloCash if they don't have an ID yet
+                $result = $this->hellocashService->createUser($customer);
+                
+                if (!$result['success'] || empty($result['user_id'])) {
+                    // HelloCash Sync Failed - Rollback Transaction
+                    DB::rollBack();
+                    $errorMessage = $result['error'] ?? 'Unknown error during HelloCash synchronization';
+                    Log::error('HelloCash sync failed during customer update', [
+                        'customer_id' => $customer->id,
+                        'customer_name' => $customer->name,
+                        'error' => $errorMessage,
+                    ]);
+                    Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
+                    return redirect()->back()->withInput($request->except('picture'));
+                }
+                
+                // Set HelloCash ID and save
+                $customer->hellocash_customer_id = (int)$result['user_id'];
+                $customer->save();
+            }
+
+            // All Operations Successful - Commit Transaction
+            DB::commit();
+        } catch (\Exception $e) {
+            // Exception Occurred - Rollback Transaction if Transaction was Started
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::error('Exception while updating customer with HelloCash sync', [
+                'customer_id' => $customer->id ?? null,
+                'customer_name' => $customer->name ?? 'Unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            Session::flash('error', 'Fehler beim Aktualisieren des Kunden. Bitte versuchen Sie es erneut.');
+            return redirect()->back()->withInput($request->except('picture'));
+        }
+        
         Session::flash('success', 'Der Kunde wurde erfolgreich aktualisiert');
         return to_route('admin.customers');
     }
@@ -577,6 +665,7 @@ class CustomersController extends Controller
                                 $paymentData['plan_cost'] = isset($paymentData['plan_cost']) ? (float)$paymentData['plan_cost'] : 0.0;
                                 $paymentData['special_cost'] = isset($paymentData['special_cost']) ? (float)$paymentData['special_cost'] : 0.0;
                                 $paymentData['cost'] = isset($paymentData['cost']) ? (float)$paymentData['cost'] : 0.0;
+                                $paymentData['vat_amount'] = isset($paymentData['vat_amount']) ? (float)$paymentData['vat_amount'] : 0.0;
                                 $paymentData['received_amount'] = isset($paymentData['received_amount']) ? (float)$paymentData['received_amount'] : 0.0;
                                 $paymentData['discount'] = isset($paymentData['discount']) ? (float)$paymentData['discount'] : 0.0;
                                 $paymentData['discount_amount'] = isset($paymentData['discount_amount']) ? (float)$paymentData['discount_amount'] : 0.0;
@@ -1479,5 +1568,53 @@ class CustomersController extends Controller
                 ? 'Dokument erfolgreich gelöscht' 
                 : 'Dokument-Eintrag gelöscht, aber Datei konnte nicht entfernt werden',
         ]);
+    }
+
+    /**
+     * Helper method to handle file uploads
+     */
+    private function handleFileUpload($file, $relativePath = '', $maxSize = null)
+    {
+        try {
+            // Validate file size if specified
+            if ($maxSize !== null && $file->getSize() > $maxSize) {
+                return [
+                    'success' => false,
+                    'filename' => null,
+                    'error' => 'Datei ist zu groß. Maximale Größe: ' . ($maxSize / 1024 / 1024) . ' MB',
+                ];
+            }
+
+            $originalName = $file->getClientOriginalName();
+            $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+            $filename = uniqid() . '_' . $sanitizedName;
+            
+            $uploadPath = public_path('uploads/users' . ($relativePath ? '/' . $relativePath : ''));
+            
+            if (!file_exists($uploadPath)) {
+                if (!mkdir($uploadPath, 0755, true)) {
+                    throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
+                }
+            }
+            
+            $file->move($uploadPath, $filename);
+            
+            return [
+                'success' => true,
+                'filename' => $filename,
+                'error' => null,
+            ];
+        } catch (\Exception $e) {
+            Log::error('File upload failed: ' . $e->getMessage(), [
+                'relative_path' => $relativePath,
+                'original_name' => $file->getClientOriginalName(),
+            ]);
+            
+            return [
+                'success' => false,
+                'filename' => null,
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 }
