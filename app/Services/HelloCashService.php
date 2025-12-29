@@ -15,12 +15,14 @@ class HelloCashService
 {
     protected $baseUrl;
     protected $apiKey;
+    protected $signatureMandatory;
     protected $testMode;
 
     public function __construct()
     {
         $this->baseUrl = config('services.hellocash.base_url', 'https://api.hellocash.business/api/v1');
         $this->apiKey = config('services.hellocash.api_key', '');
+        $this->signatureMandatory = filter_var(config('services.hellocash.signature_mandatory', false), FILTER_VALIDATE_BOOLEAN);
         $this->testMode = filter_var(config('services.hellocash.test_mode', true), FILTER_VALIDATE_BOOLEAN);
     }
 
@@ -146,7 +148,7 @@ class HelloCashService
             'invoice_paymentMethod' => $paymentMethod,
             'invoice_type' => 'pdf',
             'locale' => 'de_AT',
-            'signature_mandatory' => true,
+            'signature_mandatory' => $this->signatureMandatory,
             'invoice_text' => 'Vielen Dank für Ihren Besuch!',
             'items' => $items,
         ];

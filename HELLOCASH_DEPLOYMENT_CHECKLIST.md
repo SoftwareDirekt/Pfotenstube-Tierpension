@@ -41,6 +41,7 @@ Add the following to your `.env` file:
 # HelloCash API Configuration
 HELLOCASH_API_KEY=your_api_key_here
 HELLOCASH_BASE_URL=https://api.hellocash.business/api/v1
+HELLOCASH_SIGNATURE_MANDATORY=false # For production: Set to true only if you have a signature already setup in hellocash system otherwise the invoice generation wont work.
 HELLOCASH_TEST_MODE=true  # Set to false for production
 ```
 
