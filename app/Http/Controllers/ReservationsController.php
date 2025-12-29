@@ -1555,7 +1555,7 @@ class ReservationsController extends Controller
 
                 Session::flash(
                     'warning',
-                    'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein Fehler bei der HelloCash-Verarbeitung auf. Bitte versuchen Sie es erneut.'
+                    'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein Fehler bei der Registrierkasse-Verarbeitung auf. Bitte versuchen Sie es erneut.'
                 );
             }
             
@@ -1569,7 +1569,7 @@ class ReservationsController extends Controller
 
             Session::flash(
                 'warning',
-                'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein technischer Fehler bei der HelloCash-Kommunikation auf. Bitte versuchen Sie es erneut.'
+                'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein technischer Fehler bei der Registrierkasse-Kommunikation auf. Bitte versuchen Sie es erneut.'
             );
             
             return null;

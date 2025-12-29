@@ -1647,7 +1647,7 @@
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" name="send_to_hellocash" id="send_to_hellocash" value="1">
                                             <label class="form-check-label" for="send_to_hellocash">
-                                                <strong>An HelloCash senden</strong> <span class="text-muted">(Kassensystem)</span>
+                                                <strong>An Registrierkasse senden</strong> <span class="text-muted">(Kassensystem)</span>
                                             </label>
                                         </div>
                                     </div>
@@ -1676,13 +1676,13 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">HelloCash Bestätigung</h5>
+                    <h5 class="modal-title">Registrierkasse Bestätigung</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p><strong>Möchten Sie diese Rechnung wirklich an HelloCash senden?</strong></p>
+                    <p><strong>Möchten Sie diese Rechnung wirklich an die Registrierkasse senden?</strong></p>
                     <div class="alert alert-warning">
-                        <strong>Wichtig:</strong> Nach dem Senden an HelloCash wird die Rechnung an die Steuerbehörde übermittelt. 
+                        <strong>Wichtig:</strong> Nach dem Senden an die Registrierkasse wird die Rechnung an die Steuerbehörde übermittelt. 
                         Diese Aktion kann nicht rückgängig gemacht werden.
                     </div>
                     <div class="mb-3">
@@ -1691,7 +1691,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                    <button type="button" class="btn btn-primary" id="confirmHelloCashBtn">Ja, an HelloCash senden</button>
+                    <button type="button" class="btn btn-primary" id="confirmHelloCashBtn">Ja, an Registrierkasse senden</button>
                 </div>
             </div>
         </div>
@@ -2800,7 +2800,7 @@
             submitBtn.disabled = true;
             submitBtn.classList.add('disabled');
             var originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Sende an HelloCash...';
+            submitBtn.innerHTML = 'Sende an Registrierkasse...';
 
             // Ensure use_wallet is included
             if (!$('#use_wallet').is(':checked')) {

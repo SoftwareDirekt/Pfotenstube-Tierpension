@@ -40,7 +40,7 @@
                             <label for="price">Preis (Netto)</label>
                         </div>
                         <small class="text-muted mb-4 d-block">
-                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird nur hinzugefügt, wenn die Rechnung an HelloCash gesendet wird.
+                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird nur hinzugefügt, wenn die Rechnung an die Registrierkasse gesendet wird.
                         </small>
                         @error('price')
                             <p class="formError">*{{$message}}</p>

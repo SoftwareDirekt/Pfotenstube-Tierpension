@@ -87,14 +87,14 @@ class HelloCashService
 
                 return [
                     'success' => false,
-                    'error' => 'Fehler beim Erstellen der Rechnung in HelloCash. Bitte versuchen Sie es erneut.',
+                    'error' => 'Fehler beim Erstellen der Rechnung in der Registrierkasse. Bitte versuchen Sie es erneut.',
                     'status_code' => $response->status(),
                 ];
             }
         } catch (ConnectionException $e) {
             $logMessage = 'HelloCash API connection error: ' . $e->getMessage();
             Log::error($logMessage);
-            return ['success' => false, 'error' => 'HelloCash API-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Registrierkasse-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
         } catch (Exception $e) {
             $logMessage = 'Exception while creating invoice in HelloCash: ' . $e->getMessage();
             Log::error($logMessage);
@@ -215,7 +215,7 @@ class HelloCashService
         } catch (ConnectionException $e) {
             $logMessage = 'HelloCash API connection error: ' . $e->getMessage();
             Log::error($logMessage, ['invoice_id' => $invoiceId]);
-            return ['success' => false, 'error' => 'HelloCash API-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Registrierkasse-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
         } catch (Exception $e) {
             $logMessage = 'Exception while retrieving invoice PDF from HelloCash: ' . $e->getMessage();
             Log::error($logMessage, ['invoice_id' => $invoiceId]);
@@ -287,7 +287,7 @@ class HelloCashService
                         'customer_id' => $customer->id,
                         'customer_name' => $customer->name,
                     ]);
-                    return ['success' => false, 'error' => 'Fehler bei der HelloCash-Synchronisation. Bitte versuchen Sie es erneut.'];
+                    return ['success' => false, 'error' => 'Fehler bei der Registrierkasse-Synchronisation. Bitte versuchen Sie es erneut.'];
                 }
 
                 return [
@@ -310,7 +310,7 @@ class HelloCashService
 
                 return [
                     'success' => false,
-                    'error' => 'Fehler beim Erstellen des Kunden in HelloCash. Bitte versuchen Sie es erneut.',
+                    'error' => 'Fehler beim Erstellen des Kunden in der Registrierkasse. Bitte versuchen Sie es erneut.',
                     'status_code' => $response->status(),
                 ];
             }
@@ -320,14 +320,14 @@ class HelloCashService
                 'customer_id' => $customer->id,
                 'customer_name' => $customer->name,
             ]);
-            return ['success' => false, 'error' => 'HelloCash API-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Registrierkasse-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
         } catch (Exception $e) {
             $logMessage = 'Exception while creating customer in HelloCash: ' . $e->getMessage();
             Log::error($logMessage, [
                 'customer_id' => $customer->id,
                 'customer_name' => $customer->name,
             ]);
-            return ['success' => false, 'error' => 'Fehler beim Erstellen des Kunden in HelloCash. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Fehler beim Erstellen des Kunden in der Registrierkasse. Bitte versuchen Sie es erneut.'];
         }
     }
 
@@ -372,7 +372,7 @@ class HelloCashService
 
                 return [
                     'success' => false,
-                    'error' => 'Fehler beim Aktualisieren des Kunden in HelloCash. Bitte versuchen Sie es erneut.',
+                    'error' => 'Fehler beim Aktualisieren des Kunden in der Registrierkasse. Bitte versuchen Sie es erneut.',
                     'status_code' => $response->status(),
                 ];
             }
@@ -382,14 +382,14 @@ class HelloCashService
                 'customer_id' => $customer->id,
                 'hellocash_customer_id' => $hellocashCustomerId,
             ]);
-            return ['success' => false, 'error' => 'HelloCash API-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Registrierkasse-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
         } catch (Exception $e) {
             $logMessage = 'Exception while updating customer in HelloCash: ' . $e->getMessage();
             Log::error($logMessage, [
                 'customer_id' => $customer->id,
                 'hellocash_customer_id' => $hellocashCustomerId,
             ]);
-            return ['success' => false, 'error' => 'Fehler beim Aktualisieren des Kunden in HelloCash. Bitte versuchen Sie es erneut.'];
+            return ['success' => false, 'error' => 'Fehler beim Aktualisieren des Kunden in der Registrierkasse. Bitte versuchen Sie es erneut.'];
         }
     }
 

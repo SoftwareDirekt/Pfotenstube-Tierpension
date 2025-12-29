@@ -119,7 +119,7 @@
                                             </div>
                                         </div>
                                         <div class="alert alert-info mb-0">
-                                            <strong>Hinweis:</strong> Alle Preise im System sind ohne Mehrwertsteuer (Netto). Der MwSt-Satz wird nur verwendet, wenn Rechnungen an HelloCash gesendet werden.
+                                            <strong>Hinweis:</strong> Alle Preise im System sind ohne Mehrwertsteuer (Netto). Der MwSt-Satz wird nur verwendet, wenn Rechnungen an die Registrierkasse gesendet werden.
                                         </div>
                                     </div>
                                 </div>
