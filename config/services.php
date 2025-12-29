@@ -43,6 +43,7 @@ return [
     'hellocash' => [
         'api_key' => env('HELLOCASH_API_KEY', ''),
         'base_url' => env('HELLOCASH_BASE_URL', 'https://api.hellocash.business/api/v1'),
+        'signature_mandatory' => env('HELLOCASH_SIGNATURE_MANDATORY', false),
         'test_mode' => env('HELLOCASH_TEST_MODE', true),
     ],
 
