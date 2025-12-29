@@ -30,6 +30,13 @@ class SyncCustomersToHelloCash implements ShouldQueue
     public $backoff = 60;
 
     /**
+     * The number of seconds the job can run before timing out.
+     *
+     * @var int
+     */
+    public $timeout = 600; // 10 minutes
+
+    /**
      * Number of requests per minute for rate limiting
      *
      * @var int
@@ -37,11 +44,19 @@ class SyncCustomersToHelloCash implements ShouldQueue
     public int $ratePerMinute;
 
     /**
+     * Maximum number of customers to process in a single job execution
+     *
+     * @var int
+     */
+    public int $batchSize;
+
+    /**
      * Create a new job instance.
      */
-    public function __construct(int $ratePerMinute = 10)
+    public function __construct(int $ratePerMinute = 10, int $batchSize = 30)
     {
         $this->ratePerMinute = $ratePerMinute;
+        $this->batchSize = $batchSize;
     }
 
     /**
@@ -49,10 +64,13 @@ class SyncCustomersToHelloCash implements ShouldQueue
      */
     public function handle(HelloCashService $service): void
     {
-        // Get all customers without HelloCash ID
-        $customers = Customer::whereNull('hellocash_customer_id')->get();
+        // Get all customers without HelloCash ID, limit to batch size
+        $customers = Customer::whereNull('hellocash_customer_id')
+            ->limit($this->batchSize)
+            ->get();
 
         if ($customers->isEmpty()) {
+            Log::info('No customers remaining to sync');
             return;
         }
 
@@ -63,8 +81,9 @@ class SyncCustomersToHelloCash implements ShouldQueue
         $skippedCount = 0;
         $failedCustomers = [];
 
-        Log::info("Starting HelloCash sync for {$total} customers", [
+        Log::info("Starting HelloCash sync for {$total} customers (batch size: {$this->batchSize})", [
             'rate_per_minute' => $this->ratePerMinute,
+            'batch_size' => $this->batchSize,
         ]);
 
         foreach ($customers as $index => $customer) {
@@ -128,8 +147,8 @@ class SyncCustomersToHelloCash implements ShouldQueue
             }
         }
 
-        Log::info('HelloCash customer sync completed', [
-            'total' => $total,
+        Log::info('HelloCash customer sync batch completed', [
+            'total_processed' => $total,
             'success' => $successCount,
             'failed' => $failedCount,
             'skipped' => $skippedCount,
@@ -140,6 +159,16 @@ class SyncCustomersToHelloCash implements ShouldQueue
                 'failed_count' => $failedCount,
                 'failed_customers' => $failedCustomers,
             ]);
+        }
+
+        // Check if there are more customers to sync
+        $remainingCount = Customer::whereNull('hellocash_customer_id')->count();
+        
+        if ($remainingCount > 0) {
+            Log::info("Dispatching next batch for {$remainingCount} remaining customers");
+            self::dispatch($this->ratePerMinute, $this->batchSize)->delay(now()->addSeconds(5));
+        } else {
+            Log::info('All customers have been synced to HelloCash');
         }
     }
 

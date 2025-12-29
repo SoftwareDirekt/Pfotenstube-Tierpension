@@ -211,7 +211,7 @@ class CustomersController extends Controller
             if (!$result['success'] || empty($result['user_id'])) {
                 // HelloCash sync failed - rollback transaction
                 DB::rollBack();
-                $errorMessage = $result['error'] ?? 'Unknown error during HelloCash synchronization';
+                $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
                 Log::error('HelloCash sync failed during customer creation', [
                     'customer_name' => $request->name ?? 'Unknown',
                     'error' => $errorMessage,
@@ -520,7 +520,7 @@ class CustomersController extends Controller
                 if (!$result['success']) {
                     // HelloCash Update Failed - Rollback Transaction
                     DB::rollBack();
-                    $errorMessage = $result['error'] ?? 'Unknown error during HelloCash update';
+                    $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Aktualisierung';
                     Log::error('HelloCash update failed during customer update', [
                         'customer_id' => $customer->id,
                         'customer_name' => $customer->name,
@@ -537,7 +537,7 @@ class CustomersController extends Controller
                 if (!$result['success'] || empty($result['user_id'])) {
                     // HelloCash Sync Failed - Rollback Transaction
                     DB::rollBack();
-                    $errorMessage = $result['error'] ?? 'Unknown error during HelloCash synchronization';
+                    $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
                     Log::error('HelloCash sync failed during customer update', [
                         'customer_id' => $customer->id,
                         'customer_name' => $customer->name,

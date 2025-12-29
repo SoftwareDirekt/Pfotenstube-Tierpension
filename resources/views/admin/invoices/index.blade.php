@@ -15,7 +15,7 @@
         <div class="card">
             <div class="row">
                 <div class="col-md-4 my-2">
-                    <h5 class="card-header">HelloCash Rechnungen</h5>
+                    <h5 class="card-header">Registrierkasse Rechnungen</h5>
                 </div>
                 <hr>
                 <form class="row" method="GET" action="{{ route('admin.invoices') }}">
