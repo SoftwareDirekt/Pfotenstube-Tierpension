@@ -56,16 +56,17 @@ class InvoicesController extends Controller
     {
         $invoice = HelloCashInvoice::findOrFail($id);
 
-        if ($invoice->file_path && Storage::disk('local')->exists($invoice->file_path)) {
-            return response()->stream(function () use ($invoice) {
-                echo Storage::disk('local')->get($invoice->file_path);
-            }, 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="invoice_' . $invoice->hellocash_invoice_id . '.pdf"',
-            ]);
+        if ($invoice->file_path) {
+            $fullPath = storage_path('app/' . $invoice->file_path);
+
+            if (file_exists($fullPath)) {
+                return response()->file($fullPath, [
+                    'Content-Type' => 'application/pdf',
+                ]);
+            }
         }
 
-        return $this->fetchAndServeInvoiceFromHelloCash($invoice);
+        return $this->fetchAndServeInvoiceFromHelloCash($invoice, false);
     }
 
     /**
@@ -75,12 +76,16 @@ class InvoicesController extends Controller
     {
         $invoice = HelloCashInvoice::findOrFail($id);
 
-        if ($invoice->file_path && Storage::disk('local')->exists($invoice->file_path)) {
-            return Storage::disk('local')->download(
-                $invoice->file_path,
-                'invoice_' . $invoice->hellocash_invoice_id . '.pdf',
-                ['Content-Type' => 'application/pdf']
-            );
+        if ($invoice->file_path) {
+            $fullPath = storage_path('app/' . $invoice->file_path);
+
+            if (file_exists($fullPath)) {
+                return response()->download(
+                    $fullPath,
+                    'invoice_' . $invoice->hellocash_invoice_id . '.pdf',
+                    ['Content-Type' => 'application/pdf']
+                );
+            }
         }
 
         return $this->fetchAndServeInvoiceFromHelloCash($invoice, true);
@@ -89,7 +94,7 @@ class InvoicesController extends Controller
     /**
      * Fetch invoice PDF from HelloCash API, store locally, and serve it
      */
-    private function fetchAndServeInvoiceFromHelloCash(HelloCashInvoice $invoice, bool $download = false)
+    private function fetchAndServeInvoiceFromHelloCash(HelloCashInvoice $invoice, bool $download = false) 
     {
         try {
             $result = $this->hellocashService->getInvoicePdf(
@@ -101,21 +106,16 @@ class InvoicesController extends Controller
             if (!$result['success'] || empty($result['pdf_base64'])) {
                 Log::error('HelloCash invoice fetch failed', [
                     'invoice_id' => $invoice->id,
-                    'hellocash_invoice_id' => $invoice->hellocash_invoice_id,
                     'response' => $result,
                 ]);
 
-                abort(500, 'Rechnung konnte nicht von der Registrierkasse abgerufen werden.');
+                abort(500, 'Rechnung konnte nicht abgerufen werden.');
             }
 
             $pdfContent = base64_decode($result['pdf_base64'], true);
 
             if ($pdfContent === false) {
-                Log::error('Invalid base64 PDF from HelloCash', [
-                    'invoice_id' => $invoice->id,
-                ]);
-
-                abort(500, 'Ungültiges Rechnungsformat von der Registrierkasse.');
+                abort(500, 'Ungültiges PDF-Format.');
             }
 
             // Save locally
@@ -126,32 +126,28 @@ class InvoicesController extends Controller
                 $path = "invoices/{$year}/{$month}/{$filename}";
 
                 Storage::disk('local')->put($path, $pdfContent);
-
                 $invoice->update(['file_path' => $path]);
             } catch (\Throwable $e) {
-                Log::warning('Invoice saved failed (non-blocking)', [
+                Log::warning('Invoice save failed', [
                     'invoice_id' => $invoice->id,
                     'error' => $e->getMessage(),
                 ]);
             }
 
-            $headers = [
+            return response($pdfContent, 200, [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => ($download ? 'attachment' : 'inline')
+                'Content-Disposition' =>
+                    ($download ? 'attachment' : 'inline')
                     . '; filename="invoice_' . $invoice->hellocash_invoice_id . '.pdf"',
-            ];
-
-            return response()->stream(function () use ($pdfContent) {
-                echo $pdfContent;
-            }, 200, $headers);
+            ]);
 
         } catch (\Throwable $e) {
-            Log::error('Exception while fetching HelloCash invoice', [
+            Log::error('HelloCash exception', [
                 'invoice_id' => $invoice->id,
                 'error' => $e->getMessage(),
             ]);
 
-            abort(500, 'Fehler beim Abrufen der Rechnung von der Registrierkasse.');
+            abort(500, 'Fehler beim Abrufen der Rechnung.');
         }
     }
 }
