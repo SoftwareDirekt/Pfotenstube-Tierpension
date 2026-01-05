@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Preference;
 use App\Models\HelloCashInvoice;
 use App\Models\Customer;
+use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -165,7 +166,7 @@ class HelloCashService
         return $payload;
     }
 
-    public function getInvoicePdf(int $invoiceId, string $locale = 'de_DE', bool $cancellation = false): array
+    public function getInvoicePdf(int $invoiceId, string $locale = 'de_AT', bool $cancellation = false): array
     {
         try {
             if (empty($this->apiKey)) {
@@ -236,19 +237,41 @@ class HelloCashService
                 return null;
             }
 
-            $year = date('Y');
-            $month = date('m');
+            $invoiceDate = now();
+            if (!empty($data['payment_id'])) {
+                $payment = Payment::find($data['payment_id']);
+                if ($payment && $payment->created_at) {
+                    $invoiceDate = $payment->created_at;
+                }
+            }
+
+            $year = $invoiceDate->format('Y');
+            $month = $invoiceDate->format('m');
             $filename = 'invoice_' . $data['hellocash_invoice_id'] . '.pdf';
             $filePath = "invoices/{$year}/{$month}/{$filename}";
 
             Storage::disk('local')->put($filePath, $pdfContent);
 
-            return HelloCashInvoice::create([
+            $invoice = HelloCashInvoice::create([
                 'hellocash_invoice_id' => $data['hellocash_invoice_id'],
                 'reservation_id' => $data['reservation_id'],
                 'payment_id' => $data['payment_id'],
                 'file_path' => $filePath,
             ]);
+
+            if ($invoice->created_at->format('Y-m') !== $invoiceDate->format('Y-m')) {
+                $correctYear = $invoice->created_at->format('Y');
+                $correctMonth = $invoice->created_at->format('m');
+                $correctPath = "invoices/{$correctYear}/{$correctMonth}/{$filename}";
+                
+                // Move file to correct location
+                if (Storage::disk('local')->exists($filePath)) {
+                    Storage::disk('local')->move($filePath, $correctPath);
+                    $invoice->update(['file_path' => $correctPath]);
+                }
+            }
+
+            return $invoice;
         } catch (Exception $e) {
             Log::error('Failed to save invoice to local storage', [
                 'hellocash_invoice_id' => $data['hellocash_invoice_id'] ?? null,
