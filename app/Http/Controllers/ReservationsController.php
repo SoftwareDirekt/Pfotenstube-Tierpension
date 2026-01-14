@@ -156,7 +156,7 @@ class ReservationsController extends Controller
                     $checkin = Carbon::createFromFormat('d/m/Y H:i', trim($ex0))->toDateTimeString();
                     $checkout = Carbon::createFromFormat('d/m/Y H:i', trim($ex1))->toDateTimeString();
                 } catch (\Exception $e) {
-                    \Log::error('Date parsing error:', ['error' => $e->getMessage(), 'input' => $date]);
+                    Log::error('Date parsing error:', ['error' => $e->getMessage(), 'input' => $date]);
                     Session::flash('error', 'Fehler beim Verarbeiten des Datums! Überprüfen Sie Ihre Eingaben.');
                     return back();
                 }
@@ -453,9 +453,16 @@ class ReservationsController extends Controller
                 $checkinDate = $reservation->checkin_date instanceof Carbon
                     ? $reservation->checkin_date
                     : ($reservation->checkin_date ? Carbon::parse($reservation->checkin_date) : null);
+                $checkoutDate = $reservation->checkout_date instanceof Carbon
+                    ? $reservation->checkout_date
+                    : ($reservation->checkout_date ? Carbon::parse($reservation->checkout_date) : null);
 
                 if (!$checkinDate || $checkinDate->lt(Carbon::today())) {
                     $reservation->checkin_date = Carbon::now();
+                }
+                
+                if (!$checkoutDate || $checkoutDate->lt(Carbon::today())) {
+                    $reservation->checkout_date = Carbon::now();
                 }
             }
 
@@ -630,31 +637,33 @@ class ReservationsController extends Controller
 
         foreach ($reservations as $reservation) {
             if ($reservation->checkin_date && $reservation->checkout_date) {
-                // Normalize to start of day for consistent "1 day per night" calculation
+                // Normalize to start of day for consistent calculation
                 $checkinDate = Carbon::parse($reservation->checkin_date)->startOfDay();
                 $checkoutDate = Carbon::parse($reservation->checkout_date)->startOfDay();
                 
-                // Calculate duration as 1 day per night (not inclusive)
-                // Same-day checkin/checkout counts as 1 day
-                $duration = $checkinDate->diffInDays($checkoutDate);
-                $duration = max(1, $duration); // At least 1 day (for same-day checkin/checkout)
+                // Calculate duration inclusively (both checkin and checkout dates count)
+                // Example: 29-29 = 1 day, 29-30 = 2 days
+                $duration = $checkinDate->diffInDays($checkoutDate) + 1;
                 
-                // Get the plan price
+                // Get actual payment data if available
                 $dailyPrice = $reservation->plan ? $reservation->plan->price : 0;
                 $totalPrice = $duration * $dailyPrice;
-                
-                // Get actual payment amount if available
                 $actualAmount = $totalPrice;
+                
                 if ($reservation->payments && $reservation->payments->count() > 0) {
                     $payment = $reservation->payments->first();
                     $actualAmount = $payment->received_amount;
+                    
+                    if ($payment->plan_cost && $duration > 0) {
+                        $dailyPrice = $payment->plan_cost / $duration;
+                    }
                 }
                 
                 $visitHistory[] = [
                     'checkin_date' => $checkinDate->format('d.m'),
                     'checkout_date' => $checkoutDate->format('d.m'),
                     'duration' => $duration,
-                    'daily_price' => $dailyPrice,
+                    'daily_price' => round($dailyPrice, 2),
                     'total_price' => $totalPrice,
                     'actual_amount' => $actualAmount,
                     'year' => $checkinDate->format('Y')
@@ -1033,14 +1042,20 @@ class ReservationsController extends Controller
             $res->status = $request->status;
         }
         
-        // Update checkin_date only when dragging from reservation area to room (check-in)
+        // Update checkin_date and checkout_date when dragging from reservation area to room (check-in)
         if($request->drag_type === 'checkin')
         {
             $checkinDate = $res->checkin_date instanceof Carbon ? $res->checkin_date : ($res->checkin_date ? Carbon::parse($res->checkin_date) : null);
+            $checkoutDate = $res->checkout_date instanceof Carbon ? $res->checkout_date : ($res->checkout_date ? Carbon::parse($res->checkout_date) : null);
 
             if(!$checkinDate || $checkinDate->lt(Carbon::today()))
             {
                 $res->checkin_date = Carbon::now();
+            }
+            
+            if(!$checkoutDate || $checkoutDate->lt(Carbon::today()))
+            {
+                $res->checkout_date = Carbon::now();
             }
         }
         
@@ -1156,6 +1171,7 @@ class ReservationsController extends Controller
                 {
                     $total_before_discount = $base_cost + $special_cost;
                     $discount_amount = $total_before_discount * ($discount_percentage / 100);
+                    $discount_amount = round($discount_amount, 2);
                 }
 
                 // Calculate remaining amount and advance payment

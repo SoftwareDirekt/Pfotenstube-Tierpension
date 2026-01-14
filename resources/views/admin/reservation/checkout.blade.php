@@ -39,12 +39,12 @@
                                 @php $total = 0; @endphp
                                 @foreach($reservations as $obj)
                                 @php
-                                    // Calculate days as 1 day per night (not inclusive)
+                                    // Calculate days inclusively (both checkin date and today count)
+                                    // Example: checkin today = 1 day, checkin yesterday = 2 days
                                     // Normalize dates to start of day for consistent calculation
                                     $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
                                     $now = \Carbon\Carbon::now()->startOfDay();
-                                    $days_between = $checkinDate->diffInDays($now);
-                                    $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
+                                    $days_between = $checkinDate->diffInDays($now) + 1;
 
                                     if(isset($obj->plan) && $obj->plan != null)
                                     {

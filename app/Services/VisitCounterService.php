@@ -60,14 +60,12 @@ class VisitCounterService
             ['visits' => 0, 'stay' => 0]
         );
 
-        // Calculate days as 1 day per night (not inclusive)
-        // Example: checkin 2025-07-17, checkout 2025-07-22
-        // Nights: 17-18, 18-19, 19-20, 20-21, 21-22 = 5 nights = 5 days
-        // Same-day checkin/checkout counts as 1 day
+        // Calculate days inclusively (both checkin and checkout dates count)
+        // Example: checkin 2025-07-17, checkout 2025-07-17 = 1 day (same day)
+        // Example: checkin 2025-07-17, checkout 2025-07-22 = 6 days (17, 18, 19, 20, 21, 22)
         $checkinStart = $checkinDate->copy()->startOfDay();
         $checkoutEnd = $checkoutDate->copy()->startOfDay();
-        $days = $checkinStart->diffInDays($checkoutEnd);
-        $days = max(1, $days); // At least 1 day (for same-day checkin/checkout)
+        $days = $checkinStart->diffInDays($checkoutEnd) + 1;
 
         $visit->increment('stay', $days);
     }
