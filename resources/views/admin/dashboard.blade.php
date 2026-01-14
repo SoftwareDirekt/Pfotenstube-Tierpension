@@ -349,12 +349,12 @@
                                                             </p>
                                                             <hr class="p-0 m-0">
                                                             @php
-                                                                // Calculate days as 1 day per night (not inclusive)
+                                                                // Calculate days inclusively (both checkin and checkout dates count)
+                                                                // Example: 29-29 = 1 day, 29-30 = 2 days
                                                                 // Normalize dates to start of day for consistent calculation
                                                                 $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
                                                                 $checkoutDate = \Carbon\Carbon::parse($obj->checkout_date)->startOfDay();
-                                                                $days_between = $checkinDate->diffInDays($checkoutDate);
-                                                                $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
+                                                                $days_between = $checkinDate->diffInDays($checkoutDate) + 1;
                                                             @endphp
                                                             <div class="flex justify-between py-2">
                                                                 <p class="tag">{{$days_between}} Tage</p>
@@ -585,12 +585,12 @@
                                                                 </div>
                                                                 <hr class="p-0 m-0">
                                                                 @php
-                                                                    // Calculate days as 1 day per night (not inclusive)
+                                                                    // Calculate days inclusively (both checkin and checkout dates count)
+                                                                    // Example: 29-29 = 1 day, 29-30 = 2 days
                                                                     // Normalize dates to start of day for consistent calculation
                                                                     $checkinDate = \Carbon\Carbon::parse($item->checkin_date)->startOfDay();
                                                                     $checkoutDate = \Carbon\Carbon::parse($item->checkout_date)->startOfDay();
-                                                                    $days_between = $checkinDate->diffInDays($checkoutDate);
-                                                                    $days_between = max(1, $days_between); // At least 1 day (for same-day checkin/checkout)
+                                                                    $days_between = $checkinDate->diffInDays($checkoutDate) + 1; 
 
                                                                     $morning = $item->dog->eating_morning != '' ? '1' : '0';
                                                                     $afternoon = $item->dog->eating_midday != '' ? '1' : '0';
@@ -2593,14 +2593,12 @@
                         var checkin_date = new Date(checkin);
                         var checkout_date = new Date(res.checkout_date);
 
-                        var daysDiffs = checkout_date.getTime() - checkin_date.getTime();
-                        var daysDiff = Math.floor(daysDiffs / (1000 * 3600 * 24));
-                        var tage = (daysDiff > 0) ? daysDiff : 1;
-
                         var today = new Date();
+                        // Calculate days inclusively (both checkin date and today count)
+                        // Example: checkin today = 1 day, checkin yesterday = 2 days
                         var time_difference = today.getTime() - checkin_date.getTime();
                         var difference_in_days = Math.floor(time_difference / (1000 * 3600 * 24));
-                        var days = (difference_in_days > 0) ? difference_in_days : 1;
+                        var days = difference_in_days + 1;
 
                         var formatted_checkin_date = checkin_date.toLocaleDateString('en-GB', {
                             day: '2-digit',

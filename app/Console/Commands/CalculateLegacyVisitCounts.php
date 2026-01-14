@@ -17,6 +17,7 @@ class CalculateLegacyVisitCounts extends Command
      */
     protected $signature = 'visits:calculate-legacy 
                             {--dry-run : Show what would be updated without making changes}
+                            {--force : Force recalculation of all records, even if they already have counts}
                             {--chunk=500 : Number of dogs to process per chunk}';
 
     /**
@@ -32,10 +33,16 @@ class CalculateLegacyVisitCounts extends Command
     public function handle(): int
     {
         $dryRun = $this->option('dry-run');
+        $force = $this->option('force');
         $chunkSize = (int) $this->option('chunk');
 
         if ($dryRun) {
             $this->info('🔍 DRY RUN MODE - No changes will be made');
+            $this->newLine();
+        }
+
+        if ($force) {
+            $this->info('⚡ FORCE MODE - All records will be recalculated');
             $this->newLine();
         }
 
@@ -48,7 +55,7 @@ class CalculateLegacyVisitCounts extends Command
         $created = 0;
         $skipped = 0;
 
-        Dog::chunk($chunkSize, function ($dogs) use (&$processed, &$updated, &$created, &$skipped, $dryRun) {
+        Dog::chunk($chunkSize, function ($dogs) use (&$processed, &$updated, &$created, &$skipped, $dryRun, $force) {
             foreach ($dogs as $dog) {
                 $processed++;
 
@@ -81,11 +88,11 @@ class CalculateLegacyVisitCounts extends Command
                         $checkoutDate = Carbon::today()->startOfDay();
                     }
 
-                    // Calculate days as 1 day per night
-                    // Example: checkin 2025-07-17, checkout 2025-07-22
-                    // Nights: 17-18, 18-19, 19-20, 20-21, 21-22 = 5 nights = 5 days
-                    $days = $checkinDate->diffInDays($checkoutDate);
-                    return max(1, $days); // At least 1 day (for same-day checkin/checkout)
+                    // Calculate days inclusively (both checkin and checkout dates count)
+                    // Example: checkin 2025-07-17, checkout 2025-07-17 = 1 day (same day)
+                    // Example: checkin 2025-07-17, checkout 2025-07-22 = 6 days (17, 18, 19, 20, 21, 22)
+                    $days = $checkinDate->diffInDays($checkoutDate) + 1; 
+                    return $days;
                 });
 
                 // Get or create visit record
@@ -96,12 +103,11 @@ class CalculateLegacyVisitCounts extends Command
                     $existingVisits = (int)($visit->visits ?? 0);
                     $existingDays = (int)($visit->stay ?? 0);
 
-                    // Only skip if BOTH visits and days are > 0 (meaningful data)
-                    // If visits is 0, we should recalculate even if days > 0
-                    if ($existingVisits > 0 && $existingDays > 0) {
+                    // Skip if force mode is not enabled and record has meaningful values
+                    if (!$force && $existingVisits > 0 && $existingDays > 0) {
                         // Has meaningful existing values - skip to preserve manual entries
                         $skipped++;
-                        $this->line("  ⏭️  Dog ID {$dog->id} ({$dog->name}): Already has counts ({$existingVisits}/{$existingDays}) - Skipped");
+                        $this->line("  ⏭️  Dog ID {$dog->id} ({$dog->name}): Already has counts ({$existingVisits}/{$existingDays}) - Skipped (use --force to recalculate)");
                         continue;
                     }
 
