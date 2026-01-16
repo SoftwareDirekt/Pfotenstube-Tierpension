@@ -231,7 +231,8 @@ class AdminsController extends Controller
 
     public function admin_settings()
     {
-        return view('admin.auth.settings');
+        $user = Auth::user();
+        return view('admin.auth.settings', compact('user'));
     }
 
     public function admin_preferences_post(Request $request)
@@ -296,6 +297,81 @@ class AdminsController extends Controller
 
         Session::flash('success', 'Passwort erfolgreich aktualisiert.');
         return redirect()->back();
+    }
+
+    public function admin_basic_info_post(Request $request)
+    {
+        $request->validate([
+            'company_name' => 'required|string|max:255',
+            'company_email' => 'required|email|max:255',
+            'address' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'country' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ], [
+            'company_name.required' => 'Der Firmenname ist erforderlich, da er auf Rechnungen verwendet wird.',
+            'company_email.required' => 'Die Firmen-E-Mail ist erforderlich, da sie auf Rechnungen verwendet wird.',
+        ]);
+
+        try {
+            $user = Auth::user();
+            
+            // Update basic info
+            $user->company_name = $request->company_name;
+            $user->company_email = $request->company_email;
+            $user->address = $request->address;
+            $user->city = $request->city;
+            $user->country = $request->country;
+            $user->phone = $request->phone;
+
+            // Handle picture upload
+            if ($request->hasFile('picture')) {
+                // Delete old picture if exists
+                if ($user->picture && file_exists(public_path('uploads/users/' . $user->picture))) {
+                    unlink(public_path('uploads/users/' . $user->picture));
+                }
+
+                $file = $request->file('picture');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                
+                // Ensure uploads/users directory exists
+                $uploadPath = public_path('uploads/users');
+                if (!file_exists($uploadPath)) {
+                    mkdir($uploadPath, 0755, true);
+                }
+                
+                $file->move($uploadPath, $filename);
+                $user->picture = $filename;
+            }
+
+            $user->save();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Grundinformationen erfolgreich aktualisiert',
+                    'user' => [
+                        'picture' => $user->picture,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                    ],
+                ]);
+            }
+
+            Session::flash('success', 'Grundinformationen erfolgreich aktualisiert.');
+            return redirect()->back();
+        } catch (\Exception $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Fehler beim Aktualisieren: ' . $e->getMessage(),
+                ], 500);
+            }
+
+            Session::flash('error', 'Fehler beim Aktualisieren der Grundinformationen: ' . $e->getMessage());
+            return redirect()->back()->withInput();
+        }
     }
 
     public function admin_logout(Request $request)

@@ -15,7 +15,7 @@
         <div class="card">
             <div class="row">
                 <div class="col-md-4 my-2">
-                    <h5 class="card-header">Registrierkasse Rechnungen</h5>
+                    <h5 class="card-header">Rechnungen</h5>
                 </div>
                 <hr>
                 <form class="row" method="GET" action="{{ route('admin.invoices') }}">
@@ -41,6 +41,16 @@
                                 <option value="all" {{ request('year') == 'all' || !request('year') ? 'selected' : '' }}>Alle</option>
                             </select>
                             <label for="year">Jahr</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-floating form-floating-outline my-3">
+                            <select name="invoice_type" class="form-control">
+                                <option value="all" {{ request('invoice_type') == 'all' || !request('invoice_type') ? 'selected' : '' }}>Alle Typen</option>
+                                <option value="local" {{ request('invoice_type') == 'local' ? 'selected' : '' }}>Lokal</option>
+                                <option value="cashier" {{ request('invoice_type') == 'cashier' ? 'selected' : '' }}>Registrierkasse</option>
+                            </select>
+                            <label for="invoice_type">Rechnungstyp</label>
                         </div>
                     </div>
                     <div class="col-md-2">
@@ -71,7 +81,7 @@
                                         <a href="{{ route('admin.invoices.view', $invoice->id) }}" 
                                            target="_blank" 
                                            class="text-primary text-decoration-none fw-bold">
-                                            #{{ $invoice->hellocash_invoice_id }}
+                                            #{{ $invoice->formatted_invoice_number }}
                                         </a>
                                     </td>
                                     <td>
