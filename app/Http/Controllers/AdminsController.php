@@ -207,11 +207,10 @@ class AdminsController extends Controller
         $dogs = Dog::with('customer')->get();
         $tasks = Task::orderBy('created_at','desc')->get();
         $users = User::orderBy('created_at','desc')->get();
-
         $total_reservations = count($reservations);
-
-
-        return view('admin.dashboard', compact('currentMonth','reservations' , 'dogs', 'tasks','rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users'));
+        $daysCalculationMode = config('app.days_calculation_mode', 'inclusive');
+        
+        return view('admin.dashboard', compact('currentMonth','reservations' , 'dogs', 'tasks','rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users', 'daysCalculationMode'));
 
     }
 

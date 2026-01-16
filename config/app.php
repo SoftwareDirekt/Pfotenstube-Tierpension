@@ -197,4 +197,20 @@ return [
 
     'admin_pin' => env('ADMIN_PIN', '1122'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Days Calculation Mode
+    |--------------------------------------------------------------------------
+    |
+    | Determines how days are calculated for reservations:
+    | - 'inclusive': Both checkin and checkout dates count (29-30 = 2 days)
+    | - 'exclusive': Only days between dates count (29-30 = 1 day)
+    |
+    | Set DAYS_CALCULATION_MODE=inclusive or DAYS_CALCULATION_MODE=exclusive
+    | in your ".env" file. Defaults to 'inclusive'.
+    |
+    */
+
+    'days_calculation_mode' => env('DAYS_CALCULATION_MODE', 'inclusive'),
+
 ];

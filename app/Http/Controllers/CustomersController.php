@@ -1381,7 +1381,11 @@ class CustomersController extends Controller
             $keyword = $request->keyword;
             $date = $request->date;
 
-            $dogs = Reservation::selectRaw('MAX(reservations.id) as id, reservations.dog_id, SUM(DATEDIFF(date(`checkout_date`), date(`checkin_date`)) + 1) AS total_stay_days')
+            $daysCalculationMode = config('app.days_calculation_mode', 'inclusive');
+            $daysOffset = ($daysCalculationMode === 'inclusive') ? ' + 1' : '';
+            $selectRaw = 'MAX(reservations.id) as id, reservations.dog_id, SUM(GREATEST(1, DATEDIFF(date(`checkout_date`), date(`checkin_date`))' . $daysOffset . ')) AS total_stay_days';
+
+            $dogs = Reservation::selectRaw($selectRaw)
             ->with('dog.customer')
             ->join('dogs', 'reservations.dog_id', '=', 'dogs.id')
             ->whereYear('reservations.checkin_date', $date)
@@ -1411,7 +1415,11 @@ class CustomersController extends Controller
             return $dogs;
         }
 
-        $dogs = Reservation::selectRaw('MAX(id) as id, dog_id, SUM(DATEDIFF(date(`checkout_date`), date(`checkin_date`)) + 1) AS total_stay_days')
+        $daysCalculationMode = config('app.days_calculation_mode', 'inclusive');
+        $daysOffset = ($daysCalculationMode === 'inclusive') ? ' + 1' : '';
+        $selectRaw = 'MAX(id) as id, dog_id, SUM(GREATEST(1, DATEDIFF(date(`checkout_date`), date(`checkin_date`))' . $daysOffset . ')) AS total_stay_days';
+
+        $dogs = Reservation::selectRaw($selectRaw)
         ->with('dog.customer')
         ->whereYear('checkin_date', $year)
         ->where(function ($query) {

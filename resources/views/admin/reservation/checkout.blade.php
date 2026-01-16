@@ -39,12 +39,22 @@
                                 @php $total = 0; @endphp
                                 @foreach($reservations as $obj)
                                 @php
-                                    // Calculate days inclusively (both checkin date and today count)
-                                    // Example: checkin today = 1 day, checkin yesterday = 2 days
+                                    // Calculate days based on configuration (inclusive or exclusive)
+                                    // Same-day (29-29) always counts as 1 day regardless of mode
+                                    // Inclusive: both checkin date and today count (29-30 = 2 days, 29-31 = 3 days)
+                                    // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
                                     // Normalize dates to start of day for consistent calculation
                                     $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
                                     $now = \Carbon\Carbon::now()->startOfDay();
-                                    $days_between = $checkinDate->diffInDays($now) + 1;
+                                    $daysDiff = $checkinDate->diffInDays($now);
+                                    
+                                    // Same-day checkin/checkout always counts as 1 day
+                                    if ($daysDiff === 0) {
+                                        $days_between = 1;
+                                    } else {
+                                        $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                                        $days_between = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                                    }
 
                                     if(isset($obj->plan) && $obj->plan != null)
                                     {
