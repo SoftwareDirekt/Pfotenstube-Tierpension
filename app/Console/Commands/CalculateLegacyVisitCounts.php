@@ -88,10 +88,19 @@ class CalculateLegacyVisitCounts extends Command
                         $checkoutDate = Carbon::today()->startOfDay();
                     }
 
-                    // Calculate days inclusively (both checkin and checkout dates count)
-                    // Example: checkin 2025-07-17, checkout 2025-07-17 = 1 day (same day)
-                    // Example: checkin 2025-07-17, checkout 2025-07-22 = 6 days (17, 18, 19, 20, 21, 22)
-                    $days = $checkinDate->diffInDays($checkoutDate) + 1; 
+                    // Calculate days based on configuration (inclusive or exclusive)
+                    // Same-day (29-29) always counts as 1 day regardless of mode
+                    // Inclusive: both checkin and checkout dates count (29-30 = 2 days, 29-31 = 3 days)
+                    // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
+                    $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                    
+                    // Same-day checkin/checkout always counts as 1 day
+                    if ($daysDiff === 0) {
+                        return 1;
+                    }
+                    
+                    $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                    $days = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
                     return $days;
                 });
 

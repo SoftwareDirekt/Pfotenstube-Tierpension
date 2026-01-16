@@ -349,12 +349,22 @@
                                                             </p>
                                                             <hr class="p-0 m-0">
                                                             @php
-                                                                // Calculate days inclusively (both checkin and checkout dates count)
-                                                                // Example: 29-29 = 1 day, 29-30 = 2 days
+                                                                // Calculate days based on configuration (inclusive or exclusive)
+                                                                // Same-day (29-29) always counts as 1 day regardless of mode
+                                                                // Inclusive: both checkin and checkout dates count (29-30 = 2 days, 29-31 = 3 days)
+                                                                // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
                                                                 // Normalize dates to start of day for consistent calculation
                                                                 $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
                                                                 $checkoutDate = \Carbon\Carbon::parse($obj->checkout_date)->startOfDay();
-                                                                $days_between = $checkinDate->diffInDays($checkoutDate) + 1;
+                                                                $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                                                                
+                                                                // Same-day checkin/checkout always counts as 1 day
+                                                                if ($daysDiff === 0) {
+                                                                    $days_between = 1;
+                                                                } else {
+                                                                    $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                                                                    $days_between = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                                                                }
                                                             @endphp
                                                             <div class="flex justify-between py-2">
                                                                 <p class="tag">{{$days_between}} Tage</p>
@@ -585,12 +595,22 @@
                                                                 </div>
                                                                 <hr class="p-0 m-0">
                                                                 @php
-                                                                    // Calculate days inclusively (both checkin and checkout dates count)
-                                                                    // Example: 29-29 = 1 day, 29-30 = 2 days
+                                                                    // Calculate days based on configuration (inclusive or exclusive)
+                                                                    // Same-day (29-29) always counts as 1 day regardless of mode
+                                                                    // Inclusive: both checkin and checkout dates count (29-30 = 2 days, 29-31 = 3 days)
+                                                                    // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
                                                                     // Normalize dates to start of day for consistent calculation
                                                                     $checkinDate = \Carbon\Carbon::parse($item->checkin_date)->startOfDay();
                                                                     $checkoutDate = \Carbon\Carbon::parse($item->checkout_date)->startOfDay();
-                                                                    $days_between = $checkinDate->diffInDays($checkoutDate) + 1; 
+                                                                    $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                                                                    
+                                                                    // Same-day checkin/checkout always counts as 1 day
+                                                                    if ($daysDiff === 0) {
+                                                                        $days_between = 1;
+                                                                    } else {
+                                                                        $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                                                                        $days_between = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                                                                    } 
 
                                                                     $morning = $item->dog->eating_morning != '' ? '1' : '0';
                                                                     $afternoon = $item->dog->eating_midday != '' ? '1' : '0';
@@ -2594,11 +2614,20 @@
                         var checkout_date = new Date(res.checkout_date);
 
                         var today = new Date();
-                        // Calculate days inclusively (both checkin date and today count)
-                        // Example: checkin today = 1 day, checkin yesterday = 2 days
+                        // Calculate days based on configuration (inclusive or exclusive)
+                        // Same-day (29-29) always counts as 1 day regardless of mode
+                        // Inclusive: both checkin date and today count (29-30 = 2 days, 29-31 = 3 days)
+                        // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
                         var time_difference = today.getTime() - checkin_date.getTime();
                         var difference_in_days = Math.floor(time_difference / (1000 * 3600 * 24));
-                        var days = difference_in_days + 1;
+                        var daysCalculationMode = @json($daysCalculationMode ?? 'inclusive');
+                        
+                        // Same-day checkin/checkout always counts as 1 day
+                        if (difference_in_days === 0) {
+                            var days = 1;
+                        } else {
+                            var days = (daysCalculationMode === 'inclusive') ? difference_in_days + 1 : difference_in_days;
+                        }
 
                         var formatted_checkin_date = checkin_date.toLocaleDateString('en-GB', {
                             day: '2-digit',

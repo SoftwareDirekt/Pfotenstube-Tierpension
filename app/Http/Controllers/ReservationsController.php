@@ -641,9 +641,17 @@ class ReservationsController extends Controller
                 $checkinDate = Carbon::parse($reservation->checkin_date)->startOfDay();
                 $checkoutDate = Carbon::parse($reservation->checkout_date)->startOfDay();
                 
-                // Calculate duration inclusively (both checkin and checkout dates count)
-                // Example: 29-29 = 1 day, 29-30 = 2 days
-                $duration = $checkinDate->diffInDays($checkoutDate) + 1;
+                // Inclusive: both checkin and checkout dates count (29-30 = 2 days, 29-31 = 3 days)
+                // Exclusive: days between count, same-day is 1 (29-30 = 1 day, 29-31 = 2 days)
+                $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                
+                // Same-day checkin/checkout always counts as 1 day
+                if ($daysDiff === 0) {
+                    $duration = 1;
+                } else {
+                    $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                    $duration = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                }
                 
                 // Get actual payment data if available
                 $dailyPrice = $reservation->plan ? $reservation->plan->price : 0;
