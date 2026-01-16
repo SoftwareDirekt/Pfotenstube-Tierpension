@@ -254,6 +254,7 @@ class HelloCashService
 
             $invoice = HelloCashInvoice::create([
                 'hellocash_invoice_id' => $data['hellocash_invoice_id'],
+                'invoice_type' => 'cashier',
                 'reservation_id' => $data['reservation_id'],
                 'payment_id' => $data['payment_id'],
                 'file_path' => $filePath,

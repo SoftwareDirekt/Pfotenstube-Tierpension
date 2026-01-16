@@ -58,6 +58,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('/settings', [AdminsController::class, 'admin_settings'])->name('settings');
         Route::post('/settings', [AdminsController::class, 'admin_settings_post'])->name('settings.post');
         Route::post('/preferences', [AdminsController::class, 'admin_preferences_post'])->name('preferences.post');
+        Route::post('/basic-info', [AdminsController::class, 'admin_basic_info_post'])->name('basic-info.post');
         Route::get('/logout', [AdminsController::class, 'admin_logout'])->name('logout');
 
         // Session & Security

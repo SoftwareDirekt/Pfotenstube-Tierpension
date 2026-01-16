@@ -18,6 +18,7 @@ use App\Models\Customer;
 use App\Models\Preference;
 use App\Services\CustomerBalanceService;
 use App\Services\HelloCashService;
+use App\Services\BankInvoiceService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -26,10 +27,12 @@ use function PHPSTORM_META\type;
 class ReservationsController extends Controller
 {
     protected $hellocashService;
+    protected $bankInvoiceService;
 
-    public function __construct(HelloCashService $hellocashService)
+    public function __construct(HelloCashService $hellocashService, BankInvoiceService $bankInvoiceService)
     {
         $this->hellocashService = $hellocashService;
+        $this->bankInvoiceService = $bankInvoiceService;
     }
 
     public function reservation(Request $request)
@@ -702,12 +705,13 @@ class ReservationsController extends Controller
     {
         $request->validate([
             'id' => 'required',
-            'received_amount' => 'required',
-            'total' => 'required',
+            'received_amount' => 'required|numeric|min:0',
+            'total' => 'required|numeric|min:0',
             'discount' => 'required',
-            'gateway' => 'required',
-            'status' => 'required',
+            'gateway' => 'required|in:Bar,Bank',
+            'status' => 'required|in:0,1,2',
             'checkout' => 'required',
+            'wallet_amount' => 'nullable|numeric|min:0',
         ]);
 
         $checkout = $request->checkout;
@@ -717,10 +721,18 @@ class ReservationsController extends Controller
         // Create Price
         $plan = Plan::find($request->price_plan);
         $days = max(1, (int)$request->days);
-        $planCost = $plan ? (float)$plan->price * $days : 0.0;
+        
+        // For flat rate plans, don't multiply by days
+        $isFlatRate = $plan && $plan->flat_rate == 1;
+        $planCost = $plan ? (float)$plan->price : 0.0;
+        if (!$isFlatRate) {
+            $planCost = $planCost * $days;
+        }
 
         $special_cost = isset($request->special_cost) ? (float)$request->special_cost : 0.0;
-        $discountPercentage = (int)$request->discount;
+        
+        // Flat rate plans cannot have discounts
+        $discountPercentage = $isFlatRate ? 0 : (int)$request->discount;
         $sendToHelloCash = $request->has('send_to_hellocash') && $request->send_to_hellocash == '1';
         
         // Calculate discount amount
@@ -928,26 +940,43 @@ class ReservationsController extends Controller
             $reservation->refresh();
             $payment->refresh();
             
-            // Handle HelloCash API call if requested
-            $hellocashResponse = $this->handleHelloCashIntegration(
-                $request,
-                $plan,
-                $planCost,
-                $special_cost,
-                $days,
-                $discountPercentage,
-                $reservation->id,
-                $payment->id,
-            );
+            // Handle invoice generation based on payment method
+            $invoiceResponse = null;
+            if ($request->gateway === 'Bank') {
+                // Generate Bank transfer invoice
+                $invoiceResponse = $this->bankInvoiceService->generateInvoice(
+                    $reservation,
+                    $payment,
+                    [
+                        'plan_cost' => $planCost,
+                        'special_cost' => $special_cost,
+                        'discount_percentage' => $discountPercentage,
+                        'days' => $days,
+                    ]
+                );
+            } elseif ($sendToHelloCash) {
+                // Handle HelloCash API call if requested
+                $invoiceResponse = $this->handleHelloCashIntegration(
+                    $request,
+                    $plan,
+                    $planCost,
+                    $special_cost,
+                    $days,
+                    $discountPercentage,
+                    $reservation->id,
+                    $payment->id,
+                );
+            }
             
             Session::flash('success', 'Kaufabwicklung erfolgreich');
             
-            // If AJAX request, return JSON with HelloCash data
+            // If AJAX request, return JSON with invoice data
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => 'Kaufabwicklung erfolgreich',
-                    'hellocash' => $hellocashResponse,
+                    'hellocash' => $invoiceResponse,
+                    'invoice' => $invoiceResponse,
                 ]);
             }
         } catch (\Exception $e) {

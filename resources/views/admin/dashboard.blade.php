@@ -1538,7 +1538,7 @@
                                     <label for="status_display">Status</label>
                                 </div>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-12" id="discountSection">
                                 <div class="d-flex justify-space-between">
                                     <div class="">
                                         <label>Rabatt</label>
@@ -1581,7 +1581,7 @@
                                     <label for="total_amount">Rechnungsbetrag (&euro;)</label>
                                 </div>
                             </div>
-                            <div class="col-md-12 mb-4" id="vatBreakdown" style="display: none;">
+                            <div class="col-md-12 mb-4" id="vatBreakdown">
                                 <div class="table-responsive">
                                     <table class="table table-sm table-bordered mb-0" style="background-color: #f8f9fa;">
                                         <thead>
@@ -2649,6 +2649,13 @@
                         
                         // Hide wallet breakdown initially
                         $('#walletBreakdown').hide();
+                        
+                        // Check gateway selection and hide only HelloCash section if Banküberweisung is selected
+                        var selectedGateway = $('#checkoutModal #gateway').val();
+                        if (selectedGateway === 'Bank') {
+                            $('#hellocashSection').hide();
+                            $('#send_to_hellocash').prop('checked', false);
+                        }
 
                         $('#checkoutModal #checkoutId').val(id);
                         $('#checkoutModal #days').val(days);
@@ -2680,7 +2687,16 @@
                         // Fallback if the triggered change could not resolve the plan price
                         if (!$('#checkoutModal #plan_cost').val()) {
                             var fallbackCost = 0;
-                            if (days > 1) {
+                            var selectedPlanId = $('#checkoutModal #price_plan').val();
+                            var plan = pricePlans.find(function (item) {
+                                return item.id == selectedPlanId;
+                            });
+                            var isFlatRate = plan && plan.flat_rate == 1;
+                            
+                            if (isFlatRate) {
+                                // Flat rate: use plan price directly
+                                fallbackCost = planBasePrice;
+                            } else if (days > 1) {
                                 fallbackCost = days * planBasePrice;
                             } else if (doc.dog && doc.dog.day_plan_obj) {
                                 fallbackCost = doc.dog.day_plan_obj.price;
@@ -2688,6 +2704,18 @@
                                 fallbackCost = planBasePrice;
                             }
                             $('#checkoutModal #plan_cost').val(parseFloat(fallbackCost).toFixed(2));
+                        }
+                        
+                        // Check if initial plan is flat rate and hide discount section
+                        var initialPlanId = $('#checkoutModal #price_plan').val();
+                        if (initialPlanId) {
+                            var initialPlan = pricePlans.find(function (item) {
+                                return item.id == initialPlanId;
+                            });
+                            if (initialPlan && initialPlan.flat_rate == 1) {
+                                $('#discountSection').hide();
+                                $('#discount1').prop('checked', true);
+                            }
                         }
 
                         recalcInvoiceTotals({updateReceived: true});
@@ -2768,6 +2796,13 @@
             // Ensure use_wallet is included (0 if unchecked, 1 if checked)
             if (!$('#use_wallet').is(':checked')) {
                 formData.set('use_wallet', '0');
+                formData.set('wallet_amount', '0');
+            } else {
+                // Calculate and send wallet amount for validation
+                var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+                var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+                var walletAmount = Math.min(existingBalance, total);
+                formData.set('wallet_amount', walletAmount.toFixed(2));
             }
 
             // Submit via AJAX
@@ -2778,6 +2813,28 @@
                 processData: false,
                 contentType: false,
                 success: function(response) {
+                    // Handle Bank invoice PDF if present
+                    if (response.invoice && response.invoice.success && response.invoice.invoice_pdf_base64) {
+                        try {
+                            var binaryString = atob(response.invoice.invoice_pdf_base64);
+                            var bytes = new Uint8Array(binaryString.length);
+                            for (var i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            
+                            var blob = new Blob([bytes], { type: 'application/pdf' });
+                            var pdfUrl = URL.createObjectURL(blob);
+                            window.open(pdfUrl, '_blank');
+                            
+                            setTimeout(function() {
+                                URL.revokeObjectURL(pdfUrl);
+                            }, 1000);
+                        } catch (e) {
+                            console.error('Error opening PDF:', e);
+                            alert('Fehler beim Öffnen der Rechnung: ' + e.message);
+                        }
+                    }
+                    
                     // Close modal
                     $('#checkoutModal').modal('hide');
                     // Reload page on success
@@ -2811,6 +2868,13 @@
             // Ensure use_wallet is included
             if (!$('#use_wallet').is(':checked')) {
                 formData.set('use_wallet', '0');
+                formData.set('wallet_amount', '0');
+            } else {
+                // Calculate and send wallet amount for validation
+                var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+                var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+                var walletAmount = Math.min(existingBalance, total);
+                formData.set('wallet_amount', walletAmount.toFixed(2));
             }
             formData.set('send_to_hellocash', '1');
 
@@ -2928,19 +2992,10 @@
             }
             netTotal = parseFloat(netTotal.toFixed(2));
 
-            // Check if HelloCash is selected
-            var sendToHelloCash = $('#send_to_hellocash').is(':checked');
-            
-            if (sendToHelloCash) {
-                // Calculate VAT and show gross total
-                calculateVATBreakdown(netTotal);
-                var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
-                $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
-            } else {
-                // No VAT, just show net total
-                $("#checkoutModal #total_amount").val(netTotal.toFixed(2));
-                $('#vatBreakdown').hide();
-            }
+            // Always calculate VAT and show gross total
+            calculateVATBreakdown(netTotal);
+            var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
+            $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
             
             var displayTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
@@ -2969,11 +3024,6 @@
                 vatPercentage = 20;
             }
             
-            if (netAmount <= 0) {
-                $('#vatBreakdown').hide();
-                return;
-            }
-            
             // Prices are VAT exclusive (net), calculate VAT and gross
             var vatAmount = netAmount * (vatPercentage / 100);
             var grossAmount = netAmount + vatAmount;
@@ -2989,29 +3039,46 @@
             $('#vat_amount').text(vatAmount.toFixed(2) + '€');
             $('#vat_gross_amount').text(grossAmount.toFixed(2) + '€');
             
-            // Show VAT breakdown
-            $('#vatBreakdown').show();
         }
         
-        // Show/hide VAT breakdown when HelloCash checkbox changes
+        // Handle HelloCash checkbox change
         $(document).on('change', '#send_to_hellocash', function() {
             var sendToHelloCash = $(this).is(':checked');
             var currentReceived = parseFloat($("#checkoutModal #received_amount").val()) || 0;
             var currentTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
-            // Recalculate totals (this will update the total amount)
+            // Recalculate totals
             recalcInvoiceTotals();
             
             // Get the new total after recalculation
             var newTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
             // If received amount was equal to old total, update it to new total
-            // This ensures the received amount stays in sync when VAT is added/removed
+            // This ensures the received amount stays in sync
             if (Math.abs(currentReceived - currentTotal) < 0.01) {
                 $("#checkoutModal #received_amount").val(newTotal.toFixed(2));
             }
             
             updateRemaining();
+        });
+        
+        // Handle gateway (payment method) change - hide only HelloCash section for Banküberweisung
+        $(document).on('change', '#gateway', function() {
+            var selectedGateway = $(this).val();
+            
+            if (selectedGateway === 'Bank') {
+                // Hide only HelloCash section for Banküberweisung
+                $('#hellocashSection').hide();
+                // Uncheck HelloCash checkbox if it was checked
+                $('#send_to_hellocash').prop('checked', false);
+                // Recalculate totals
+                recalcInvoiceTotals();
+            } else {
+                // Show HelloCash section for Bar payment
+                $('#hellocashSection').show();
+                // Recalculate totals
+                recalcInvoiceTotals();
+            }
         });
         
         // Handle wallet checkbox change
@@ -3205,8 +3272,21 @@
                     return item.id == planId;
                 });
                 var price = plan ? parseFloat(plan.price) : 0;
-                var planCost = price * days;
+                var isFlatRate = plan && plan.flat_rate == 1;
+                
+                // For flat rate plans, don't multiply by days
+                var planCost = isFlatRate ? price : (price * days);
                 $('#checkoutModal #plan_cost').val(planCost.toFixed(2));
+                
+                // Hide/disable discount section for flat rate plans
+                if (isFlatRate) {
+                    $('#discountSection').hide();
+                    // Reset discount to 0
+                    $('#discount1').prop('checked', true);
+                } else {
+                    $('#discountSection').show();
+                }
+                
                 recalcInvoiceTotals({updateReceived: true});
              });
  

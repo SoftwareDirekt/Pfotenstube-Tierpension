@@ -38,6 +38,10 @@ class InvoicesController extends Controller
             $query->whereMonth('created_at', $request->month);
         }
 
+        if ($request->filled('invoice_type') && $request->invoice_type !== 'all') {
+            $query->where('invoice_type', $request->invoice_type);
+        }
+
         $invoices = $query->orderByDesc('created_at')->paginate(30);
         $invoices->appends($request->query());
 
@@ -56,17 +60,33 @@ class InvoicesController extends Controller
     {
         $invoice = HelloCashInvoice::findOrFail($id);
 
-        if ($invoice->file_path) {
-            $fullPath = storage_path('app/' . $invoice->file_path);
-
-            if (file_exists($fullPath)) {
-                return response()->file($fullPath, [
-                    'Content-Type' => 'application/pdf',
-                ]);
+        if ($invoice->invoice_type === 'local') {
+            if ($invoice->file_path) {
+                $fullPath = storage_path('app/' . $invoice->file_path);
+                if (file_exists($fullPath)) {
+                    return response()->file($fullPath, [
+                        'Content-Type' => 'application/pdf',
+                    ]);
+                }
             }
+            abort(404, 'Rechnungsdatei nicht gefunden.');
         }
 
-        return $this->fetchAndServeInvoiceFromHelloCash($invoice, false);
+        if ($invoice->invoice_type === 'cashier') {
+            if ($invoice->file_path) {
+                $fullPath = storage_path('app/' . $invoice->file_path);
+                if (file_exists($fullPath)) {
+                    return response()->file($fullPath, [
+                        'Content-Type' => 'application/pdf',
+                    ]);
+                }
+            }
+            
+            // If file doesn't exist localy, try to fetch from HelloCash API
+            return $this->fetchAndServeInvoiceFromHelloCash($invoice, false);
+        }
+
+        abort(404, 'Rechnungsdatei nicht gefunden.');
     }
 
     /**
@@ -76,19 +96,55 @@ class InvoicesController extends Controller
     {
         $invoice = HelloCashInvoice::findOrFail($id);
 
-        if ($invoice->file_path) {
-            $fullPath = storage_path('app/' . $invoice->file_path);
-
-            if (file_exists($fullPath)) {
-                return response()->download(
-                    $fullPath,
-                    'invoice_' . $invoice->hellocash_invoice_id . '.pdf',
-                    ['Content-Type' => 'application/pdf']
-                );
+        if ($invoice->invoice_type === 'local') {
+            if ($invoice->file_path) {
+                $fullPath = storage_path('app/' . $invoice->file_path);
+                if (file_exists($fullPath)) {
+                    $filename = $this->getInvoiceFilename($invoice);
+                    return response()->download(
+                        $fullPath,
+                        $filename,
+                        ['Content-Type' => 'application/pdf']
+                    );
+                }
             }
+            abort(404, 'Rechnungsdatei nicht gefunden.');
         }
 
-        return $this->fetchAndServeInvoiceFromHelloCash($invoice, true);
+        if ($invoice->invoice_type === 'cashier') {
+            if ($invoice->file_path) {
+                $fullPath = storage_path('app/' . $invoice->file_path);
+                if (file_exists($fullPath)) {
+                    $filename = $this->getInvoiceFilename($invoice);
+                    return response()->download(
+                        $fullPath,
+                        $filename,
+                        ['Content-Type' => 'application/pdf']
+                    );
+                }
+            }
+            
+            // If file doesn't exist, try to fetch from HelloCash API
+            return $this->fetchAndServeInvoiceFromHelloCash($invoice, true);
+        }
+
+        abort(404, 'Rechnungsdatei nicht gefunden.');
+    }
+
+    /**
+     * Get appropriate filename for invoice download
+     */
+    private function getInvoiceFilename(HelloCashInvoice $invoice): string
+    {
+        // Use Invoice model's formatted invoice number accessor
+        $formattedNumber = $invoice->formatted_invoice_number;
+        
+        // Replace 'N/A' with 'unknown' for filenames
+        if ($formattedNumber === 'N/A') {
+            $formattedNumber = 'unknown';
+        }
+        
+        return 'invoice_' . str_replace('-', '_', $formattedNumber) . '.pdf';
     }
 
     /**
@@ -96,6 +152,10 @@ class InvoicesController extends Controller
      */
     private function fetchAndServeInvoiceFromHelloCash(HelloCashInvoice $invoice, bool $download = false) 
     {
+        if (empty($invoice->hellocash_invoice_id)) {
+            abort(400, 'Rechnungs-ID fehlt. Die Rechnung konnte nicht von der Registrierkasse abgerufen werden.');
+        }
+
         try {
             $result = $this->hellocashService->getInvoicePdf(
                 $invoice->hellocash_invoice_id,
@@ -134,11 +194,12 @@ class InvoicesController extends Controller
                 ]);
             }
 
+            $filename = $this->getInvoiceFilename($invoice);
             return response($pdfContent, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' =>
                     ($download ? 'attachment' : 'inline')
-                    . '; filename="invoice_' . $invoice->hellocash_invoice_id . '.pdf"',
+                    . '; filename="' . $filename . '"',
             ]);
 
         } catch (\Throwable $e) {
