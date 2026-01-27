@@ -94,6 +94,22 @@
                                         </div>
                                         <div class="row mb-3">
                                             <div class="col-md-6">
+                                                <label for="iban" class="form-label">IBAN</label>
+                                                <input type="text" class="form-control" id="iban" name="iban" value="{{ old('iban', $user->iban ?? '') }}" placeholder="AT61 1904 3002 3457 3201">
+                                                @error('iban')
+                                                    <p class="formError">*{{$message}}</p>
+                                                @enderror
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="bic" class="form-label">BIC</label>
+                                                <input type="text" class="form-control" id="bic" name="bic" value="{{ old('bic', $user->bic ?? '') }}" placeholder="BAWAATWW">
+                                                @error('bic')
+                                                    <p class="formError">*{{$message}}</p>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
                                                 <label for="picture" class="form-label">Bild <span class="text-primary">(Erlaubte Formate: JPEG, PNG, JPG, GIF. Max. Größe: 2MB)</span></label>
                                                 <input type="file" class="form-control" id="picture" name="picture" accept="image/*">
                                                 @error('picture')

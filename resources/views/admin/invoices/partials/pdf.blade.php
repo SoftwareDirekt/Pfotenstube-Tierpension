@@ -223,7 +223,13 @@
                             Telefon: {{ $company['phone'] }}<br>
                             @endif
                             @if(!empty($company['email']))
-                            E-Mail: {{ $company['email'] }}
+                            E-Mail: {{ $company['email'] }}<br>
+                            @endif
+                            @if(!empty($company['iban']))
+                            IBAN: {{ $company['iban'] }}<br>
+                            @endif
+                            @if(!empty($company['bic']))
+                            BIC: {{ $company['bic'] }}
                             @endif
                         </div>
                     </td>
