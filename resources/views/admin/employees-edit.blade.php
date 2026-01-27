@@ -35,7 +35,7 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" id="email" value="{{$user->email}}" placeholder="Email" disabled/>
+                            <input type="email" class="form-control" name="email" id="email" value="{{$user->email}}" placeholder="Email" />
                             <label for="email">Email</label>
                         </div>
                         @error('email')

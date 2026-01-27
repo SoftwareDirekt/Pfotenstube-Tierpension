@@ -235,6 +235,45 @@ class AdminsController extends Controller
         return view('admin.auth.settings', compact('user'));
     }
 
+    public function employee_info_post(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $user = Auth::user();
+            
+            // Only allow employees to update their own profile
+            if ($user->role != 2) {
+                abort(403, 'Nur Mitarbeiter können ihr Profil hier bearbeiten.');
+            }
+            
+            $user->name = $request->name;
+            $user->save();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Profilinformationen erfolgreich aktualisiert',
+                ]);
+            }
+
+            Session::flash('success', 'Profilinformationen erfolgreich aktualisiert.');
+            return redirect()->back();
+        } catch (\Exception $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Fehler beim Aktualisieren: ' . $e->getMessage(),
+                ], 500);
+            }
+
+            Session::flash('error', 'Fehler beim Aktualisieren der Profilinformationen: ' . $e->getMessage());
+            return redirect()->back()->withInput();
+        }
+    }
+
     public function admin_preferences_post(Request $request)
     {
         $request->validate([
@@ -242,6 +281,13 @@ class AdminsController extends Controller
         ]);
 
         try {
+            $user = Auth::user();
+            
+            // Only allow admins to update preferences
+            if ($user->role != 1) {
+                abort(403, 'Nur Administratoren können Präferenzen bearbeiten.');
+            }
+            
             Preference::set('vat_percentage', $request->vat_percentage, 'float', 'Mehrwertsteuer-Satz in Prozent');
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -318,6 +364,11 @@ class AdminsController extends Controller
 
         try {
             $user = Auth::user();
+            
+            // Only allow admins to update company info
+            if ($user->role != 1) {
+                abort(403, 'Nur Administratoren können Firmeninformationen bearbeiten.');
+            }
             
             // Update basic info
             $user->company_name = $request->company_name;
@@ -499,10 +550,20 @@ class AdminsController extends Controller
     {
         $request->validate([
             'name' => 'required',
+            'email' => 'required|email|unique:users,email,' . $request->id,
         ]);
 
         $user = User::find($request->id);
         $user->name = $request->name;
+        
+        // Update email if changed
+        if ($request->email && $request->email != $user->email) {
+            $user->email = $request->email;
+            // Update username based on email
+            $ex = explode("@", $request->email);
+            $user->username = $ex[0];
+        }
+        
         $user->department = $request->department;
         $user->address = $request->address;
         $user->city = $request->city;

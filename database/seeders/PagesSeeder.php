@@ -13,52 +13,30 @@ class PagesSeeder extends Seeder
      */
     public function run(): void
     {
-        Page::insert([
-            [
-                'name' => 'Mitarbeiter'
-            ],
-            [
-                'name' => 'Armaturenbrett'
-            ],
-            [
-                'name' => 'Zimmer'
-            ],
-            [
-                'name' => 'Kunde'
-            ],
-            [
-                'name' => 'Reservierung'
-            ],
-            [
-                'name' => 'Zahlung'
-            ],
-            [
-                'name' => 'Verkaufsbericht'
-            ],
-            [
-                'name' => 'Aufgaben hinzufugen'
-            ],
-            [
-                'name' => 'Preisplane'
-            ],
-            [
-                'name' => 'Hunde bleiben'
-            ],
-            [
-                'name' => 'Kalender'
-            ],
-            [
-                'name' => 'Hundekalender'
-            ],
-            [
-                'name' => 'Verstorbene Hunde'
-            ],
-            [
-                'name' => 'Kunden ansehen'
-            ],
-            [
-                'name' => 'Hund hinzufugen'
-            ]
-        ]);
+        $pages = [
+            'Mitarbeiter',
+            'Armaturenbrett',
+            'Zimmer',
+            'Kunde',
+            'Reservierung',
+            'Zahlung',
+            'Verkaufsbericht',
+            'Aufgaben hinzufugen',
+            'Preisplane',
+            'Hunde bleiben',
+            'Kalender',
+            'Hundekalender',
+            'Verstorbene Hunde',
+            'Kunden ansehen',
+            'Hund hinzufugen',
+            'Rechnungen',
+        ];
+
+        foreach ($pages as $pageName) {
+            Page::firstOrCreate(
+                ['name' => $pageName],
+                ['name' => $pageName]
+            );
+        }
     }
 }

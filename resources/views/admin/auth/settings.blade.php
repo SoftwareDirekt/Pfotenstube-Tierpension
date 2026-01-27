@@ -27,17 +27,20 @@
                             Passwort
                         </button>
                     </li>
+                    @if($user->role == 1)
                     <li class="nav-item">
                         <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#preferences-tab" aria-controls="preferences-tab" aria-selected="false">
                             <i class="mdi mdi-percent me-1"></i>
                             MwSt
                         </button>
                     </li>
+                    @endif
                 </ul>
                 
                 <!-- Tab Content -->
                 <div class="tab-content">
-                    <!-- Profile Information Tab -->
+                    @if($user->role == 1)
+                    <!-- Admin Profile Information Tab -->
                     <div class="tab-pane fade show active" id="basic-info-tab" role="tabpanel">
                         <form id="basicInfoForm" action="{{route('admin.basic-info.post')}}" method="POST" enctype="multipart/form-data">
                         @csrf
@@ -133,6 +136,40 @@
                             </div>
                         </form>
                     </div>
+                    @else
+                    <!-- Employee Profile Information Tab -->
+                    <div class="tab-pane fade show active" id="basic-info-tab" role="tabpanel">
+                        <form id="employeeInfoForm" action="{{route('admin.employee-info.post')}}" method="POST">
+                        @csrf
+                            <div class="row mt-3">
+                                <div class="card mb-4">
+                                    <div class="card-body">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control" id="name" name="name" value="{{ old('name', $user->name ?? '') }}" required>
+                                                @error('name')
+                                                    <p class="formError">*{{$message}}</p>
+                                                @enderror
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="email" class="form-label">E-Mail</label>
+                                                <input type="email" class="form-control" id="email" name="email" value="{{ old('email', $user->email ?? '') }}" readonly>
+                                                <small class="text-muted">E-Mail kann nicht geändert werden</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <button type="submit" class="btn btn-primary me-2">Profilinformationen Speichern</button>
+                                <a href="{{(route('admin.dashboard'))}}">
+                                    <button type="button" class="btn btn-outline-secondary">Stornieren</button>
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                    @endif
                     
                     <!-- Password Tab -->
                     <div class="tab-pane fade" id="profile-tab" role="tabpanel">
@@ -206,7 +243,8 @@
                         </form>
                     </div>
                     
-                    <!-- Preferences Tab -->
+                    @if($user->role == 1)
+                    <!-- Preferences Tab (Admin Only) -->
                     <div class="tab-pane fade" id="preferences-tab" role="tabpanel">
                         <form id="preferencesForm" action="{{route('admin.preferences.post')}}" method="POST">
                         @csrf
@@ -234,6 +272,7 @@
                             </div>
                         </form>
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -243,6 +282,34 @@
 @section('extra_js')
 <script src="assets/vendor/libs/select2/select2.js"></script>
 <script>
+    // Handle employee info form submission
+    $('#employeeInfoForm').on('submit', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        var formData = form.serialize();
+        
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    alert('Profilinformationen erfolgreich gespeichert!');
+                    window.location.reload();
+                } else {
+                    alert('Fehler beim Speichern: ' + (response.message || 'Unbekannter Fehler'));
+                }
+            },
+            error: function(xhr) {
+                var errorMsg = 'Fehler beim Speichern der Profilinformationen';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                }
+                alert(errorMsg);
+            }
+        });
+    });
+    
     // Handle basic info form submission
     $('#basicInfoForm').on('submit', function(e) {
         e.preventDefault();
