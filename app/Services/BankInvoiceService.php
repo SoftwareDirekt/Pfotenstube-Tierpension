@@ -114,6 +114,8 @@ class BankInvoiceService
         $companyEmail = $user->company_email ?? '';
         $companyAddress = $this->formatUserAddress($user);
         $companyPhone = $user->phone ?? '';
+        $companyIban = $user->iban ?? '';
+        $companyBic = $user->bic ?? '';
         
         // Only set picture if it exists and is not the default placeholder
         $companyPictureBase64 = null;
@@ -158,6 +160,8 @@ class BankInvoiceService
                 'address' => $companyAddress,
                 'phone' => $companyPhone,
                 'email' => $companyEmail,
+                'iban' => $companyIban,
+                'bic' => $companyBic,
             ],
             'customer' => [
                 'type' => $customerType,

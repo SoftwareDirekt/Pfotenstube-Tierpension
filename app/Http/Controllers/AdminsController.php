@@ -308,6 +308,8 @@ class AdminsController extends Controller
             'city' => 'nullable|string|max:255',
             'country' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:50',
+            'iban' => 'nullable|string|max:34',
+            'bic' => 'nullable|string|max:11',
             'picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ], [
             'company_name.required' => 'Der Firmenname ist erforderlich, da er auf Rechnungen verwendet wird.',
@@ -324,6 +326,8 @@ class AdminsController extends Controller
             $user->city = $request->city;
             $user->country = $request->country;
             $user->phone = $request->phone;
+            $user->iban = $request->iban;
+            $user->bic = $request->bic;
 
             // Handle picture upload
             if ($request->hasFile('picture')) {
