@@ -5,6 +5,7 @@
     'customers' => true,
     'reservations' => true,
     'payments' => true,
+    'invoices' => true,
     'employees' => true,
     'report' => true,
     'tasks' => true,
@@ -24,6 +25,7 @@
     $permissions['customers'] = (in_array('Kunde', $pages)) ? true : false;
     $permissions['reservations'] = (in_array('Reservierung', $pages)) ? true : false;
     $permissions['payments'] = (in_array('Zahlung', $pages)) ? true : false;
+    $permissions['invoices'] = (in_array('Rechnungen', $pages)) ? true : false;
     $permissions['employees'] = (in_array('Mitarbeiter', $pages)) ? true : false;
     $permissions['report'] = (in_array('Verkaufsbericht', $pages)) ? true : false;
     $permissions['tasks'] = (in_array('Aufgaben hinzufugen', $pages)) ? true : false;
@@ -118,7 +120,7 @@
       </li>
       @endif
 
-      @if($permissions['payments'] && Session::has('lock'))
+      @if($permissions['invoices'] && Session::has('lock'))
       <li class="menu-item">
         <a href="{{route('admin.invoices')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>

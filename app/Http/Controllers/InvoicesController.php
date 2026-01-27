@@ -24,7 +24,7 @@ class InvoicesController extends Controller
      */
     public function index(Request $request)
     {
-        if (!General::permissions('Zahlung')) {
+        if (!General::permissions('Rechnungen')) {
             return redirect()->route('admin.settings');
         }
 
@@ -58,6 +58,10 @@ class InvoicesController extends Controller
      */
     public function view($id)
     {
+        if (!General::permissions('Rechnungen')) {
+            return redirect()->route('admin.settings');
+        }
+
         $invoice = HelloCashInvoice::findOrFail($id);
 
         if ($invoice->invoice_type === 'local') {
@@ -94,6 +98,10 @@ class InvoicesController extends Controller
      */
     public function download($id)
     {
+        if (!General::permissions('Rechnungen')) {
+            return redirect()->route('admin.settings');
+        }
+
         $invoice = HelloCashInvoice::findOrFail($id);
 
         if ($invoice->invoice_type === 'local') {
