@@ -71,23 +71,36 @@
                 </tr>
                 </thead>
                 <tbody>
-                @foreach($days as $day)
+                @foreach($days as $dayData)
                     <tr>
-                        <td class="px-2 py-1 text-center">{{ $day->format('d') }}</td>
+                        <td class="px-2 py-1 text-center">{{ $dayData['date']->format('d') }}</td>
                         <td class="px-2 py-1 text-center">
-                            {{ $employee->workingStart($day)?->format('H:i') }}
+                            {{ $dayData['start_time'] ?? '' }}
                         </td>
                         <td class="px-2 py-1 text-center">
-                            {{ $employee->workingEnd($day)?->format('H:i') }}
+                            {{ $dayData['end_time'] ?? '' }}
                         </td>
                         <td class="px-2 py-1 text-center">
-                            {{$employee->workingHoursOn($day)}}
+                            {{ $dayData['hours'] ?? '' }}
                         </td>
-                        <td></td>
-                        <td></td>
+                        <td class="px-2 py-1 text-center"></td>
+                        <td class="px-2 py-1" style="font-size: 10px;">
+                            {{ $dayData['notes'] ?? '' }}
+                        </td>
                     </tr>
                 @endforeach
-
+                {{-- Totals Row --}}
+                <tr style="background-color: #f8f9fa; font-weight: bold;">
+                    <td class="px-2 py-1 text-center" colspan="3">
+                        <strong>Gesamt</strong>
+                    </td>
+                    <td class="px-2 py-1 text-center" style="color: #0d6efd; font-size: 13px;">
+                        <strong>{{ $total_hours ?? '00:00' }}</strong>
+                    </td>
+                    <td class="px-2 py-1 text-center" colspan="2">
+                        <strong>{{ $total_days_worked ?? 0 }} Tage</strong>
+                    </td>
+                </tr>
             </table>
 
         </div>
