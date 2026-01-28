@@ -138,6 +138,14 @@
                 const year     = btn.data('year');
                 const token    = $('meta[name="csrf-token"]').attr('content');
 
+                // Store original button HTML
+                const originalHtml = btn.html();
+                const originalDisabled = btn.prop('disabled');
+
+                // Disable button and show spinner
+                btn.prop('disabled', true);
+                btn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Verarbeitung...');
+
                 $.ajax({
                     url: "{{ route('admin.employee.workingrecord') }}",
                     method: "POST",
@@ -150,18 +158,44 @@
                     xhrFields: {
                         responseType: 'blob'
                     },
-                    success: function(blob){
+                    success: function(blob, status, xhr){
+                        // Get filename from custom header or Content-Disposition header
+                        let filename = `Arbeitszeit_${year}_${month}.pdf`; // Fallback
+                        
+                        // Try custom header first (more reliable)
+                        const customFilename = xhr.getResponseHeader('X-Filename');
+                        if (customFilename) {
+                            filename = customFilename;
+                        } else {
+                            // Fallback to Content-Disposition header
+                            const contentDisposition = xhr.getResponseHeader('Content-Disposition');
+                            if (contentDisposition) {
+                                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                                if (filenameMatch && filenameMatch[1]) {
+                                    filename = filenameMatch[1].replace(/['"]/g, '');
+                                }
+                            }
+                        }
+
                         const fileURL = window.URL.createObjectURL(blob);
                         const a       = document.createElement('a');
                         a.href        = fileURL;
-                        a.download    = `Arbeitszeit_${year}_${month}.pdf`;
+                        a.download    = filename;
                         document.body.appendChild(a);
                         a.click();
                         a.remove();
                         window.URL.revokeObjectURL(fileURL);
+
+                        // Re-enable button and restore original HTML
+                        btn.prop('disabled', false);
+                        btn.html(originalHtml);
                     },
                     error: function(xhr){
                         alert('Fehler beim Erstellen der PDF: ' + (xhr.responseText || xhr.statusText));
+                        
+                        // Re-enable button and restore original HTML on error
+                        btn.prop('disabled', false);
+                        btn.html(originalHtml);
                     }
                 });
             });

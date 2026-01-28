@@ -23,8 +23,11 @@ class EmployeeTrackController extends Controller
         $startDate = Carbon::create($selectedYear, $selectedMonth, 1)->startOfDay();
         $endDate = $startDate->copy()->endOfMonth()->endOfDay();
 
+        // Filter events by status 'Arbeit' and where shift is null (exclude morning/evening shifts)
         $employees = User::with(['events' => function ($query) use ($startDate, $endDate) {
-            $query->where('start', '>=', $startDate)
+            $query->where('status', 'Arbeit')
+                  ->whereNull('shift')
+                  ->where('start', '>=', $startDate)
                   ->where('start', '<=', $endDate);
         }])
         ->where('role', 2)
@@ -33,8 +36,8 @@ class EmployeeTrackController extends Controller
         foreach ($employees as $employee) {
             foreach ($employee->events as $event) {
                 $start = Carbon::parse($event->start);
-                $end = Carbon::parse($event->end);
-                $event->hours_worked = $start->floatDiffInHours($end);
+                $end = $this->getEventEndTime($event);
+                $event->hours_worked = $end->diffInSeconds($start) / 3600;
             }
         }
 
@@ -51,12 +54,9 @@ class EmployeeTrackController extends Controller
     public function monatsplanShow(Request $request)
     {
         $currentMonth = $this->resolveMonth($request);
-        
-        // Parse month string and get proper date boundaries
         $monthDate = Carbon::parse($currentMonth);
         $startOfMonth = $monthDate->copy()->startOfMonth()->startOfDay();
         $endOfMonth = $monthDate->copy()->endOfMonth()->endOfDay();
-        $daysInMonth = $startOfMonth->daysInMonth;
 
         // Fetch all Arbeit events for this month with shifts (only morning/evening)
         // Use proper date range with start/end of day boundaries
@@ -71,32 +71,18 @@ class EmployeeTrackController extends Controller
         // Group events by day and shift for easy access in view
         $eventsByDayAndShift = [];
         foreach ($events as $event) {
-            // Ensure event is within the current month and has valid shift
-            if (!$event->shift || !in_array($event->shift, ['morning', 'evening'])) {
-                continue;
-            }
-            
             $eventDate = Carbon::parse($event->start);
-            $day = $eventDate->day;
-            $shift = $event->shift;
-            
-            // Double-check event is in the correct month
-            if ($eventDate->month === $startOfMonth->month && $eventDate->year === $startOfMonth->year) {
-                $eventsByDayAndShift[$day][$shift][] = $event;
-            }
+            $eventsByDayAndShift[$eventDate->day][$event->shift][] = $event;
         }
 
         $employees = User::where('role', 2)->orderBy('name')->get(['id', 'name']);
-
-        // German month name
-        $germanMonth = $startOfMonth->locale('de')->translatedFormat('F Y');
 
         return view('admin.employee_monatsplan', [
             'employees' => $employees,
             'eventsByDayAndShift' => $eventsByDayAndShift,
             'currentMonth' => $currentMonth,
-            'germanMonth' => $germanMonth,
-            'daysInMonth' => $daysInMonth,
+            'germanMonth' => $startOfMonth->locale('de')->translatedFormat('F Y'),
+            'daysInMonth' => $startOfMonth->daysInMonth,
             'startOfMonth' => $startOfMonth,
         ]);
     }
@@ -223,17 +209,91 @@ class EmployeeTrackController extends Controller
         $selectedMonth = $request->month ?? Carbon::now()->month;
         $selectedYear = $request->year ?? Carbon::now()->year;
 
-        $start = Carbon::createFromDate($selectedYear, $selectedMonth, 1);
-        $end = $start->copy()->endOfMonth();
-        $days = iterator_to_array(CarbonPeriod::create($start, $end));
+        $startDate = Carbon::createFromDate($selectedYear, $selectedMonth, 1)->startOfDay();
+        $endDate = $startDate->copy()->endOfMonth()->endOfDay();
+        $days = iterator_to_array(CarbonPeriod::create($startDate, $endDate));
 
         $employee = User::findOrFail($request->employee);
 
+        $events = Event::where('uid', $employee->id)
+            ->where('status', 'Arbeit')
+            ->whereNull('shift')
+            ->where('start', '>=', $startDate)
+            ->where('start', '<=', $endDate)
+            ->orderBy('start')
+            ->get(['id', 'start', 'end', 'notes']);
+
+        $totalDecimalHours = 0;
+        foreach ($events as $event) {
+            $start = Carbon::parse($event->start);
+            $end = $this->getEventEndTime($event);
+            $event->hours_worked = $end->diffInSeconds($start) / 3600;
+            $totalDecimalHours += $event->hours_worked;
+        }
+
+        $dayData = [];
+        $totalDaysWorked = 0;
+
+        foreach ($days as $day) {
+            $dayStart = $day->copy()->startOfDay();
+            $dayEvents = $events->filter(function ($event) use ($dayStart) {
+                return Carbon::parse($event->start)->isSameDay($dayStart);
+            });
+
+            $dayStartTime = null;
+            $dayEndTime = null;
+            $dayTotalSeconds = 0;
+            $dayNotes = [];
+
+            if ($dayEvents->count() > 0) {
+                $dayStartTime = Carbon::createFromTimestamp(
+                    $dayEvents->min(fn($event) => Carbon::parse($event->start)->timestamp)
+                );
+
+                $dayEndTime = Carbon::createFromTimestamp(
+                    $dayEvents->max(function ($event) use ($dayStart) {
+                        $end = $this->getEventEndTime($event, $dayStart);
+                        return $end->timestamp;
+                    })
+                );
+
+                foreach ($dayEvents as $event) {
+                    $start = Carbon::parse($event->start);
+                    $end = $this->getEventEndTime($event, $dayStart);
+                    $dayTotalSeconds += $end->diffInSeconds($start);
+
+                    if ($event->notes && trim($event->notes)) {
+                        $dayNotes[] = trim($event->notes);
+                    }
+                }
+
+                $totalDaysWorked++;
+            }
+
+            $hours = floor($dayTotalSeconds / 3600);
+            $minutes = floor(($dayTotalSeconds % 3600) / 60);
+            $hoursDisplay = $dayTotalSeconds > 0 ? sprintf('%02d:%02d', $hours, $minutes) : '';
+
+            $dayData[] = [
+                'date' => $day,
+                'start_time' => $dayStartTime?->format('H:i'),
+                'end_time' => $dayEndTime?->format('H:i'),
+                'hours' => $hoursDisplay,
+                'notes' => implode('; ', $dayNotes),
+            ];
+        }
+
+        $totalHours = floor($totalDecimalHours);
+        $totalMinutes = round(($totalDecimalHours - $totalHours) * 60);
+        $totalHoursDisplay = sprintf('%02d:%02d', $totalHours, $totalMinutes);
+
         $pdf = Pdf::loadView('admin.workingrecord.pdf', [
-            'days' => $days,
+            'days' => $dayData,
             'employee' => $employee,
             'selected_month' => $selectedMonth,
             'selected_year' => $selectedYear,
+            'total_hours' => $totalHoursDisplay,
+            'total_days_worked' => $totalDaysWorked,
         ])
         ->setPaper('a4', 'portrait')
         ->setOptions([
@@ -241,7 +301,17 @@ class EmployeeTrackController extends Controller
             'isRemoteEnabled' => true,
         ]);
 
-        return $pdf->download("Arbeitszeit_{$selectedYear}_{$selectedMonth}.pdf");
+        $monthName = Carbon::createFromDate($selectedYear, $selectedMonth, 1)->locale('de')->translatedFormat('F');
+        $employeeName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $employee->name);
+        $employeeName = preg_replace('/_+/', '_', $employeeName);
+        $employeeName = trim($employeeName, '_');
+        $filename = "Arbeitszeit_{$monthName}_{$selectedYear}_{$employeeName}_" . Carbon::now()->format('Ymd_His') . ".pdf";
+
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->header('X-Filename', $filename)
+            ->header('Access-Control-Expose-Headers', 'X-Filename, Content-Disposition');
     }
 
     /**
@@ -250,23 +320,25 @@ class EmployeeTrackController extends Controller
     private function resolveMonth(Request $request): string
     {
         if ($request->filled('month') && $request->filled('action')) {
-            // Parse the month string (e.g., "October 2025")
-            // Use copy() to avoid mutating the original Carbon instance
             $month = Carbon::parse($request->month);
-            
-            // Apply the action (next or prev) using copy() to avoid mutation
-            if ($request->action === 'next') {
-                $month = $month->copy()->addMonth();
-            } else {
-                $month = $month->copy()->subMonth();
-            }
-            
+            $month = $request->action === 'next' ? $month->copy()->addMonth() : $month->copy()->subMonth();
             return $month->format('F Y');
         }
 
         return Carbon::now()->format('F Y');
     }
+
+    private function getEventEndTime($event, ?Carbon $dayStart = null): Carbon
+    {
+        if ($event->end) {
+            return Carbon::parse($event->end);
+        }
+
+        $eventDate = Carbon::parse($event->start)->startOfDay();
+        $targetDate = $dayStart ?? $eventDate;
+
+        return $targetDate->isSameDay(Carbon::today())
+            ? Carbon::now()
+            : $targetDate->copy()->endOfDay();
+    }
 }
-
-
-
