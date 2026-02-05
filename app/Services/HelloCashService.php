@@ -282,6 +282,196 @@ class HelloCashService
         }
     }
 
+    public function createGroupedInvoice(array $data): array
+    {
+        try {
+            if (empty($this->apiKey)) {
+                throw new Exception('HelloCash API key is not configured');
+            }
+
+            $payload = $this->buildGroupedInvoicePayload($data);
+            $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            
+            if ($jsonPayload === false) {
+                throw new Exception('Failed to encode JSON payload: ' . json_last_error_msg());
+            }
+
+            Log::info('HelloCash grouped invoice payload', ['payload' => $payload]);
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Authorization' => 'Bearer ' . $this->apiKey,
+            ])->withBody($jsonPayload, 'application/json')
+              ->connectTimeout(15) // Allow more time for DNS resolution
+              ->timeout(30) // Longer timeout for grouped invoices with multiple items
+              ->post($this->baseUrl . '/invoices');
+
+            if ($response->successful()) {
+                $responseData = $response->json();
+                $invoiceId = $responseData['invoice_id'] ?? null;
+                $invoicePdf = $responseData['pdf_base64_encoded'] ?? null;
+                
+                if (empty($invoicePdf) && $invoiceId) {
+                    $pdfResult = $this->getInvoicePdf($invoiceId);
+                    if ($pdfResult['success']) {
+                        $invoicePdf = $pdfResult['pdf_base64'];
+                    }
+                }
+                
+                $savedInvoice = null;
+                if ($invoiceId && $invoicePdf) {
+                    $savedInvoice = $this->saveGroupedInvoice([
+                        'hellocash_invoice_id' => $invoiceId,
+                        'invoice_pdf_base64' => $invoicePdf,
+                        'customer_id' => $data['customer_id'] ?? null,
+                        'reservation_ids' => $data['reservation_ids'] ?? [],
+                        'payment_ids' => $data['payment_ids'] ?? [],
+                    ]);
+                }
+                
+                return [
+                    'success' => true,
+                    'invoice' => $responseData,
+                    'invoice_id' => $invoiceId,
+                    'invoice_pdf_base64' => $invoicePdf,
+                    'saved_invoice_id' => $savedInvoice?->id,
+                ];
+            } else {
+                $jsonResponse = $response->json();
+                $apiError = is_array($jsonResponse) 
+                    ? ($jsonResponse['message'] ?? $jsonResponse['error'] ?? 'Unknown API error')
+                    : ($response->status() === 403 ? 'Request blocked by firewall' : 'Unknown API error');
+                
+                Log::error('Failed to create grouped invoice in HelloCash', [
+                    'http_status' => $response->status(),
+                    'error' => $apiError,
+                    'response_body' => $response->body(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'Fehler beim Erstellen der Gruppenrechnung in der Registrierkasse. Bitte versuchen Sie es erneut.',
+                    'status_code' => $response->status(),
+                ];
+            }
+        } catch (ConnectionException $e) {
+            $logMessage = 'HelloCash API connection error (grouped): ' . $e->getMessage();
+            Log::error($logMessage);
+            return ['success' => false, 'error' => 'Registrierkasse-Timeout oder Verbindungsfehler. Bitte versuchen Sie es erneut.'];
+        } catch (Exception $e) {
+            $logMessage = 'Exception while creating grouped invoice in HelloCash: ' . $e->getMessage();
+            Log::error($logMessage);
+            return ['success' => false, 'error' => 'Fehler beim Erstellen der Gruppenrechnung. Bitte versuchen Sie es erneut.'];
+        }
+    }
+
+    private function buildGroupedInvoicePayload(array $data): array
+    {
+        $reservations = $data['reservations'] ?? [];
+        $paymentMethod = $data['payment_method'] ?? 'Bar';
+        $vatPercentage = Preference::get('vat_percentage', 20);
+
+        $items = [];
+
+        foreach ($reservations as $resData) {
+            $dogName = $resData['dog_name'] ?? 'Hund';
+            $planTitle = $resData['plan_title'] ?? 'Hundepension';
+            $days = $resData['days'] ?? 1;
+            $discountPercentage = $resData['discount_percentage'] ?? 0;
+            
+            // Use pre-calculated net amounts from form (already includes discount)
+            $planCostNet = $resData['plan_cost_net'] ?? 0;
+            $specialCostNet = $resData['special_cost_net'] ?? 0;
+            
+            // Convert net to gross for HelloCash
+            $planCostGross = $planCostNet * (1 + ($vatPercentage / 100));
+
+            // Item name: "Dog Name - Plan (X Tage) (-X%)"
+            $itemName = $dogName . ' - ' . $planTitle;
+            if ($days > 1) {
+                $itemName .= ' (' . $days . ' Tage)';
+            }
+            if ($discountPercentage > 0) {
+                $itemName .= ' (-' . $discountPercentage . '%)';
+            }
+
+            // Add plan cost as line item
+            $items[] = [
+                'item_name' => $itemName,
+                'item_quantity' => 1.0,
+                'item_price' => round($planCostGross, 2),
+                'item_taxRate' => (float)$vatPercentage,
+            ];
+
+            // Add special costs as separate line item if any
+            if ($specialCostNet > 0) {
+                $grossSpecialCost = $specialCostNet * (1 + ($vatPercentage / 100));
+                $items[] = [
+                    'item_name' => $dogName . ' - Zusatzkosten',
+                    'item_quantity' => 1.0,
+                    'item_price' => round($grossSpecialCost, 2),
+                    'item_taxRate' => (float)$vatPercentage,
+                ];
+            }
+        }
+
+        $payload = [
+            'invoice_testMode' => $this->testMode,
+            'invoice_paymentMethod' => $paymentMethod,
+            'invoice_type' => 'pdf',
+            'locale' => 'de_AT',
+            'signature_mandatory' => $this->signatureMandatory,
+            'invoice_text' => 'Vielen Dank für Ihren Besuch!',
+            'items' => $items,
+        ];
+
+        // Add customer if available
+        $hellocashCustomerId = $data['hellocash_customer_id'] ?? null;
+        if (!empty($hellocashCustomerId)) {
+            $payload['invoice_user_id'] = $hellocashCustomerId;
+        }
+
+        return $payload;
+    }
+
+    private function saveGroupedInvoice(array $data): ?HelloCashInvoice
+    {
+        try {
+            $pdfContent = base64_decode($data['invoice_pdf_base64']);
+            if ($pdfContent === false) {
+                Log::error('Failed to decode grouped invoice PDF from base64', [
+                    'hellocash_invoice_id' => $data['hellocash_invoice_id'] ?? null,
+                ]);
+                return null;
+            }
+
+            $invoiceDate = now();
+            $year = $invoiceDate->format('Y');
+            $month = $invoiceDate->format('m');
+            $filename = 'invoice_' . $data['hellocash_invoice_id'] . '.pdf';
+            $filePath = "invoices/{$year}/{$month}/{$filename}";
+
+            Storage::disk('local')->put($filePath, $pdfContent);
+
+            $invoice = HelloCashInvoice::create([
+                'hellocash_invoice_id' => $data['hellocash_invoice_id'],
+                'invoice_type' => 'cashier',
+                'customer_id' => $data['customer_id'],
+                'is_grouped' => true,
+                'reservation_ids' => $data['reservation_ids'] ?? [],
+                'file_path' => $filePath,
+            ]);
+
+            return $invoice;
+        } catch (Exception $e) {
+            Log::error('Failed to save grouped invoice to local storage', [
+                'hellocash_invoice_id' => $data['hellocash_invoice_id'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
     public function createUser(Customer $customer): array
     {
         try {

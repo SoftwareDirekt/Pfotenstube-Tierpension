@@ -43,7 +43,7 @@ class AdminsController extends Controller
             return to_route('admin.dashboard');
         }
 
-        Session::flash('error', 'Invalid email address or password');
+        Session::flash('error', 'Ungültige E-Mail-Adresse oder Passwort');
         return back();
     }
     ///pin functionality

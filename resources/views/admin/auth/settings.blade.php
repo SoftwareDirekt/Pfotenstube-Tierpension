@@ -259,7 +259,7 @@
                                             </div>
                                         </div>
                                         <div class="alert alert-info mb-0">
-                                            <strong>Hinweis:</strong> Alle Preise im System sind ohne Mehrwertsteuer (Netto). Der MwSt-Satz wird nur verwendet, wenn Rechnungen an die Registrierkasse gesendet werden.
+                                            <strong>Hinweis:</strong> Alle Preise im System sind ohne Mehrwertsteuer (Netto). Der MwSt-Satz wird für alle Rechnungen verwendet – sowohl für lokale PDF-Rechnungen als auch für Rechnungen an die Registrierkasse.
                                         </div>
                                     </div>
                                 </div>

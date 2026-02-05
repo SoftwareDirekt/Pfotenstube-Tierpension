@@ -36,8 +36,15 @@ class CustomersController extends Controller
             return to_route('admin.settings');
         }
 
-        $order = $request->input('order', 'desc');
-        $sortBy = $request->input('sort_by', 'id_number');
+        // Validate and sanitize input parameters
+        $order = in_array(strtolower($request->input('order', 'desc')), ['asc', 'desc']) 
+            ? strtolower($request->input('order', 'desc')) 
+            : 'desc';
+        
+        $allowedSortFields = ['id_number', 'name', 'created_at', 'email', 'phone'];
+        $sortBy = in_array($request->input('sort_by', 'id_number'), $allowedSortFields)
+            ? $request->input('sort_by', 'id_number')
+            : 'id_number';
 
         if($request->ajax())
         {
@@ -440,6 +447,48 @@ class CustomersController extends Controller
         return back();
     }
     
+
+    public function check_email(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $query = Customer::where('email', $request->email);
+        
+        // Exclude current customer when editing
+        if ($request->has('exclude_id') && $request->exclude_id) {
+            $query->where('id', '!=', $request->exclude_id);
+        }
+        
+        $exists = $query->exists();
+
+        return response()->json([
+            'exists' => $exists,
+            'message' => $exists ? 'Diese E-Mail-Adresse wird bereits verwendet' : 'E-Mail ist verfügbar'
+        ]);
+    }
+
+    public function check_id_number(Request $request)
+    {
+        $request->validate([
+            'id_number' => 'required',
+        ]);
+
+        $query = Customer::where('id_number', $request->id_number);
+        
+        // Exclude current customer when editing
+        if ($request->has('exclude_id') && $request->exclude_id) {
+            $query->where('id', '!=', $request->exclude_id);
+        }
+        
+        $exists = $query->exists();
+
+        return response()->json([
+            'exists' => $exists,
+            'message' => $exists ? 'Diese ID-Nummer wird bereits verwendet' : 'ID-Nummer ist verfügbar'
+        ]);
+    }
     public function edit_customers($id)
     {
         if(!General::permissions('Kunde'))

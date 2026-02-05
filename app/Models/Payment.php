@@ -9,6 +9,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Payment extends Model
 {
     use HasFactory, SoftDeletes;
+    
+    // Payment status constants
+    const STATUS_NOT_PAID = 0;
+    const STATUS_PAID = 1;
+    const STATUS_PARTIAL = 2;
+    
     protected $guarded = [];
     protected $table = 'payments';
 

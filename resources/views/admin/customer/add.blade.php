@@ -35,7 +35,7 @@
                                 <option value="Mr." {{ old('title', 'Mr.') == 'Mr.' ? 'selected' : '' }}>Herr</option>
                                 <option value="Mrs." {{ old('title') == 'Mrs.' ? 'selected' : '' }}>Frau</option>
                             </select>
-                            <label for="title">Anrede</label>
+                            <label for="title">Anrede <span class="text-danger">*</span></label>
                         </div>
                     </div>
                     <div class="col-md-12">
@@ -171,7 +171,7 @@
             html += "<div class='col-md-12'>";
                 html += '<div class="form-floating form-floating-outline mb-4">';
                     html += '<input type="text" class="form-control" name="dogs['+counter+'][name]" id="name" placeholder="Name" required />';
-                    html += '<label for="name">Name</label>';
+                    html += '<label for="name">Name <span class="text-danger">*</span></label>';
                 html += '</div>';
             html += "</div>";
             html += '<div class="col-md-3">';
@@ -323,7 +323,7 @@
                         html += '<option value="{{$obj->id}}"><?php echo $obj->title; ?></option>';
                         html += '@endforeach';
                     html += '</select>';
-                html += '<label for="price_plan">Pensionstarif</label>';
+                html += '<label for="price_plan">Pensionstarif <span class="text-danger">*</span></label>';
                 html += '</div>';
             html += '</div>';
 
@@ -335,7 +335,7 @@
                         html += '<option value="{{$obj->id}}"><?php echo $obj->title; ?></option>';
                         html += '@endforeach';
                     html += '</select>';
-                    html += '<label for="daily_rate">Tagestarif</label>';
+                    html += '<label for="daily_rate">Tagestarif <span class="text-danger">*</span></label>';
                 html += '</div>';
             html += '</div>';
 
@@ -470,12 +470,12 @@
             html += "<div class='row'>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="text" class="form-control" name="dogs['+key+'][picks]['+id+'][name]" id="pick_name'+id+'" placeholder="Name" required/><label for="pick_name'+id+'">Name</label>';
+                    html += '<input type="text" class="form-control" name="dogs['+key+'][picks]['+id+'][name]" id="pick_name'+id+'" placeholder="Name" required/><label for="pick_name'+id+'">Name <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="number" class="form-control" name="dogs['+key+'][picks]['+id+'][phone]" id="pick_phone'+id+'" placeholder="Telefonnummer" required/><label for="pick_phone'+id+'">Telefonnummer</label>';
+                    html += '<input type="number" class="form-control" name="dogs['+key+'][picks]['+id+'][phone]" id="pick_phone'+id+'" placeholder="Telefonnummer" required/><label for="pick_phone'+id+'">Telefonnummer <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
@@ -508,19 +508,19 @@
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
                     html += '<input type="text" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][vaccine_name]" id="vaccine_name'+key+'_'+id+'" placeholder="Impfstoff Name" required />';
-                    html += '<label for="vaccine_name'+key+'_'+id+'">Impfstoff Name</label>';
+                    html += '<label for="vaccine_name'+key+'_'+id+'">Impfstoff Name <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
                     html += '<input type="date" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][vaccination_date]" id="vaccination_date'+key+'_'+id+'" placeholder="Impfdatum" required />';
-                    html += '<label for="vaccination_date'+key+'_'+id+'">Impfdatum</label>';
+                    html += '<label for="vaccination_date'+key+'_'+id+'">Impfdatum <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
                     html += '<input type="date" class="form-control" name="dogs['+key+'][vaccinations]['+id+'][next_vaccination_date]" id="next_vaccination_date'+key+'_'+id+'" placeholder="Nächste Impfung" required />';
-                    html += '<label for="next_vaccination_date'+key+'_'+id+'">Nächste Impfung</label>';
+                    html += '<label for="next_vaccination_date'+key+'_'+id+'">Nächste Impfung <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3 mt-3'>";
@@ -551,13 +551,13 @@
             html += "<div class='col-md-6'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
                     html += '<input type="text" class="form-control" name="dogs['+key+'][documents]['+id+'][name]" id="document_name'+key+'_'+id+'" placeholder="Dokumentname" required />';
-                    html += '<label for="document_name'+key+'_'+id+'">Dokumentname</label>';
+                    html += '<label for="document_name'+key+'_'+id+'">Dokumentname <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-6'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
                     html += '<input type="file" class="form-control" name="dogs['+key+'][documents]['+id+'][file]" id="document_file'+key+'_'+id+'" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required />';
-                    html += '<label for="document_file'+key+'_'+id+'">Datei (PDF, DOC, DOCX, JPG, PNG)</label>';
+                    html += '<label for="document_file'+key+'_'+id+'">Datei (PDF, DOC, DOCX, JPG, PNG) <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "</div>";
@@ -645,6 +645,145 @@
             $(`#special_mittag_box${counter}`).addClass('d-none');
             $(`#special_abend_box${counter}`).addClass('d-none');
         }
+    }
+
+    // Real-time email validation
+    let emailCheckTimeout;
+    const emailInput = document.getElementById('email');
+    const emailContainer = emailInput.closest('.col-md-6');
+    
+    emailInput.addEventListener('input', function() {
+        clearTimeout(emailCheckTimeout);
+        
+        const email = this.value.trim();
+        
+        // Remove any existing error message
+        const existingError = emailContainer.querySelector('.email-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Only check if email is not empty and looks valid
+        if (email.length > 0 && email.includes('@')) {
+            emailCheckTimeout = setTimeout(() => {
+                checkEmailAvailability(email);
+            }, 500); // Wait 500ms after user stops typing
+        } else if (email.length === 0) {
+            // Re-enable submit if email is cleared (it's optional)
+            updateSubmitButton();
+        }
+    });
+    
+    function checkEmailAvailability(email) {
+        fetch('{{ route("admin.customers.check.email") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ email: email })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove any existing error message
+            const existingError = emailContainer.querySelector('.email-validation-error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            if (data.exists) {
+                // Add error message
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'formError email-validation-error text-danger';
+                errorMsg.textContent = '*' + data.message;
+                emailContainer.appendChild(errorMsg);
+                
+                emailInput.classList.add('is-invalid');
+                emailInput.dataset.isValid = 'false';
+            } else {
+                emailInput.classList.remove('is-invalid');
+                emailInput.dataset.isValid = 'true';
+            }
+            
+            updateSubmitButton();
+        })
+        .catch(error => {
+            console.error('Error checking email:', error);
+        });
+    }
+
+    // Real-time ID number validation
+    let idNumberCheckTimeout;
+    const idNumberInput = document.getElementById('id_number');
+    const idNumberContainer = idNumberInput.closest('.col-md-6');
+    
+    idNumberInput.addEventListener('input', function() {
+        clearTimeout(idNumberCheckTimeout);
+        
+        const idNumber = this.value.trim();
+        
+        // Remove any existing error message
+        const existingError = idNumberContainer.querySelector('.id-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Only check if id_number is not empty
+        if (idNumber.length > 0) {
+            idNumberCheckTimeout = setTimeout(() => {
+                checkIdNumberAvailability(idNumber);
+            }, 500); // Wait 500ms after user stops typing
+        } else {
+            // Re-enable submit if id_number is cleared (it's optional)
+            updateSubmitButton();
+        }
+    });
+    
+    function checkIdNumberAvailability(idNumber) {
+        fetch('{{ route("admin.customers.check.id-number") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ id_number: idNumber })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove any existing error message
+            const existingError = idNumberContainer.querySelector('.id-validation-error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            if (data.exists) {
+                // Add error message
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'formError id-validation-error text-danger';
+                errorMsg.textContent = '*' + data.message;
+                idNumberContainer.appendChild(errorMsg);
+                
+                idNumberInput.classList.add('is-invalid');
+                idNumberInput.dataset.isValid = 'false';
+            } else {
+                idNumberInput.classList.remove('is-invalid');
+                idNumberInput.dataset.isValid = 'true';
+            }
+            
+            updateSubmitButton();
+        })
+        .catch(error => {
+            console.error('Error checking ID number:', error);
+        });
+    }
+
+    function updateSubmitButton() {
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const emailValid = emailInput.dataset.isValid !== 'false';
+        const idNumberValid = idNumberInput.dataset.isValid !== 'false';
+        
+        // Disable submit only if there are validation errors
+        submitBtn.disabled = !emailValid || !idNumberValid;
     }
 </script>
 @endsection

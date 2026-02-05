@@ -34,7 +34,7 @@
                                 <option value="Mr." {{ old('title', $customer->title) == 'Mr.' ? 'selected' : '' }}>Herr</option>
                                 <option value="Mrs." {{ old('title', $customer->title) == 'Mrs.' ? 'selected' : '' }}>Frau</option>
                             </select>
-                            <label for="title">Anrede</label>
+                            <label for="title">Anrede <span class="text-danger">*</span></label>
                         </div>
                     </div>
                     <div class="col-md-12">
@@ -48,7 +48,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="id_number" id="id_number" value="{{ old('id_number', $customer->id_number) }}" placeholder="ID-Number" required/>
+                            <input type="text" class="form-control" name="id_number" id="id_number" value="{{ old('id_number', $customer->id_number) }}" placeholder="ID-Number"/>
                             <label for="id_number">ID-Number</label>
                             @error('id_number')
                                 <small class="text-danger">{{$message}}</small>
@@ -72,7 +72,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
-                            <input type="text" class="form-control" name="phone" id="phone" value="{{ old('phone', $customer->phone) }}" placeholder="Telefonnummer" required />
+                            <input type="text" class="form-control" name="phone" id="phone" value="{{ old('phone', $customer->phone) }}" placeholder="Telefonnummer" />
                             <label for="phone">Telefonnummer</label>
                             @error('phone')
                                 <small class="text-danger">{{$message}}</small>
@@ -140,4 +140,137 @@
 @endsection
 @section('extra_js')
 <script src="assets/vendor/libs/select2/select2.js"></script>
+<script>
+    const customerId = {{ $customer->id }};
+
+    // Real-time email validation
+    let emailCheckTimeout;
+    const emailInput = document.getElementById('email');
+    const emailContainer = emailInput.closest('.col-md-6');
+    
+    emailInput.addEventListener('input', function() {
+        clearTimeout(emailCheckTimeout);
+        
+        const email = this.value.trim();
+        
+        // Remove any existing error message
+        const existingError = emailContainer.querySelector('.email-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Only check if email is not empty and looks valid
+        if (email.length > 0 && email.includes('@')) {
+            emailCheckTimeout = setTimeout(() => {
+                checkEmailAvailability(email);
+            }, 500);
+        } else if (email.length === 0) {
+            updateSubmitButton();
+        }
+    });
+    
+    function checkEmailAvailability(email) {
+        fetch('{{ route("admin.customers.check.email") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ email: email, exclude_id: customerId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const existingError = emailContainer.querySelector('.email-validation-error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            if (data.exists) {
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'formError email-validation-error text-danger';
+                errorMsg.textContent = '*' + data.message;
+                emailContainer.appendChild(errorMsg);
+                
+                emailInput.classList.add('is-invalid');
+                emailInput.dataset.isValid = 'false';
+            } else {
+                emailInput.classList.remove('is-invalid');
+                emailInput.dataset.isValid = 'true';
+            }
+            
+            updateSubmitButton();
+        })
+        .catch(error => {
+            console.error('Error checking email:', error);
+        });
+    }
+
+    // Real-time ID number validation
+    let idNumberCheckTimeout;
+    const idNumberInput = document.getElementById('id_number');
+    const idNumberContainer = idNumberInput.closest('.col-md-6');
+    
+    idNumberInput.addEventListener('input', function() {
+        clearTimeout(idNumberCheckTimeout);
+        
+        const idNumber = this.value.trim();
+        
+        const existingError = idNumberContainer.querySelector('.id-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        if (idNumber.length > 0) {
+            idNumberCheckTimeout = setTimeout(() => {
+                checkIdNumberAvailability(idNumber);
+            }, 500);
+        } else {
+            updateSubmitButton();
+        }
+    });
+    
+    function checkIdNumberAvailability(idNumber) {
+        fetch('{{ route("admin.customers.check.id-number") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ id_number: idNumber, exclude_id: customerId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const existingError = idNumberContainer.querySelector('.id-validation-error');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            if (data.exists) {
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'formError id-validation-error text-danger';
+                errorMsg.textContent = '*' + data.message;
+                idNumberContainer.appendChild(errorMsg);
+                
+                idNumberInput.classList.add('is-invalid');
+                idNumberInput.dataset.isValid = 'false';
+            } else {
+                idNumberInput.classList.remove('is-invalid');
+                idNumberInput.dataset.isValid = 'true';
+            }
+            
+            updateSubmitButton();
+        })
+        .catch(error => {
+            console.error('Error checking ID number:', error);
+        });
+    }
+
+    function updateSubmitButton() {
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const emailValid = emailInput.dataset.isValid !== 'false';
+        const idNumberValid = idNumberInput.dataset.isValid !== 'false';
+        
+        submitBtn.disabled = !emailValid || !idNumberValid;
+    }
+</script>
 @endsection

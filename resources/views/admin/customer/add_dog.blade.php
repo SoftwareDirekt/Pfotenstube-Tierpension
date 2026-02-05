@@ -33,14 +33,14 @@
                                             </option>
                                         @endforeach
                                     </select>
-                                    <label for="customer_id">Kunde</label>
+                                    <label for="customer_id">Kunde <span class="text-danger">*</span></label>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <input type="text" class="form-control" name="name" id="name"
                                         placeholder="Name" required />
-                                    <label for="name">Name</label>
+                                    <label for="name">Name <span class="text-danger">*</span></label>
                                 </div>
                                 @error('name')
                                     <p class="formError">*{{ $message }}</p>
@@ -215,7 +215,7 @@
                                         <option value="{{$obj->id}}"><?php echo $obj->title; ?></option>
                                         @endforeach
                                     </select>
-                                    <label for="price_plan">Pensionstarif</label>
+                                    <label for="price_plan">Pensionstarif <span class="text-danger">*</span></label>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -226,7 +226,7 @@
                                         <option value="{{$obj->id}}"><?php echo $obj->title; ?></option>
                                         @endforeach
                                     </select>
-                                    <label for="daily_rate">Tagestarif</label>
+                                    <label for="daily_rate">Tagestarif <span class="text-danger">*</span></label>
                                 </div>
                             </div>
 
@@ -408,13 +408,13 @@
             html += "<div class='col-md-3'>";
             html += "<div class='form-floating form-floating-outline mb-4'>";
             html += '<input type="text" class="form-control" name="pick_name[]" id="pick_name' + id +
-                '" placeholder="Name" required/><label for="pick_name' + id + '">Name</label>';
+                '" placeholder="Name" required/><label for="pick_name' + id + '">Name <span class="text-danger">*</span></label>';
             html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
             html += "<div class='form-floating form-floating-outline mb-4'>";
             html += '<input type="number" class="form-control" name="pick_phone[]" id="pick_phone' + id +
-                '" placeholder="Telefonnummer" required/><label for="pick_phone' + id + '">Telefonnummer</label>';
+                '" placeholder="Telefonnummer" required/><label for="pick_phone' + id + '">Telefonnummer <span class="text-danger">*</span></label>';
             html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
@@ -497,19 +497,19 @@
             html += "<div class='col-md-3'>";
             html += "<div class='form-floating form-floating-outline mb-4'>";
             html += '<input type="text" class="form-control" name="vaccine_name[]" id="vaccine_name' + id +
-                '" placeholder="Impfstoff Name" required/><label for="vaccine_name' + id + '">Impfstoff Name</label>';
+                '" placeholder="Impfstoff Name" required/><label for="vaccine_name' + id + '">Impfstoff Name <span class="text-danger">*</span></label>';
             html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
             html += "<div class='form-floating form-floating-outline mb-4'>";
             html += '<input type="date" class="form-control" name="vaccination_date[]" id="vaccination_date' + id +
-                '" placeholder="Impfdatum" required/><label for="vaccination_date' + id + '">Impfdatum</label>';
+                '" placeholder="Impfdatum" required/><label for="vaccination_date' + id + '">Impfdatum <span class="text-danger">*</span></label>';
             html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
             html += "<div class='form-floating form-floating-outline mb-4'>";
             html += '<input type="date" class="form-control" name="next_vaccination_date[]" id="next_vaccination_date' + id +
-                '" placeholder="Nächste Impfung" required/><label for="next_vaccination_date' + id + '">Nächste Impfung</label>';
+                '" placeholder="Nächste Impfung" required/><label for="next_vaccination_date' + id + '">Nächste Impfung <span class="text-danger">*</span></label>';
             html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
@@ -537,12 +537,12 @@
             html += "<div class='row'>";
             html += "<div class='col-md-6'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="text" class="form-control" name="document_name[]" id="document_name' + id + '" placeholder="Dokumentname" required/><label for="document_name' + id + '">Dokumentname</label>';
+                    html += '<input type="text" class="form-control" name="document_name[]" id="document_name' + id + '" placeholder="Dokumentname" required/><label for="document_name' + id + '">Dokumentname <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-6'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="file" class="form-control" name="document_file[]" id="document_file' + id + '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required/><label for="document_file' + id + '">Datei (PDF, DOC, DOCX, JPG, PNG)</label>';
+                    html += '<input type="file" class="form-control" name="document_file[]" id="document_file' + id + '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required/><label for="document_file' + id + '">Datei (PDF, DOC, DOCX, JPG, PNG) <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "</div>";

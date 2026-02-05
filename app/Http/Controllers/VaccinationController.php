@@ -15,7 +15,7 @@ class VaccinationController extends Controller
     {
         // Check if user has access to this dog's vaccinations
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         return response()->json($dog->vaccinations);
@@ -25,7 +25,7 @@ class VaccinationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         try {
@@ -78,7 +78,7 @@ class VaccinationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         try {
@@ -103,7 +103,7 @@ class VaccinationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         try {

@@ -512,17 +512,17 @@
                       <span class="switch-on"></span>
                       <span class="switch-off"></span>
                     </span>
-                    <span class="switch-label">Use as a billing address?</span>
+                    <span class="switch-label">Als Rechnungsadresse verwenden?</span>
                   </label>
                 </div>
                 <div class="col-12 text-center">
-                  <button type="submit" class="btn btn-primary me-sm-3 me-1">Submit</button>
+                  <button type="submit" class="btn btn-primary me-sm-3 me-1">Speichern</button>
                   <button
                     type="reset"
                     class="btn btn-outline-secondary"
                     data-bs-dismiss="modal"
-                    aria-label="Close">
-                    Cancel
+                    aria-label="Schließen">
+                    Abbrechen
                   </button>
                 </div>
               </form>

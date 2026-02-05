@@ -85,7 +85,20 @@
                                         </a>
                                     </td>
                                     <td>
-                                        @if($invoice->reservation)
+                                        @if($invoice->is_grouped)
+                                            {{-- Grouped invoice: show all reservation IDs as comma-separated links --}}
+                                            @php
+                                                $resIds = $invoice->reservation_ids ?? [];
+                                            @endphp
+                                            @if(count($resIds) > 0)
+                                                @foreach($resIds as $index => $resId)
+                                                    <a href="{{ route('admin.reservation', ['status' => ['all'], 'keyword' => $resId, 'date_range' => '', 'per_page' => 30]) }}" 
+                                                       class="text-primary text-decoration-none">{{ $resId }}</a>{{ $index < count($resIds) - 1 ? ', ' : '' }}
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">N/A</span>
+                                            @endif
+                                        @elseif($invoice->reservation)
                                             <a href="{{ route('admin.reservation', ['status' => ['all'], 'keyword' => $invoice->reservation->id, 'date_range' => '', 'per_page' => 30]) }}" 
                                                class="text-primary text-decoration-none">
                                                 {{ $invoice->reservation->id }}
@@ -95,7 +108,17 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->payment)
+                                        @if($invoice->is_grouped)
+                                            {{-- Grouped invoice: show all payment IDs as comma-separated links --}}
+                                            @if($invoice->payments->count() > 0)
+                                                @foreach($invoice->payments as $index => $pmt)
+                                                    <a href="{{ route('admin.payment', ['id' => $pmt->id]) }}" 
+                                                       class="text-primary text-decoration-none">{{ $pmt->id }}</a>{{ $index < $invoice->payments->count() - 1 ? ', ' : '' }}
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">N/A</span>
+                                            @endif
+                                        @elseif($invoice->payment)
                                             <a href="{{ route('admin.payment', ['id' => $invoice->payment->id]) }}" 
                                                class="text-primary text-decoration-none">
                                                 {{ $invoice->payment->id }}
@@ -105,17 +128,43 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->reservation && $invoice->reservation->dog)
+                                        @if($invoice->is_grouped)
+                                            {{-- Grouped invoice: show all dog IDs as comma-separated --}}
+                                            @if($invoice->payments->count() > 0)
+                                                @php
+                                                    $dogIds = $invoice->payments
+                                                        ->map(fn($p) => $p->reservation?->dog?->id)
+                                                        ->filter()
+                                                        ->unique()
+                                                        ->values();
+                                                @endphp
+                                                @if($dogIds->count() > 0)
+                                                    @foreach($dogIds as $index => $dogId)
+                                                        {{ $dogId }}{{ $index < $dogIds->count() - 1 ? ', ' : '' }}
+                                                    @endforeach
+                                                @else
+                                                    <span class="text-muted">N/A</span>
+                                                @endif
+                                            @else
+                                                <span class="text-muted">N/A</span>
+                                            @endif
+                                        @elseif($invoice->reservation && $invoice->reservation->dog)
                                             {{ $invoice->reservation->dog->id ?? 'N/A' }}
                                         @else
-                                            N/A
+                                            <span class="text-muted">N/A</span>
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->reservation && $invoice->reservation->dog && $invoice->reservation->dog->customer)
+                                        @if($invoice->is_grouped && $invoice->customer)
+                                            {{-- Grouped invoice: show customer directly --}}
+                                            {{ $invoice->customer->name ?? 'N/A' }} ({{ $invoice->customer->id }})
+                                        @elseif($invoice->reservation && $invoice->reservation->dog && $invoice->reservation->dog->customer)
+                                            {{-- Single invoice: show customer via reservation --}}
                                             {{ $invoice->reservation->dog->customer->name ?? 'N/A' }} ({{ $invoice->reservation->dog->customer->id }})
+                                        @elseif($invoice->customer)
+                                            {{ $invoice->customer->name ?? 'N/A' }} ({{ $invoice->customer->id }})
                                         @else
-                                            N/A
+                                            <span class="text-muted">N/A</span>
                                         @endif
                                     </td>
                                     <td>

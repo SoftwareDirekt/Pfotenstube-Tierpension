@@ -84,6 +84,8 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::prefix('customers')->name('customers.')->group(function () {
             Route::get('/add', [CustomersController::class, 'add_customers'])->name('add');
             Route::post('/add', [CustomersController::class, 'post_customers'])->name('add.post');
+            Route::post('/check-email', [CustomersController::class, 'check_email'])->name('check.email');
+            Route::post('/check-id-number', [CustomersController::class, 'check_id_number'])->name('check.id-number');
             Route::get('/{id}/edit', [CustomersController::class, 'edit_customers'])->name('edit');
             Route::post('/update', [CustomersController::class, 'update_customers'])->name('update');
             Route::post('/delete', [CustomersController::class, 'delete_customers'])->name('delete');

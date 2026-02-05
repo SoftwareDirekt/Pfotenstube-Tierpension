@@ -43,9 +43,9 @@ class PlansController extends Controller
     public function post_plan(Request $request)
     {
         $request->validate([
-            'title' => 'required',
-            'type' => 'required',
-            'price' => 'required'
+            'title' => 'required|string|max:255',
+            'type' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0'
         ]);
 
         $flatrate = null;
@@ -79,9 +79,9 @@ class PlansController extends Controller
     public function update_plan(Request $request)
     {
         $request->validate([
-            'title' => 'required',
-            'type' => 'required',
-            'price' => 'required'
+            'title' => 'required|string|max:255',
+            'type' => 'required|string|max:255',
+            'price' => 'required|numeric|min:0'
         ]);
 
         $flat_rate = null;

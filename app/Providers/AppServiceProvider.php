@@ -25,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Validate VAT configuration
+        $this->validateVATConfiguration();
+        
         if (
             Schema::hasTable('customers') &&
             Schema::hasTable('dogs') &&
@@ -41,5 +44,19 @@ class AppServiceProvider extends ServiceProvider
         }
     
         Paginator::useBootstrap();
+    }
+    
+    /**
+     * Validate VAT configuration to ensure it's properly set
+     */
+    private function validateVATConfiguration(): void
+    {
+        $vatMode = config('app.vat_calculation_mode');
+        
+        if ($vatMode && !in_array($vatMode, ['inclusive', 'exclusive'])) {
+            throw new \RuntimeException(
+                "Ungültiger MwSt-Berechnungsmodus: '{$vatMode}'. Muss 'inclusive' oder 'exclusive' sein."
+            );
+        }
     }
 }

@@ -19,7 +19,7 @@ class RoomsController extends Controller
 
         if($request->ajax())
         {
-            $keyword = isset($request->keyword) ? $request->keyword :"";
+            $keyword = isset($request->keyword) ? $request->keyword : "";
             $order = isset($request->order) ? $request->order : 'desc';
 
             $where = [];
