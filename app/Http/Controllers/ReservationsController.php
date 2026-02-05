@@ -1245,11 +1245,40 @@ class ReservationsController extends Controller
             return back();
         }
 
+        // Add comprehensive input validation
+        $request->validate([
+            'res_id' => 'required|array|min:1',
+            'res_id.*' => 'required|integer|exists:reservations,id',
+            'plan_id' => 'required|array',
+            'plan_id.*' => 'required|integer|exists:plans,id',
+            'days' => 'required|array',
+            'days.*' => 'required|integer|min:1',
+            'base_cost' => 'required|array',
+            'base_cost.*' => 'required|numeric|min:0',
+            'special_cost' => 'required|array',
+            'special_cost.*' => 'required|numeric|min:0',
+            'discount' => 'required|array',
+            'discount.*' => 'required|numeric|min:0|max:100',
+            'payment_method' => 'required|array',
+            'payment_method.*' => 'required|string|in:Bar,Bank',
+            'received_amount' => 'required|array',
+            'received_amount.*' => 'required|numeric|min:0',
+            'invoice_amount' => 'required|array',
+            'invoice_amount.*' => 'required|numeric|min:0',
+        ]);
+
+        // Define amount tolerance constant for consistent use throughout
+        $amountTolerance = 0.01;
+
         $visitCounter = new VisitCounterService();
         $balanceService = new CustomerBalanceService();
         
         // Initialize invoice data collection for grouping by customer
         $invoiceDataByCustomer = [];
+        
+        // Initialize HelloCash invoice data collection for Bar payments (per-customer)
+        $helloCashDataByCustomer = [];
+        $helloCashCustomers = $request->send_to_hellocash ?? [];
         
         // First pass: Calculate customer totals for wallet distribution
         $customerTotals = [];
@@ -1614,6 +1643,50 @@ class ReservationsController extends Controller
                     // Collect reservation IDs for grouped invoice
                     $invoiceDataByCustomer[$customerId]['reservation_ids'][] = $res_id;
                 }
+                
+                // Collect HelloCash data for Bar payments when send_to_hellocash is checked for this customer
+                $customerHelloCashEnabled = isset($helloCashCustomers[$customerId]) && $helloCashCustomers[$customerId] == '1';
+                if ($customerHelloCashEnabled && $request->payment_method[$key] === 'Bar' && $customerId) {
+                    // Group HelloCash invoice data by customer
+                    if (!isset($helloCashDataByCustomer[$customerId])) {
+                        $customer = $reservation->dog->customer;
+                        $helloCashDataByCustomer[$customerId] = [
+                            'customer_id' => $customerId,
+                            'customer' => $customer,
+                            'hellocash_customer_id' => $customer->hellocash_customer_id ?? null,
+                            'reservations' => [],
+                            'reservation_ids' => [],
+                            'payment_ids' => [],
+                        ];
+                    }
+                    
+                    // Store data for HelloCash grouped invoice - use form-calculated values
+                    // Calculate net costs - discount applies to BOTH base_cost and special_cost
+                    $baseCostNet = $vatMode === 'inclusive' 
+                        ? VATCalculator::getNetFromGross($base_cost, $vatPercentage) 
+                        : $base_cost;
+                    $specialCostNet = $vatMode === 'inclusive' 
+                        ? VATCalculator::getNetFromGross($special_cost, $vatPercentage) 
+                        : $special_cost;
+                    
+                    // Apply discount to BOTH costs (same as frontend calculation)
+                    $discountMultiplier = $discount_percentage > 0 ? (1 - $discount_percentage / 100) : 1;
+                    $planCostNetAfterDiscount = $baseCostNet * $discountMultiplier;
+                    $specialCostNetAfterDiscount = $specialCostNet * $discountMultiplier;
+                    
+                    $helloCashDataByCustomer[$customerId]['reservations'][] = [
+                        'dog_name' => $reservation->dog->name ?? 'Hund',
+                        'plan_title' => $plan->title ?? 'Hundepension',
+                        'plan_cost_net' => round($planCostNetAfterDiscount, 2),
+                        'special_cost_net' => round($specialCostNetAfterDiscount, 2),
+                        'days' => $days,
+                        'discount_percentage' => $discount_percentage,
+                    ];
+                    
+                    // Collect IDs for linking
+                    $helloCashDataByCustomer[$customerId]['reservation_ids'][] = $res_id;
+                    $helloCashDataByCustomer[$customerId]['payment_ids'][] = $payment->id;
+                }
             } catch (\Exception $e) {
                 // Rollback transaction on error
                 DB::rollBack();
@@ -1687,13 +1760,76 @@ class ReservationsController extends Controller
                 }
             }
         }
+        
+        // Generate HelloCash grouped invoices for Bar payments (when send_to_hellocash is checked)
+        $helloCashInvoices = [];
+        if (!empty($helloCashDataByCustomer)) {
+            $helloCashService = new HelloCashService();
+            
+            Log::info('Bulk checkout: Generating HelloCash invoices for ' . count($helloCashDataByCustomer) . ' customer(s)');
+            
+            foreach ($helloCashDataByCustomer as $customerId => $helloCashData) {
+                try {
+                    // Prepare data for HelloCash grouped invoice
+                    $invoiceResponse = $helloCashService->createGroupedInvoice([
+                        'customer_id' => $customerId,
+                        'hellocash_customer_id' => $helloCashData['hellocash_customer_id'],
+                        'reservations' => $helloCashData['reservations'],
+                        'reservation_ids' => $helloCashData['reservation_ids'],
+                        'payment_ids' => $helloCashData['payment_ids'],
+                        'payment_method' => 'Bar',
+                    ]);
+                    
+                    if ($invoiceResponse['success'] ?? false) {
+                        $savedInvoiceId = $invoiceResponse['saved_invoice_id'] ?? null;
+                        
+                        // Link all payments to the HelloCash invoice
+                        if ($savedInvoiceId && !empty($helloCashData['payment_ids'])) {
+                            Payment::whereIn('id', $helloCashData['payment_ids'])->update(['invoice_id' => $savedInvoiceId]);
+                        }
+                        
+                        $helloCashInvoices[] = [
+                            'customer_id' => $customerId,
+                            'customer_name' => $helloCashData['customer']->name,
+                            'invoice_id' => $savedInvoiceId,
+                            'invoice_url' => $savedInvoiceId ? route('admin.invoices.view', $savedInvoiceId) : null,
+                            'hellocash_invoice_id' => $invoiceResponse['invoice_id'] ?? null,
+                        ];
+                        
+                        Log::info('HelloCash grouped invoice created for customer ' . $customerId, [
+                            'hellocash_invoice_id' => $invoiceResponse['invoice_id'] ?? null,
+                            'saved_invoice_id' => $savedInvoiceId,
+                            'reservation_count' => count($helloCashData['reservations']),
+                        ]);
+                    } else {
+                        Log::warning('HelloCash grouped invoice failed for customer ' . $customerId, [
+                            'error' => $invoiceResponse['error'] ?? 'Unknown error',
+                        ]);
+                        
+                        // Flash a warning but don't fail the checkout
+                        Session::flash('hellocash_warning', 'Registrierkasse-Gruppenrechnung für ' . $helloCashData['customer']->name . ' konnte nicht erstellt werden: ' . ($invoiceResponse['error'] ?? 'Unbekannter Fehler'));
+                    }
+                } catch (\Exception $e) {
+                    Log::error('HelloCash grouped invoice exception during bulk checkout', [
+                        'customer_id' => $customerId,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    
+                    Session::flash('hellocash_warning', 'Registrierkasse-Fehler für ' . $helloCashData['customer']->name . ': ' . $e->getMessage());
+                }
+            }
+        }
+        
+        // Merge both Bank and HelloCash invoices for display
+        $allInvoices = array_merge($generatedInvoices, $helloCashInvoices);
 
         // Store invoice URLs for opening in new tabs
-        if (!empty($generatedInvoices)) {
-            Log::info('Bulk checkout: Storing ' . count($generatedInvoices) . ' invoice(s) in session', $generatedInvoices);
-            Session::flash('bulk_checkout_invoices', $generatedInvoices);
+        if (!empty($allInvoices)) {
+            Log::info('Bulk checkout: Storing ' . count($allInvoices) . ' invoice(s) in session', $allInvoices);
+            Session::flash('bulk_checkout_invoices', $allInvoices);
         } else {
-            Log::info('Bulk checkout: No invoices to store (Bar payment or no Bank payments)');
+            Log::info('Bulk checkout: No invoices to store (Bar payment without HelloCash or no Bank payments)');
         }
 
         // Provide appropriate user feedback based on success/failure status

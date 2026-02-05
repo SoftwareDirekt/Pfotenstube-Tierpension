@@ -795,4 +795,128 @@ class CheckoutTest extends TestCase
         $this->assertEquals(0, $payment->remaining_amount, 'No remaining amount after full payment');
         $this->assertEquals(1, $payment->status, 'Status should be paid (1)');
     }
+
+    /**
+     * TEST 14: Zero invoice amount handling
+     * 
+     * Verify that free/organization plans with 0 invoice are handled correctly
+     * Expected: Status should be paid automatically
+     */
+    public function test_zero_invoice_amount_handling()
+    {
+        Config::set('app.vat_calculation_mode', 'exclusive');
+
+        $checkinDate = Carbon::now()->subDays(1)->startOfDay();
+        $checkoutDate = Carbon::now()->startOfDay();
+
+        $reservation = Reservation::factory()->create([
+            'dog_id' => $this->dog->id,
+            'room_id' => $this->room->id,
+            'plan_id' => $this->normalPlan->id,
+            'checkin_date' => $checkinDate,
+            'status' => 1,
+        ]);
+
+        // Zero invoice amount (free plan)
+        $response = $this->post(route('admin.dogs.rooms.checkout-update'), [
+            'res_id' => [$reservation->id],
+            'plan_id' => [$this->normalPlan->id],
+            'checkout_date' => [$checkoutDate->format('Y-m-d H:i:s')],
+            'days' => [1],
+            'base_cost' => [0.00],
+            'special_cost' => [0],
+            'discount' => [0],
+            'payment_method' => ['Bar'],
+            'received_amount' => [0.00],
+            'invoice_amount' => [0.00],
+        ]);
+
+        $response->assertRedirect();
+
+        $payment = Payment::where('res_id', $reservation->id)->first();
+        $this->assertNotNull($payment, 'Payment should be created even for zero invoice');
+
+        // Verify zero invoice handling
+        $this->assertEquals(0.00, $payment->cost, 'Cost should be 0.00');
+        $this->assertEquals(0.00, $payment->received_amount, 'Received should be 0.00');
+        $this->assertEquals(0.00, $payment->remaining_amount, 'No remaining amount');
+        $this->assertEquals(Payment::STATUS_PAID, $payment->status, 'Status should be paid for zero invoice');
+        $this->assertEquals(0.00, $payment->net_amount, 'Net should be 0.00');
+        $this->assertEquals(0.00, $payment->vat_amount, 'VAT should be 0.00');
+    }
+    
+    /**
+     * TEST 15: Multi-dog bulk checkout with wallet usage
+     * 
+     * Test bulk checkout of multiple dogs for same customer with wallet usage
+     */
+    public function test_multi_dog_bulk_checkout_with_wallet()
+    {
+        Config::set('app.vat_calculation_mode', 'exclusive');
+        
+        // Set customer balance to use
+        $this->customer->balance = 50.00;
+        $this->customer->save();
+        
+        // Create a second dog for the same customer
+        $dog2 = Dog::factory()->create([
+            'customer_id' => $this->customer->id,
+            'name' => 'Test Dog 2',
+        ]);
+        
+        $checkinDate = Carbon::now()->subDays(1)->startOfDay();
+        $checkoutDate = Carbon::now()->startOfDay();
+        
+        // Create 2 reservations for same customer
+        $reservation1 = Reservation::factory()->create([
+            'dog_id' => $this->dog->id,
+            'room_id' => $this->room->id,
+            'plan_id' => $this->normalPlan->id,
+            'checkin_date' => $checkinDate,
+            'status' => 1,
+        ]);
+        
+        $reservation2 = Reservation::factory()->create([
+            'dog_id' => $dog2->id,
+            'room_id' => $this->room->id,
+            'plan_id' => $this->normalPlan->id,
+            'checkin_date' => $checkinDate,
+            'status' => 1,
+        ]);
+        
+        // Checkout both dogs - each 50 net = 60 gross, total 120 gross
+        // Wallet of 50 should partially cover total
+        $response = $this->post(route('admin.dogs.rooms.checkout-update'), [
+            'res_id' => [$reservation1->id, $reservation2->id],
+            'plan_id' => [$this->normalPlan->id, $this->normalPlan->id],
+            'checkout_date' => [$checkoutDate->format('Y-m-d H:i:s'), $checkoutDate->format('Y-m-d H:i:s')],
+            'days' => [1, 1],
+            'base_cost' => [50.00, 50.00],
+            'special_cost' => [0, 0],
+            'discount' => [0, 0],
+            'payment_method' => ['Bar', 'Bar'],
+            'received_amount' => [35.00, 35.00], // Pay 70 cash
+            'invoice_amount' => [60.00, 60.00], // 50 + 20% VAT each
+            'use_wallet' => [$this->customer->id => '1'],
+        ]);
+        
+        $response->assertRedirect();
+        
+        // Verify payments created for both
+        $payment1 = Payment::where('res_id', $reservation1->id)->first();
+        $payment2 = Payment::where('res_id', $reservation2->id)->first();
+        
+        $this->assertNotNull($payment1, 'Payment 1 should exist');
+        $this->assertNotNull($payment2, 'Payment 2 should exist');
+        
+        // Both should be checked out
+        $reservation1->refresh();
+        $reservation2->refresh();
+        $this->assertEquals(Reservation::STATUS_CHECKED_OUT, $reservation1->status);
+        $this->assertEquals(Reservation::STATUS_CHECKED_OUT, $reservation2->status);
+        
+        // Total wallet used should be 50 (the full balance since total cost > balance)
+        $totalWalletUsed = $payment1->wallet_amount + $payment2->wallet_amount;
+        $this->assertEqualsWithDelta(50.00, $totalWalletUsed, 0.05, 'Total wallet should be distributed');
+    }
 }

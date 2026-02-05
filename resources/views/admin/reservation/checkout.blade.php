@@ -91,6 +91,22 @@
         line-height: 1.5;
     }
     
+    /* HelloCash section styling */
+    .hellocash-section {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .hellocash-section .form-check-label {
+        color: #6c757d;
+    }
+    
+    .hellocash-section .form-check-input:checked + .form-check-label {
+        color: #198754;
+        font-weight: 500;
+    }
+    
     /* Add spacing between rows */
     #myTable tbody tr:not(.customer-group-header) {
         border-bottom: 1px solid #f0f0f0;
@@ -189,20 +205,36 @@
                                                     </div>
                                                 </td>
                                                 <td colspan="7">
-                                                    <div class="wallet-section" style="float:right">
-                                                        @if($customer && $customerBalance > 0)
-                                                            <div class="form-check wallet-checkbox">
-                                                                <input class="form-check-input" type="checkbox" name="use_wallet[{{ $customerId }}]" id="use_wallet_{{ $customerId }}" value="1" onchange="handleWalletChange('{{ $customerId }}')">
-                                                                <label class="form-check-label" for="use_wallet_{{ $customerId }}">
-                                                                    Guthaben verwenden (<span id="wallet_available_{{ $customerId }}">{{ number_format($customerBalance, 2, ',', '.') }}</span>€)
+                                                    <div class="d-flex justify-content-end align-items-start gap-4">
+                                                        {{-- HelloCash / Registrierkasse Checkbox --}}
+                                                        <div class="hellocash-section">
+                                                            <div class="form-check mt-1">
+                                                                <input class="form-check-input" type="checkbox" name="send_to_hellocash[{{ $customerId }}]" id="send_to_hellocash_{{ $customerId }}" value="1" onchange="handleHelloCashChange('{{ $customerId }}')">
+                                                                <label class="form-check-label" for="send_to_hellocash_{{ $customerId }}">
+                                                                    <i class="bx bx-receipt me-1"></i>Registrierkasse
                                                                 </label>
                                                             </div>
-                                                        @endif
-                                                        <div id="wallet_breakdown_{{ $customerId }}" class="wallet-breakdown" style="display: none;">
-                                                            <small>
-                                                                <strong>Guthaben:</strong> <span id="wallet_used_{{ $customerId }}">0.00</span>€<br>
-                                                                <strong>Bar:</strong> <span id="cash_payment_{{ $customerId }}">0.00</span>€
+                                                            <small id="hellocash_info_{{ $customerId }}" class="text-muted" style="display: none; font-size: 0.75rem;">
+                                                                <i class="bx bx-info-circle"></i> Zahlungsart wird auf Bar fixiert
                                                             </small>
+                                                        </div>
+                                                        
+                                                        {{-- Wallet Section --}}
+                                                        <div class="wallet-section">
+                                                            @if($customer && $customerBalance > 0)
+                                                                <div class="form-check wallet-checkbox">
+                                                                    <input class="form-check-input" type="checkbox" name="use_wallet[{{ $customerId }}]" id="use_wallet_{{ $customerId }}" value="1" onchange="handleWalletChange('{{ $customerId }}')">
+                                                                    <label class="form-check-label" for="use_wallet_{{ $customerId }}">
+                                                                        Guthaben verwenden (<span id="wallet_available_{{ $customerId }}">{{ number_format($customerBalance, 2, ',', '.') }}</span>€)
+                                                                    </label>
+                                                                </div>
+                                                            @endif
+                                                            <div id="wallet_breakdown_{{ $customerId }}" class="wallet-breakdown" style="display: none;">
+                                                                <small>
+                                                                    <strong>Guthaben:</strong> <span id="wallet_used_{{ $customerId }}">0.00</span>€<br>
+                                                                    <strong>Bar:</strong> <span id="cash_payment_{{ $customerId }}">0.00</span>€
+                                                                </small>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -277,10 +309,11 @@
                                                     </select>
                                                 </td>
                                                 <td>
-                                                    <select required class="form-control" name="payment_method[]">
+                                                    <select class="form-control payment-method-select" data-customer-id="{{ $customerId }}" id="payment_method_select_{{ $rowIndex }}" onchange="updatePaymentMethod('{{ $rowIndex }}')">
                                                         <option selected value="Bar">Bar</option>
-                                                        <option value="Bank">Bankuberweisung</option>
+                                                        <option value="Bank">Banküberweisung</option>
                                                     </select>
+                                                    <input type="hidden" name="payment_method[]" id="payment_method_{{ $rowIndex }}" value="Bar">
                                                 </td>
                                                 <td>
                                                     <select required class="form-control" id="discount_select{{$rowIndex}}" onchange="updateDiscount('{{$rowIndex}}', '{{$customerId}}')">
@@ -351,6 +384,7 @@
                                 </table>
                             </div>
                         </div>
+                        
                         <div class="d-flex justify-content-end mt-3">
                             <button type="submit" id="checkoutSubmitBtn" class="btn btn-primary px-4 py-2">
                                 <span id="submitBtnText" aria-live="polite" aria-atomic="true">Aktualisieren</span>
@@ -773,6 +807,50 @@
             });
         }
     });
+    
+    // Update hidden payment method field when select changes
+    function updatePaymentMethod(rowIndex) {
+        var selectValue = $('#payment_method_select_' + rowIndex).val();
+        $('#payment_method_' + rowIndex).val(selectValue);
+    }
+    
+    // Handle HelloCash checkbox change for a specific customer
+    function handleHelloCashChange(customerId) {
+        var isChecked = $('#send_to_hellocash_' + customerId).is(':checked');
+        var infoElement = $('#hellocash_info_' + customerId);
+        
+        // Find all payment method selects for this customer's dogs
+        var paymentSelects = $('select.payment-method-select[data-customer-id="' + customerId + '"]');
+        
+        if (isChecked) {
+            // Show info message
+            infoElement.show();
+            
+            // Force all payment methods to Bar and disable the select
+            paymentSelects.each(function() {
+                var selectId = $(this).attr('id');
+                var rowIndex = selectId.replace('payment_method_select_', '');
+                
+                $(this).val('Bar');
+                $(this).prop('disabled', true);
+                $(this).css('opacity', '0.6');
+                $(this).css('background-color', '#e9ecef');
+                
+                // Update the hidden field too
+                $('#payment_method_' + rowIndex).val('Bar');
+            });
+        } else {
+            // Hide info message
+            infoElement.hide();
+            
+            // Re-enable the payment method selects
+            paymentSelects.each(function() {
+                $(this).prop('disabled', false);
+                $(this).css('opacity', '1');
+                $(this).css('background-color', '');
+            });
+        }
+    }
 
 </script>
 @endsection

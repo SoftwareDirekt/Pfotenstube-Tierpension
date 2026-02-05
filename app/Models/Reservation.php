@@ -9,6 +9,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Reservation extends Model
 {
     use HasFactory, SoftDeletes;
+    
+    // Reservation status constants
+    const STATUS_ACTIVE = 1;
+    const STATUS_CHECKED_OUT = 2;
+    const STATUS_CANCELLED = 3;
 
     protected $guarded = [];
 
