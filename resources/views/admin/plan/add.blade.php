@@ -40,7 +40,7 @@
                             <label for="price">Preis (Netto)</label>
                         </div>
                         <small class="text-muted mb-4 d-block">
-                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird nur hinzugefügt, wenn die Rechnung an die Registrierkasse gesendet wird.
+                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird bei allen Rechnungen hinzugefügt – sowohl bei lokalen PDF-Rechnungen als auch bei der Registrierkasse.
                         </small>
                         @error('price')
                             <p class="formError">*{{$message}}</p>

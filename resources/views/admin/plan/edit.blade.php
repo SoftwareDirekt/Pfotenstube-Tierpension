@@ -40,7 +40,7 @@
                             <label for="price">Preis (Netto)</label>
                         </div>
                         <small class="text-muted mb-4 d-block">
-                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird nur hinzugefügt, wenn die Rechnung an die Registrierkasse gesendet wird.
+                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird bei allen Rechnungen hinzugefügt – sowohl bei lokalen PDF-Rechnungen als auch bei der Registrierkasse.
                         </small>
                         @error('price')
                             <p class="formError">*{{$message}}</p>
@@ -48,7 +48,7 @@
                     </div>
                     <div class="col-md-12">
                         <div class="form-check mb-4">
-                            <input class="form-check-input" type="checkbox" name="flat_rate" {{ ($plan->flat_rate == 1) ? 'checked': '' }} id="flexCheckDefault">
+                            <input class="form-check-input" type="checkbox" name="flat_rate" value="1" {{ ($plan->flat_rate == 1) ? 'checked': '' }} id="flexCheckDefault">
                             <label class="form-check-label" for="flexCheckDefault">
                                 Pauschale
                             </label>

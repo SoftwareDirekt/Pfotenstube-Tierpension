@@ -2088,7 +2088,7 @@
                     }
                 },
                 error: function () {
-                    alert('An error occurred while creating the event.');
+                    alert('Ein Fehler ist beim Erstellen des Ereignisses aufgetreten.');
                 }
             });
         }
@@ -2170,7 +2170,7 @@
                     }
                 },
                 error: function () {
-                    alert('An error occurred while trying to end the event.');
+                    alert('Ein Fehler ist beim Beenden des Ereignisses aufgetreten.');
                 }
             });
         }
@@ -4242,12 +4242,12 @@
                     remainingSeconds = data.timer.remaining;
                     startCountdown();
                 } else {
-                    alert(data.message || 'Failed to start timer');
+                    alert(data.message || 'Fehler beim Starten des Timers');
                 }
             })
             .catch(error => {
                 console.error('Error starting timer:', error);
-                alert('Error starting timer. Please try again.');
+                alert('Fehler beim Starten des Timers. Bitte versuchen Sie es erneut.');
             });
         }
 

@@ -14,6 +14,7 @@ class HelloCashInvoice extends Model
     
     protected $casts = [
         'invoice_number' => 'integer',
+        'is_grouped' => 'boolean',
     ];
 
     public function reservation()
@@ -24,6 +25,35 @@ class HelloCashInvoice extends Model
     public function payment()
     {
         return $this->belongsTo(Payment::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Payments linked to this invoice (for grouped invoices)
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'invoice_id');
+    }
+
+    /**
+     * Get reservation_ids as array
+     */
+    public function getReservationIdsAttribute($value)
+    {
+        return $value ? json_decode($value, true) : [];
+    }
+
+    /**
+     * Set reservation_ids as JSON
+     */
+    public function setReservationIdsAttribute($value)
+    {
+        $this->attributes['reservation_ids'] = $value ? json_encode($value) : null;
     }
 
     /**

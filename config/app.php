@@ -213,4 +213,20 @@ return [
 
     'days_calculation_mode' => env('DAYS_CALCULATION_MODE', 'inclusive'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | VAT Calculation Mode
+    |--------------------------------------------------------------------------
+    |
+    | Determines how VAT is calculated for prices:
+    | - 'exclusive': Prices are net (VAT excluded) and VAT is added
+    | - 'inclusive': Prices include VAT and VAT is extracted
+    |
+    | Set VAT_CALCULATION_MODE=exclusive or VAT_CALCULATION_MODE=inclusive
+    | in your ".env" file. Defaults to 'exclusive'.
+    |
+    */
+
+    'vat_calculation_mode' => env('VAT_CALCULATION_MODE', 'exclusive'),
+
 ];

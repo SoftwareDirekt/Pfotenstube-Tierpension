@@ -28,7 +28,14 @@ class InvoicesController extends Controller
             return redirect()->route('admin.settings');
         }
 
-        $query = HelloCashInvoice::with(['reservation.dog.customer', 'payment']);
+        $query = HelloCashInvoice::with([
+            // For single invoices
+            'reservation.dog.customer',
+            'payment',
+            // For grouped invoices  
+            'customer',
+            'payments.reservation.dog',
+        ]);
 
         if ($request->filled('year') && $request->year !== 'all') {
             $query->whereYear('created_at', $request->year);
@@ -42,6 +49,7 @@ class InvoicesController extends Controller
             $query->where('invoice_type', $request->invoice_type);
         }
 
+        // Sort by invoice number descending for local invoices, by created_at for cashier
         $invoices = $query->orderByDesc('created_at')->paginate(30);
         $invoices->appends($request->query());
 

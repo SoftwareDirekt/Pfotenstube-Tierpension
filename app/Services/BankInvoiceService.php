@@ -7,6 +7,8 @@ use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Preference;
 use App\Models\User;
+use App\Models\Customer;
+use App\Helpers\VATCalculator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -92,10 +94,20 @@ class BankInvoiceService
         $discountPercentage = $invoiceData['discount_percentage'] ?? 0;
         $days = $invoiceData['days'] ?? 1;
         
-        // Calculate net amounts (prices are stored as net)
-        $netPlanCost = $planCost;
-        $netSpecialCost = $specialCost;
-        $netTotal = $netPlanCost + $netSpecialCost;
+        // Calculate net amounts based on VAT calculation mode
+        $vatMode = config('app.vat_calculation_mode', 'exclusive');
+        
+        if ($vatMode === 'inclusive') {
+            // Prices include VAT, extract net from gross prices
+            $netPlanCost = VATCalculator::getNetFromGross($planCost, $vatPercentage);
+            $netSpecialCost = VATCalculator::getNetFromGross($specialCost, $vatPercentage);
+            $netTotal = $netPlanCost + $netSpecialCost;
+        } else {
+            // Prices are net (VAT exclusive)
+            $netPlanCost = $planCost;
+            $netSpecialCost = $specialCost;
+            $netTotal = $netPlanCost + $netSpecialCost;
+        }
         
         // Apply discount to net total
         $discountAmount = 0;
@@ -104,8 +116,8 @@ class BankInvoiceService
             $netTotal = $netTotal - $discountAmount;
         }
         
-        // Calculate VAT
-        $vatAmount = ($netTotal * $vatPercentage) / 100;
+        // Calculate VAT and gross total using VATCalculator
+        $vatAmount = VATCalculator::calculateVATAmount($netTotal, $vatPercentage);
         $grossTotal = $netTotal + $vatAmount;
         
         // Company information from authenticated user table
@@ -298,5 +310,244 @@ class BankInvoiceService
         ]);
         
         return $invoice;
+    }
+
+    /**
+     * Generate grouped invoice for multiple reservations belonging to the same customer
+     * 
+     * @param Customer $customer
+     * @param array $reservationData Array of reservation data with keys: reservation, payment, plan_cost, special_cost, discount_percentage, days
+     * @param array $reservationIds Array of reservation IDs for the grouped invoice
+     * @return array
+     */
+    public function generateGroupedInvoice(Customer $customer, array $reservationData, array $reservationIds = []): array
+    {
+        try {
+            if (empty($reservationData)) {
+                throw new \Exception('Keine Reservierungen für gruppierte Rechnung');
+            }
+
+            $vatPercentage = Preference::get('vat_percentage', 20);
+            
+            // Calculate totals across all reservations
+            $totalPlanCost = 0;
+            $totalSpecialCost = 0;
+            $totalDiscountAmount = 0;
+            $totalNetAmount = 0;
+            $totalVatAmount = 0;
+            $totalGrossAmount = 0;
+            
+            $invoiceItems = [];
+            
+            foreach ($reservationData as $index => $data) {
+                $reservation = $data['reservation'];
+                $payment = $data['payment'];
+                
+                // Use payment data directly (already calculated during checkout)
+                $planCost = $payment->plan_cost ?? 0;
+                $specialCost = $payment->special_cost ?? 0;
+                $discountPercentage = $payment->discount ?? 0;
+                $discountAmount = $payment->discount_amount ?? 0;
+                $days = $payment->days ?? 1;
+                $netAmount = $payment->net_amount ?? 0;
+                $vatAmount = $payment->vat_amount ?? 0;
+                $grossAmount = $payment->cost ?? 0;
+                
+                // Accumulate totals
+                $totalPlanCost += $planCost;
+                $totalSpecialCost += $specialCost;
+                $totalDiscountAmount += $discountAmount;
+                $totalNetAmount += $netAmount;
+                $totalVatAmount += $vatAmount;
+                $totalGrossAmount += $grossAmount;
+                
+                // Store item data for invoice view
+                $invoiceItems[] = [
+                    'reservation_id' => $reservation->id,
+                    'payment_id' => $payment->id,
+                    'plan_cost' => $planCost,
+                    'special_cost' => $specialCost,
+                    'discount_percentage' => $discountPercentage,
+                    'discount_amount' => $discountAmount,
+                    'days' => $days,
+                    'net_amount' => $netAmount,
+                    'vat_amount' => $vatAmount,
+                    'gross_amount' => $grossAmount,
+                ];
+            }
+            
+            // Get invoice number
+            $invoiceNumber = $this->getNextInvoiceNumber();
+            $invoiceNumberFormatted = $this->formatInvoiceNumber($invoiceNumber);
+            
+            // Prepare data for grouped invoice view
+            $invoiceViewData = $this->prepareGroupedInvoiceData($customer, $invoiceItems, $invoiceNumberFormatted, [
+                'total_net' => $totalNetAmount,
+                'total_vat' => $totalVatAmount,
+                'total_gross' => $totalGrossAmount,
+            ]);
+            
+            // Generate PDF
+            $pdf = Pdf::loadView('admin.invoices.partials.grouped-pdf', $invoiceViewData)
+                ->setPaper('a4', 'portrait')
+                ->setOptions([
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                    'defaultFont' => 'DejaVu Sans',
+                    'dpi' => 96,
+                ]);
+            
+            $pdfContent = $pdf->output();
+            
+            // Save invoice
+            $invoiceDate = now();
+            if (!empty($reservationData[0]['payment']->created_at)) {
+                $invoiceDate = $reservationData[0]['payment']->created_at;
+            }
+            
+            $year = $invoiceDate->format('Y');
+            $month = $invoiceDate->format('m');
+            
+            $storagePath = storage_path('app/local_invoices/' . $year . '/' . $month);
+            if (!file_exists($storagePath)) {
+                mkdir($storagePath, 0755, true);
+            }
+            
+            $filename = 'invoice_' . str_replace('-', '_', $invoiceNumberFormatted) . '.pdf';
+            $filePath = "local_invoices/{$year}/{$month}/{$filename}";
+            
+            Storage::disk('local')->put($filePath, $pdfContent);
+            
+            // Create invoice record
+            $invoice = HelloCashInvoice::create([
+                'hellocash_invoice_id' => null,
+                'invoice_type' => 'local',
+                'invoice_number' => $invoiceNumber,
+                'reservation_id' => null, // Grouped invoice doesn't have single reservation
+                'payment_id' => null, // Grouped invoice doesn't have single payment
+                'customer_id' => $customer->id,
+                'is_grouped' => true,
+                'reservation_ids' => !empty($reservationIds) ? $reservationIds : array_column($invoiceItems, 'reservation_id'),
+                'file_path' => $filePath,
+            ]);
+            
+            return [
+                'success' => true,
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoiceNumberFormatted,
+                'invoice_number_numeric' => $invoiceNumber,
+                'invoice_pdf_base64' => base64_encode($pdfContent),
+                'file_path' => $invoice->file_path,
+            ];
+        } catch (\Exception $e) {
+            Log::error('Grouped invoice generation failed', [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => 'Fehler beim Erstellen der gruppierten Rechnung: ' . $e->getMessage(),
+            ];
+        }
+    }
+    
+    /**
+     * Prepare grouped invoice data for view
+     */
+    private function prepareGroupedInvoiceData(Customer $customer, array $invoiceItems, string $invoiceNumberFormatted, array $totals): array
+    {
+        $vatPercentage = Preference::get('vat_percentage', 20);
+        
+        // Company information from authenticated user table
+        $user = Auth::user();
+        $companyName = $user->company_name ?? '';
+        $companyEmail = $user->company_email ?? '';
+        $companyAddress = $this->formatUserAddress($user);
+        $companyPhone = $user->phone ?? '';
+        $companyIban = $user->iban ?? '';
+        $companyBic = $user->bic ?? '';
+        
+        // Only set picture if it exists and is not the default placeholder
+        $companyPictureBase64 = null;
+        if (!empty($user->picture) && $user->picture != 'no-user-picture.gif') {
+            $picturePath = public_path('uploads/users/' . $user->picture);
+            if (file_exists($picturePath)) {
+                try {
+                    $imageData = file_get_contents($picturePath);
+                    $imageInfo = getimagesize($picturePath);
+                    if ($imageInfo !== false) {
+                        $mimeType = $imageInfo['mime'];
+                        $companyPictureBase64 = 'data:' . $mimeType . ';base64,' . base64_encode($imageData);
+                    }
+                } catch (\Exception $e) {
+                    // Silently fail if image encoding fails
+                }
+            }
+        }
+        
+        // Format customer name
+        $customerTitle = $customer->title ?? '';
+        $customerName = $customer->name ?? '';
+        $customerFullName = trim($customerTitle . ' ' . $customerName);
+        
+        // Format customer address
+        $customerAddress = trim(($customer->street ?? '') . ', ' . ($customer->zipcode ?? '') . ' ' . ($customer->city ?? ''));
+        if (empty($customer->street) && empty($customer->zipcode) && empty($customer->city)) {
+            $customerAddress = '';
+        }
+        
+        // Format customer type
+        $customerType = $customer->type ?? 'Stammkunde';
+        
+        // Prepare items for view (use payment data directly)
+        $viewItems = [];
+        foreach ($invoiceItems as $item) {
+            $reservation = Reservation::with(['dog', 'plan'])->find($item['reservation_id']);
+            
+            $viewItems[] = [
+                'reservation' => $reservation,
+                'dog_name' => $reservation->dog->name ?? 'Unbekannt',
+                'plan_name' => $reservation->plan->title ?? '-',
+                'days' => $item['days'],
+                'plan_cost' => $item['plan_cost'],
+                'special_cost' => $item['special_cost'],
+                'discount_percentage' => $item['discount_percentage'],
+                'discount_amount' => $item['discount_amount'],
+                'net_amount' => $item['net_amount'],
+                'vat_amount' => $item['vat_amount'],
+                'gross_amount' => $item['gross_amount'],
+            ];
+        }
+        
+        return [
+            'invoice_number' => $invoiceNumberFormatted,
+            'invoice_date' => Carbon::now()->format('d.m.Y H:i:s'),
+            'payment_method' => 'Banküberweisung',
+            'company' => [
+                'picture_base64' => $companyPictureBase64,
+                'name' => $companyName,
+                'address' => $companyAddress,
+                'phone' => $companyPhone,
+                'email' => $companyEmail,
+                'iban' => $companyIban,
+                'bic' => $companyBic,
+            ],
+            'customer' => [
+                'type' => $customerType,
+                'name' => $customerFullName,
+                'address' => $customerAddress,
+                'country' => $customer->land ?? 'AT',
+            ],
+            'items' => $viewItems,
+            'totals' => [
+                'net' => $totals['total_net'],
+                'vat' => $totals['total_vat'],
+                'gross' => $totals['total_gross'],
+            ],
+            'vat_percentage' => $vatPercentage,
+            'reservation_count' => count($invoiceItems),
+        ];
     }
 }

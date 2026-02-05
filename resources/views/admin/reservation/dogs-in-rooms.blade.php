@@ -10,6 +10,25 @@
 @section('body')
 <div class="px-4 flex-grow-1 container-p-y">
     <div class="row gy-4">
+    {{-- Invoice Links Section (shown after bulk checkout with Bank payment) --}}
+    @if(Session::has('bulk_checkout_invoices'))
+        @php $invoices = Session::get('bulk_checkout_invoices'); @endphp
+        @if(count($invoices) > 0)
+            <div class="alert alert-info mb-3">
+                <strong><i class="mdi mdi-file-pdf-box"></i> Rechnungen wurden erstellt:</strong>
+                <div class="mt-2">
+                    @foreach($invoices as $invoice)
+                        @if($invoice['invoice_url'] && $invoice['invoice_id'])
+                            <a href="{{ $invoice['invoice_url'] }}" target="_blank" class="btn btn-sm btn-outline-primary me-2 mb-2">
+                                <i class="mdi mdi-download"></i> {{ $invoice['customer_name'] ?? 'Kunde' }} - Rechnung #{{ $invoice['invoice_id'] }}
+                            </a>
+                        @endif
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    @endif
+    
         <div class="card">
             <form action="{{route('admin.dogs.rooms.checkout-post')}}" method="POST">
                 @csrf
@@ -71,7 +90,7 @@
                             </a>
                         </td>
                         <td>{{$obj->dog->customer->phone}}</td>
-                        <td>@php echo isset($obj->plan->title) ? $obj->plan->title : '' @endphp</td>
+                        <td>{{ $obj->plan->title ?? '' }}</td>
                         <td>{{ date('d.m.Y', strtotime($obj->checkin_date)) }}</td>
                         <td>{{ date('d.m.Y', strtotime($obj->checkout_date)) }}</td>
                       </tr>
@@ -154,5 +173,59 @@
     $(window).on('load',function(){
         document.getElementById('togglerMenuBy').click();
     });
+</script>
+
+<script>
+    // Open bulk checkout invoices in new tabs after page load
+    @if(Session::has('bulk_checkout_invoices'))
+        $(document).ready(function() {
+            var invoices = @json(Session::get('bulk_checkout_invoices'));
+            
+            console.log('Bulk checkout invoices:', invoices);
+            
+            if (invoices && invoices.length > 0) {
+                var openedCount = 0;
+                var failedUrls = [];
+                
+                invoices.forEach(function(invoice, index) {
+                    if (invoice.invoice_url && invoice.invoice_id) {
+                        // Try to open each invoice in a new tab with staggered delays
+                        setTimeout(function() {
+                            var newWindow = window.open(invoice.invoice_url, '_blank');
+                            
+                            if (newWindow) {
+                                openedCount++;
+                                console.log('Opened invoice:', invoice.invoice_id);
+                            } else {
+                                // Popup was blocked
+                                failedUrls.push({
+                                    name: invoice.customer_name,
+                                    id: invoice.invoice_id,
+                                    url: invoice.invoice_url
+                                });
+                                console.log('Popup blocked for invoice:', invoice.invoice_id);
+                            }
+                            
+                            // After last invoice, show message if any failed
+                            if (index === invoices.length - 1 && failedUrls.length > 0) {
+                                setTimeout(function() {
+                                    var linksHtml = '<div class="alert alert-info mt-3"><strong>Rechnungen wurden erstellt:</strong><br>';
+                                    failedUrls.forEach(function(item) {
+                                        linksHtml += '<a href="' + item.url + '" target="_blank" class="d-block mt-1">' + 
+                                                     '<i class="mdi mdi-file-pdf-box"></i> ' + item.name + ' - Rechnung #' + item.id + 
+                                                     '</a>';
+                                    });
+                                    linksHtml += '<small class="text-muted d-block mt-2">Klicken Sie auf die Links, um die PDFs zu öffnen.</small></div>';
+                                    
+                                    // Insert after the success message
+                                    $('.alert-success').first().after(linksHtml);
+                                }, 200);
+                            }
+                        }, index * 300); // 300ms delay between each
+                    }
+                });
+            }
+        });
+    @endif
 </script>
 @endsection

@@ -12,7 +12,7 @@ class NotificationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         $today = Carbon::today();
@@ -32,7 +32,7 @@ class NotificationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         try {
@@ -60,7 +60,7 @@ class NotificationController extends Controller
     {
         // Check authorization
         if (!auth()->check()) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
         Notification::where('type', 'vaccination_alert')

@@ -35,13 +35,13 @@
                                 </option>
                                 @endforeach
                             </select>
-                            <label for="customer_id">Kunde</label>
+                            <label for="customer_id">Kunde <span class="text-danger">*</span></label>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <input type="text" class="form-control" name="name" id="name" value="{{$dog->name}}" placeholder="Name" required />
-                            <label for="name">Name</label>
+                            <label for="name">Name <span class="text-danger">*</span></label>
                         </div>
                         @error('name')
                             <p class="formError">*{{$message}}</p>
@@ -182,7 +182,7 @@
                                 <option value="{{$obj->id}}" {{$dog->reg_plan == $obj->id ? 'selected' : ''}} ><?php echo $obj->title; ?></option>
                                 @endforeach
                             </select>
-                            <label for="price_plan">Pensionstarif</label>
+                            <label for="price_plan">Pensionstarif <span class="text-danger">*</span></label>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -193,7 +193,7 @@
                                 <option value="{{$obj->id}}" {{$dog->day_plan == $obj->id ? 'selected' : ''}} ><?php echo $obj->title; ?></option>
                                 @endforeach
                             </select>
-                            <label for="daily_rate">Tagestarif</label>
+                            <label for="daily_rate">Tagestarif <span class="text-danger">*</span></label>
                         </div>
                     </div>
 
@@ -532,13 +532,13 @@
             <div class="col-md-6">
                 <div class="form-floating form-floating-outline mb-4">
                     <input type="text" class="form-control" id="document_name" name="name" placeholder="Dokumentname" required>
-                    <label for="document_name">Dokumentname</label>
+                    <label for="document_name">Dokumentname <span class="text-danger">*</span></label>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="form-floating form-floating-outline mb-4">
                     <input type="file" class="form-control" id="document_file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
-                    <label for="document_file">Datei (PDF, DOC, DOCX, JPG, PNG - Max. 10MB)</label>
+                    <label for="document_file">Datei (PDF, DOC, DOCX, JPG, PNG - Max. 10MB) <span class="text-danger">*</span></label>
                 </div>
             </div>
             <hr>
@@ -579,13 +579,13 @@
                         <div class="col-md-3">
                             <div class='form-floating form-floating-outline mb-4'>
                                 <input type="text" class="form-control" name="pick_name[]" id="pick_name0" placeholder="Name" required/>
-                                <label for="pick_name0">Name</label>
+                                <label for="pick_name0">Name <span class="text-danger">*</span></label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class='form-floating form-floating-outline mb-4'>
                                 <input type="number" class="form-control" name="pick_phone[]" id="pick_phone0" placeholder="Telefonnummer" required/>
-                                <label for="pick_phone0">Telefonnummer</label>
+                                <label for="pick_phone0">Telefonnummer <span class="text-danger">*</span></label>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -640,13 +640,13 @@
                         <div class="col-md-3">
                             <div class='form-floating form-floating-outline mb-4'>
                                 <input type="text" class="form-control" name="name" id="name" placeholder="Name" required/>
-                                <label for="name">Name</label>
+                                <label for="name">Name <span class="text-danger">*</span></label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class='form-floating form-floating-outline mb-4'>
                                 <input type="number" class="form-control" name="phone" id="phone" placeholder="Telefonnummer" required/>
-                                <label for="phone">Telefonnummer</label>
+                                <label for="phone">Telefonnummer <span class="text-danger">*</span></label>
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -812,19 +812,19 @@
             <div class="col-md-4">
                 <div class="form-floating form-floating-outline mb-4">
                     <input type="text" class="form-control" id="vaccine_name" name="vaccine_name" placeholder="Impfstoff Name" required>
-                    <label for="vaccine_name">Impfstoff Name</label>
+                    <label for="vaccine_name">Impfstoff Name <span class="text-danger">*</span></label>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="form-floating form-floating-outline mb-4">
                     <input type="date" class="form-control" id="vaccination_date" name="vaccination_date" placeholder="Impfdatum" required>
-                    <label for="vaccination_date">Impfdatum</label>
+                    <label for="vaccination_date">Impfdatum <span class="text-danger">*</span></label>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="form-floating form-floating-outline mb-4">
                     <input type="date" class="form-control" id="next_vaccination_date" name="next_vaccination_date" placeholder="Nächste Impfung" required>
-                    <label for="next_vaccination_date">Nächste Impfung</label>
+                    <label for="next_vaccination_date">Nächste Impfung <span class="text-danger">*</span></label>
                 </div>
             </div>
             <hr>
@@ -868,12 +868,12 @@
             html += "<div class='row'>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="text" class="form-control" name="pick_name[]" id="pick_name'+id+'" placeholder="Name" required/><label for="pick_name'+id+'">Name</label>';
+                    html += '<input type="text" class="form-control" name="pick_name[]" id="pick_name'+id+'" placeholder="Name" required/><label for="pick_name'+id+'">Name <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3'>";
                 html += "<div class='form-floating form-floating-outline mb-4'>";
-                    html += '<input type="number" class="form-control" name="pick_phone[]" id="pick_phone'+id+'" placeholder="Telefonnummer" required/><label for="pick_phone'+id+'">Telefonnummer</label>';
+                    html += '<input type="number" class="form-control" name="pick_phone[]" id="pick_phone'+id+'" placeholder="Telefonnummer" required/><label for="pick_phone'+id+'">Telefonnummer <span class="text-danger">*</span></label>';
                 html += "</div>";
             html += "</div>";
             html += "<div class='col-md-3   '>";
