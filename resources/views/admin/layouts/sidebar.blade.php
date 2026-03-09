@@ -74,7 +74,7 @@
       <li class="menu-item {{ request()->routeIs('admin.dashboard') ? 'active open' : '' }}">
         <a href="{{route('admin.dashboard')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-view-dashboard-outline"></i>
-          <div data-i18n="Dashboard">Dashboard</div>
+          <div data-i18n="Dashboard">Armaturenbrett</div>
         </a>
       </li>
       @endif
@@ -87,7 +87,7 @@
       <li class="menu-item">
         <a href="{{route('admin.customers')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-dog"></i>
-          <div>Tiere ({{$total_customers}}/{{$total_dogs}})</div>
+          <div>Kunde ({{$total_customers}}/{{$total_dogs}})</div>
         </a>
       </li>
       @endif
@@ -96,7 +96,7 @@
       <li class="menu-item">
         <a href="{{route('admin.rooms')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-home-outline"></i>
-          <div>Räume</div>
+          <div>Zimmer</div>
         </a>
       </li>
       @endif
@@ -111,7 +111,7 @@
       <li class="menu-item">
         <a href="{{route('admin.reservation', ['sl' => 3])}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-swap-horizontal"></i>
-          <div>Tierübertragungen ({{$total_reservations_count}})</div>
+          <div>Reservierung ({{$total_reservations_count}})</div>
         </a>
       </li>
       @endif
@@ -120,13 +120,13 @@
       <li class="menu-item">
         <a href="{{route('admin.dog.calendar')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-calendar-heart"></i>
-          <div>Hundekalender</div>
+          <div>HundeKalender</div>
         </a>
       </li>
       @endif
 
       @if($permissions['vandv'])
-      <li class="menu-item">
+      <li class="menu-item rainbow">
         <a href="{{route('admin.v_v')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-dog"></i>
           <div>V&amp;V</div>
@@ -142,7 +142,7 @@
       <li class="menu-item">
         <a href="{{route('admin.tasks')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-checkbox-marked-outline"></i>
-          <div>Aufgaben</div>
+          <div>Aufgaben hinzufugen</div>
         </a>
       </li>
       @endif
@@ -151,7 +151,7 @@
       <li class="menu-item">
         <a href="{{route('admin.dog.ranks')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-magnify"></i>
-          <div>Chipsuche</div>
+          <div>Hunderanking</div>
         </a>
       </li>
       @endif
@@ -172,7 +172,7 @@
       <li class="menu-item">
         <a href="{{route('admin.employee.track.monatsplan')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-calendar-month-outline"></i>
-          <div>Mitarbeiter Kalender</div>
+          <div>Monatsplan</div>
         </a>
       </li>
 
@@ -180,7 +180,7 @@
       <li class="menu-item">
         <a href="{{route('admin.calendar')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
-          <div>Erinnerungs Kalender</div>
+          <div>Kalender</div>
         </a>
       </li>
       @endif
@@ -193,7 +193,7 @@
       <li class="menu-item">
         <a href="{{route('admin.invoices')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
-          <div>Rechnung</div>
+          <div>Rechnungen</div>
         </a>
       </li>
       @endif
@@ -202,7 +202,7 @@
       <li class="menu-item">
         <a href="{{route('admin.payment')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-currency-eur"></i>
-          <div>Zahlungen</div>
+          <div>Zahlung</div>
         </a>
       </li>
       @endif
@@ -211,7 +211,7 @@
       <li class="menu-item">
         <a href="{{route('admin.plans')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
-          <div>Pläne</div>
+          <div>Preisplan</div>
         </a>
       </li>
       @endif
@@ -224,7 +224,7 @@
       <li class="menu-item">
         <a href="{{route('admin.employees')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-account-cog-outline"></i>
-          <div>Benutzer Verwaltung</div>
+          <div>Mitarbeiter</div>
         </a>
       </li>
       @endif
