@@ -1586,6 +1586,11 @@
                                             class="form-control text-primary" value="0.00" readonly/>
                                     <label for="plan_cost">Planpreis (&euro;)</label>
                                 </div>
+                                <div class="text-end mb-2">
+                                    <button type="button" id="resetPlanPriceBtn" class="btn btn-sm btn-outline-secondary" style="display:none;">
+                                        Planpreis zurücksetzen
+                                    </button>
+                                </div>
                             </div>
                             <div class="col-md-6 mt-3">
                                 <div class="form-floating form-floating-outline mb-4">
@@ -3011,6 +3016,14 @@
 
         var manualTotalOverride = false;
 
+        function updateManualResetButton() {
+            if (manualTotalOverride) {
+                $("#checkoutModal #resetPlanPriceBtn").show();
+            } else {
+                $("#checkoutModal #resetPlanPriceBtn").hide();
+            }
+        }
+
         function recalcInvoiceTotals(options) {
             options = options || {};
             var planCost = parseFloat($("#checkoutModal #plan_cost").val()) || 0;
@@ -3026,6 +3039,8 @@
 
             if (manualTotalOverride && !options.forceAutoTotal) {
                 var manualGrossTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+                var adjustedPlanCost = Math.max(0, manualGrossTotal - specialCost);
+                $("#checkoutModal #plan_cost").val(adjustedPlanCost.toFixed(2));
                 calculateVATBreakdownFromGross(manualGrossTotal);
             } else {
                 // Automatically calculate VAT and gross total
@@ -3046,6 +3061,7 @@
                 $("#checkoutModal #received_amount").val(displayTotal.toFixed(2));
             }
 
+            updateManualResetButton();
             updateRemaining();
         }
         
@@ -3361,10 +3377,19 @@
  
              $("#checkoutModal #total_amount").on('input change', function () {
                  manualTotalOverride = true;
+                 updateManualResetButton();
                  var currentGrossTotal = parseFloat($(this).val()) || 0;
+                 var currentSpecialCost = parseFloat($("#checkoutModal #special_cost").val()) || 0;
+                 var adjustedPlanCost = Math.max(0, currentGrossTotal - currentSpecialCost);
+                 $("#checkoutModal #plan_cost").val(adjustedPlanCost.toFixed(2));
                  calculateVATBreakdownFromGross(currentGrossTotal);
                  updateRemaining();
              });
+
+            $("#checkoutModal #resetPlanPriceBtn").on('click', function () {
+                manualTotalOverride = false;
+                recalcInvoiceTotals({forceAutoTotal: true});
+            });
 
             $("#checkoutModal #received_amount").on('input change', function () {
                 updateRemaining();

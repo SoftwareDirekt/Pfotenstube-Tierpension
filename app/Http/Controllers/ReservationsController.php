@@ -788,6 +788,9 @@ class ReservationsController extends Controller
         $calculatedGrossTotal = round((float)$grossTotal, 2);
         if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
             // Manual invoice override: derive net/VAT from manually entered gross amount.
+            $planCost = round(max(0, $invoiceTotal - $special_cost), 2);
+            $discountPercentage = 0;
+            $discount_amount = 0.0;
             $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
             $vatAmount = round($invoiceTotal - $netTotal, 2);
         }
@@ -1451,6 +1454,9 @@ class ReservationsController extends Controller
                 $calculatedGrossTotal = round((float)$grossTotal, 2);
                 if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
                     // Manual invoice override: derive net/VAT from manually entered gross amount.
+                    $plan_cost = round(max(0, $invoiceTotal - $special_cost), 2);
+                    $discount_percentage = 0;
+                    $discount_amount = 0.0;
                     $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
                     $vatAmount = round($invoiceTotal - $netTotal, 2);
                 }
