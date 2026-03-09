@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Models\Payment;
 use App\Services\CustomerBalanceService;
 use App\Helpers\General;
+use Illuminate\Support\Facades\DB;
 
 class PaymentsController extends Controller
 {
@@ -145,5 +146,63 @@ class PaymentsController extends Controller
             ],
             'settlement_trail' => $settlementTrail,
         ]);
+    }
+
+    /**
+     * Mark an open payment as settled and correct customer balance.
+     */
+    public function settleOpenPayment(Request $request, $id)
+    {
+        if (!General::permissions('Zahlung')) {
+            return to_route('admin.settings');
+        }
+
+        DB::beginTransaction();
+        try {
+            $payment = Payment::with([
+                'settlementsReceived',
+                'reservation.dog.customer',
+            ])->lockForUpdate()->findOrFail($id);
+
+            $invoiceTotal = (float) ($payment->cost ?? 0);
+            $settledReceived = (float) $payment->settlementsReceived->sum('amount_settled');
+            $effectiveRemaining = $payment->effective_remaining_amount;
+
+            // Already settled (or invoice total is zero): only normalize status.
+            if ($effectiveRemaining < 0.01 || $invoiceTotal < 0.01) {
+                if ((int) $payment->status !== Payment::STATUS_PAID) {
+                    $payment->update(['status' => Payment::STATUS_PAID]);
+                }
+                DB::commit();
+                Session::flash('success', 'Zahlung war bereits beglichen und wurde auf Bezahlt gesetzt.');
+                return back();
+            }
+
+            $newReceivedAmount = round(((float) $payment->received_amount) + $effectiveRemaining, 2);
+            $newRemainingAmount = round(max(0, $settledReceived), 2);
+
+            $payment->update([
+                'received_amount' => $newReceivedAmount,
+                'remaining_amount' => $newRemainingAmount,
+                'status' => Payment::STATUS_PAID,
+            ]);
+
+            $customerId = $payment->reservation?->dog?->customer_id;
+            if ($customerId) {
+                $balanceService = new CustomerBalanceService();
+                // Manual settlement reduces debt -> increase customer balance accordingly.
+                $balanceService->updateBalanceByChange($customerId, $effectiveRemaining);
+                // Final reconciliation keeps legacy/edge cases consistent.
+                $balanceService->reconcileBalance($customerId);
+            }
+
+            DB::commit();
+            Session::flash('success', 'Zahlung wurde erfolgreich beglichen und auf Bezahlt gesetzt.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Session::flash('error', 'Zahlung konnte nicht beglichen werden: ' . $e->getMessage());
+        }
+
+        return back();
     }
 }

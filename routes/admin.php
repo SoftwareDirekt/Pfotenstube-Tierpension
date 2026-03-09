@@ -219,6 +219,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         // Payment Management
         Route::get('/payment', [PaymentsController::class, 'payment'])->name('payment');
         Route::get('/payment/{id}/settlement-details', [PaymentsController::class, 'settlementDetails'])->name('payment.settlement.details');
+        Route::post('/payment/{id}/settle', [PaymentsController::class, 'settleOpenPayment'])->name('payment.settle');
 
         // Invoice Management
         Route::get('/invoices', [InvoicesController::class, 'index'])->name('invoices');

@@ -93,6 +93,7 @@
                     <th>Erh.Betrag €</th>
                     <th>Rest.Betrag €</th>
                     <th>Status</th>
+                    <th>Aktion</th>
                   </tr>
                 </thead>
                 <tbody class="table-border-bottom-0">
@@ -183,6 +184,16 @@
                             <span class="badge bg-success me-1">Bezahlt</span>
                             @elseif($displayStatus == 2)
                             <span class="badge bg-info me-1">Offen</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($displayStatus == 2 && $effectiveRemaining > 0.01)
+                                <form method="POST" action="{{ route('admin.payment.settle', ['id' => $obj->id]) }}" onsubmit="return confirm('Diese offene Zahlung jetzt begleichen und auf Bezahlt setzen?');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-success">Begleichen</button>
+                                </form>
+                            @else
+                                <span class="text-muted">-</span>
                             @endif
                         </td>
                     </tr>
