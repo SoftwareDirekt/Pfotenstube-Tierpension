@@ -37,17 +37,21 @@
 }
 
 .sales-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
+    position: relative;
+    min-height: 120px;
     margin-bottom: 16px;
-    flex-wrap: wrap;
+}
+
+.sales-header .month-navigation {
+    justify-content: center;
+    margin-bottom: 0;
 }
 
 .ytd-box {
-    min-width: 320px;
-    max-width: 420px;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 320px;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     background: #fff;
@@ -74,6 +78,37 @@
     font-size: 14px;
     font-weight: 700;
     color: #198754;
+}
+
+.ytd-toggle {
+    margin-top: 6px;
+    padding: 0;
+    background: transparent;
+    color: #4f46e5;
+    font-size: 12px;
+    border: none;
+    cursor: pointer;
+}
+
+.ytd-details {
+    display: none;
+    margin-top: 4px;
+}
+
+@media (max-width: 992px) {
+    .sales-header {
+        min-height: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .ytd-box {
+        position: static;
+        width: 100%;
+        max-width: 420px;
+        margin-left: auto;
+    }
 }
 
 </style>
@@ -103,15 +138,18 @@
 
         <div class="ytd-box">
             <div class="ytd-title">Umsatz {{ $ytdYear }} (Jahresbeginn bis heute)</div>
-            @foreach($ytdMonthlyTotals as $entry)
-                <div class="ytd-row">
-                    <span>{{ $entry['month'] }}</span>
-                    <span>{{ number_format($entry['total'], 2, ',', '.') }} €</span>
-                </div>
-            @endforeach
             <div class="ytd-row ytd-total">
                 <span>Gesamt</span>
                 <span>{{ number_format($ytdTotal, 2, ',', '.') }} €</span>
+            </div>
+            <button type="button" id="ytdToggleBtn" class="ytd-toggle">Mehr anzeigen</button>
+            <div id="ytdDetails" class="ytd-details">
+                @foreach($ytdMonthlyTotals as $entry)
+                    <div class="ytd-row">
+                        <span>{{ $entry['month'] }}</span>
+                        <span>{{ number_format($entry['total'], 2, ',', '.') }} €</span>
+                    </div>
+                @endforeach
             </div>
         </div>
     </div>
@@ -158,6 +196,19 @@
         </table>
     </div>
       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var toggleBtn = document.getElementById('ytdToggleBtn');
+            var details = document.getElementById('ytdDetails');
+            if (!toggleBtn || !details) return;
+
+            toggleBtn.addEventListener('click', function () {
+                var isOpen = details.style.display === 'block';
+                details.style.display = isOpen ? 'none' : 'block';
+                toggleBtn.textContent = isOpen ? 'Mehr anzeigen' : 'Weniger anzeigen';
+            });
+        });
+      </script>
    </body>
 </html>
 </div>
