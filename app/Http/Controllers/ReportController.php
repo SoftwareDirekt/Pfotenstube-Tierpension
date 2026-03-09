@@ -196,6 +196,47 @@ class ReportController extends Controller
 
         $displayMonth = $currentDate->copy()->locale('de')->translatedFormat('F Y');
 
+        // YTD summary (January 1st until today) for small-business turnover tracking
+        $today = now();
+        $ytdYear = (int) $today->year;
+        $startOfYear = $today->copy()->startOfYear()->startOfDay();
+        $endOfToday = $today->copy()->endOfDay();
+
+        $ytdByMonthRaw = Payment::selectRaw('MONTH(created_at) as month_num, SUM(received_amount) as total_amount')
+            ->whereBetween('created_at', [$startOfYear, $endOfToday])
+            ->where('received_amount', '>', 0)
+            ->where('status', '!=', 0)
+            ->groupBy('month_num')
+            ->orderBy('month_num')
+            ->get()
+            ->pluck('total_amount', 'month_num');
+
+        $monthLabels = [
+            1 => 'Jänner',
+            2 => 'Februar',
+            3 => 'März',
+            4 => 'April',
+            5 => 'Mai',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'August',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Dezember',
+        ];
+
+        $ytdMonthlyTotals = [];
+        $ytdTotal = 0.0;
+        for ($m = 1; $m <= (int) $today->month; $m++) {
+            $monthTotal = (float) ($ytdByMonthRaw[$m] ?? 0);
+            $ytdMonthlyTotals[] = [
+                'month' => $monthLabels[$m],
+                'total' => $monthTotal,
+            ];
+            $ytdTotal += $monthTotal;
+        }
+
         return view('admin.reports.maintwo', [
             'currentYear' => $currentDate->year,
             'currentMonth' => $currentDate->month,
@@ -203,6 +244,9 @@ class ReportController extends Controller
             'weeklyTotals' => $weeklyTotals,
             'monthlyTotal' => $monthlyTotal,
             'deMonth' => $displayMonth,
+            'ytdYear' => $ytdYear,
+            'ytdMonthlyTotals' => $ytdMonthlyTotals,
+            'ytdTotal' => $ytdTotal,
         ]);
     }
 

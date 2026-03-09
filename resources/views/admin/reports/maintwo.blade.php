@@ -36,6 +36,46 @@
     margin: 0 50px;
 }
 
+.sales-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.ytd-box {
+    min-width: 320px;
+    max-width: 420px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    padding: 10px 12px;
+}
+
+.ytd-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.ytd-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 2px 0;
+}
+
+.ytd-total {
+    border-top: 1px solid #e5e7eb;
+    margin-top: 8px;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #198754;
+}
+
 </style>
 
 @endsection
@@ -43,22 +83,37 @@
 
 
 <div class="px-4 flex-grow-1 container-p-y">
-    <div class="month-navigation">
+    <div class="sales-header">
+        <div class="month-navigation">
+            <form action="{{route('admin.sales')}}" method="GET">
+              <input type="hidden" name="year" value="{{ $currentYear }}">
+              <input type="hidden" name="month" value="{{ $currentMonth }}">
+              <input type="hidden" name="direction" value="prev">
 
-        <form action="{{route('admin.sales')}}" method="GET">
-          <input type="hidden" name="year" value="{{ $currentYear }}">
-          <input type="hidden" name="month" value="{{ $currentMonth }}">
-          <input type="hidden" name="direction" value="prev">
+              <button type="submit" class="btn-arrow"><i class="fas fa-arrow-left"></i></button>
+            </form>
+            <span id="monthDisplay "class="month-display text-danger">{{$deMonth}}</span>
+            <form action="{{ route('admin.sales') }}" method="GET">
+              <input type="hidden" name="year" value="{{ $currentYear }}">
+              <input type="hidden" name="month" value="{{ $currentMonth }}">
+              <input type="hidden" name="direction" value="next">
+              <button type="submit" class="btn-arrow"><i class="fas fa-arrow-right"></i></button>
+            </form>
+        </div>
 
-          <button type="submit" class="btn-arrow"><i class="fas fa-arrow-left"></i></button>
-        </form>
-        <span id="monthDisplay "class="month-display text-danger">{{$deMonth}}</span>
-        <form action="{{ route('admin.sales') }}" method="GET">
-          <input type="hidden" name="year" value="{{ $currentYear }}">
-          <input type="hidden" name="month" value="{{ $currentMonth }}">
-          <input type="hidden" name="direction" value="next">
-          <button type="submit" class="btn-arrow"><i class="fas fa-arrow-right"></i></button>
-      </form>
+        <div class="ytd-box">
+            <div class="ytd-title">Umsatz {{ $ytdYear }} (Jahresbeginn bis heute)</div>
+            @foreach($ytdMonthlyTotals as $entry)
+                <div class="ytd-row">
+                    <span>{{ $entry['month'] }}</span>
+                    <span>{{ number_format($entry['total'], 2, ',', '.') }} €</span>
+                </div>
+            @endforeach
+            <div class="ytd-row ytd-total">
+                <span>Gesamt</span>
+                <span>{{ number_format($ytdTotal, 2, ',', '.') }} €</span>
+            </div>
+        </div>
     </div>
 
     <div class="container my-4"><!-- Sales Table -->
