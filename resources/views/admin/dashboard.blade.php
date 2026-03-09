@@ -2704,6 +2704,7 @@
                             selectedPlanId = doc.dog.day_plan_obj.id;
                         }
 
+                        manualTotalOverride = false;
                         if (selectedPlanId) {
                             $('#checkoutModal #price_plan').val(selectedPlanId).trigger('change');
                         }
@@ -2747,7 +2748,7 @@
                             }
                         }
 
-                        recalcInvoiceTotals({updateReceived: true});
+                        recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
                         
                         // After recalculating, update saldo with cumulative balance
                         // This ensures the existing balance is shown even when amounts are reset
@@ -3008,6 +3009,8 @@
             });
         }
 
+        var manualTotalOverride = false;
+
         function recalcInvoiceTotals(options) {
             options = options || {};
             var planCost = parseFloat($("#checkoutModal #plan_cost").val()) || 0;
@@ -3021,10 +3024,15 @@
             }
             netTotal = parseFloat(netTotal.toFixed(2));
 
-            // Always calculate VAT and show gross total
-            calculateVATBreakdown(netTotal);
-            var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
-            $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
+            if (manualTotalOverride && !options.forceAutoTotal) {
+                var manualGrossTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+                calculateVATBreakdownFromGross(manualGrossTotal);
+            } else {
+                // Automatically calculate VAT and gross total
+                calculateVATBreakdown(netTotal);
+                var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
+                $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
+            }
             
             var displayTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
@@ -3068,6 +3076,28 @@
             $('#vat_amount').text(vatAmount.toFixed(2) + '€');
             $('#vat_gross_amount').text(grossAmount.toFixed(2) + '€');
             
+        }
+
+        function calculateVATBreakdownFromGross(grossAmount) {
+            var vatPercentageData = $('#checkoutModal').data('vatPercentage');
+            var vatPercentage = (vatPercentageData !== null && vatPercentageData !== undefined)
+                ? parseFloat(vatPercentageData)
+                : 20;
+            if (isNaN(vatPercentage)) {
+                vatPercentage = 20;
+            }
+
+            var netAmount = grossAmount / (1 + (vatPercentage / 100));
+            var vatAmount = grossAmount - netAmount;
+
+            netAmount = parseFloat(netAmount.toFixed(2));
+            vatAmount = parseFloat(vatAmount.toFixed(2));
+            grossAmount = parseFloat(grossAmount.toFixed(2));
+
+            $('#vat_percentage_display').text(vatPercentage);
+            $('#vat_net_amount').text(netAmount.toFixed(2) + '€');
+            $('#vat_amount').text(vatAmount.toFixed(2) + '€');
+            $('#vat_gross_amount').text(grossAmount.toFixed(2) + '€');
         }
         
         // Handle HelloCash checkbox change
@@ -3316,20 +3346,23 @@
                     $('#discountSection').show();
                 }
                 
-                recalcInvoiceTotals({updateReceived: true});
+                recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
              });
  
              // Discount change on checkout
              $("#checkoutModal input[name='discount']").on('change', function () {
-                 recalcInvoiceTotals({updateReceived: true});
+                 recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
              });
  
              // Special cost change on checkout - recalculate on input and change events
              $("#checkoutModal #special_cost").on('input change', function () {
-                 recalcInvoiceTotals({updateReceived: true});
+                 recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
              });
  
              $("#checkoutModal #total_amount").on('input change', function () {
+                 manualTotalOverride = true;
+                 var currentGrossTotal = parseFloat($(this).val()) || 0;
+                 calculateVATBreakdownFromGross(currentGrossTotal);
                  updateRemaining();
              });
 

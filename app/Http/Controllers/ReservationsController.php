@@ -785,6 +785,12 @@ class ReservationsController extends Controller
 
         // Invoice total from request is gross total (includes VAT)
         $invoiceTotal = (float)$request->total;
+        $calculatedGrossTotal = round((float)$grossTotal, 2);
+        if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
+            // Manual invoice override: derive net/VAT from manually entered gross amount.
+            $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
+            $vatAmount = round($invoiceTotal - $netTotal, 2);
+        }
         $receivedAmount = (float)$request->received_amount;
         $useWallet = $request->has('use_wallet') && $request->use_wallet == '1';
         
@@ -1442,6 +1448,12 @@ class ReservationsController extends Controller
 
                 // Invoice total from request is gross total (includes VAT)
                 $invoiceTotal = floatval($request->invoice_amount[$key]);
+                $calculatedGrossTotal = round((float)$grossTotal, 2);
+                if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
+                    // Manual invoice override: derive net/VAT from manually entered gross amount.
+                    $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
+                    $vatAmount = round($invoiceTotal - $netTotal, 2);
+                }
                 $receivedAmount = floatval($request->received_amount[$key]);
                 
                 // Validate invoice total is not negative

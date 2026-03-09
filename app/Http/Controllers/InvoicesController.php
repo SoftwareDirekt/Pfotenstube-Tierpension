@@ -6,17 +6,23 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use App\Models\HelloCashInvoice;
+use App\Models\Payment;
+use App\Models\Reservation;
 use App\Services\HelloCashService;
+use App\Services\BankInvoiceService;
 use App\Helpers\General;
 
 class InvoicesController extends Controller
 {
     protected HelloCashService $hellocashService;
+    protected BankInvoiceService $bankInvoiceService;
 
-    public function __construct(HelloCashService $hellocashService)
+    public function __construct(HelloCashService $hellocashService, BankInvoiceService $bankInvoiceService)
     {
         $this->hellocashService = $hellocashService;
+        $this->bankInvoiceService = $bankInvoiceService;
     }
 
     /**
@@ -28,14 +34,22 @@ class InvoicesController extends Controller
             return redirect()->route('admin.settings');
         }
 
+        $supportsGroupedInvoices = Schema::hasColumn('hellocash_invoices', 'is_grouped')
+            && Schema::hasColumn('hellocash_invoices', 'reservation_ids')
+            && Schema::hasColumn('hellocash_invoices', 'customer_id')
+            && Schema::hasColumn('payments', 'invoice_id');
+
         $query = HelloCashInvoice::with([
-            // For single invoices
             'reservation.dog.customer',
             'payment',
-            // For grouped invoices  
-            'customer',
-            'payments.reservation.dog',
         ]);
+
+        if ($supportsGroupedInvoices) {
+            $query->with([
+                'customer',
+                'payments.reservation.dog',
+            ]);
+        }
 
         if ($request->filled('year') && $request->year !== 'all') {
             $query->whereYear('created_at', $request->year);
@@ -45,7 +59,11 @@ class InvoicesController extends Controller
             $query->whereMonth('created_at', $request->month);
         }
 
-        if ($request->filled('invoice_type') && $request->invoice_type !== 'all') {
+        if (
+            Schema::hasColumn('hellocash_invoices', 'invoice_type')
+            && $request->filled('invoice_type')
+            && $request->invoice_type !== 'all'
+        ) {
             $query->where('invoice_type', $request->invoice_type);
         }
 
@@ -58,7 +76,80 @@ class InvoicesController extends Controller
             ->orderByDesc('year')
             ->pluck('year');
 
-        return view('admin.invoices.index', compact('invoices', 'years'));
+        return view('admin.invoices.index', compact('invoices', 'years', 'supportsGroupedInvoices'));
+    }
+
+    /**
+     * Show the regenerate form for a local invoice.
+     */
+    public function regenerateForm($id)
+    {
+        if (!General::permissions('Rechnungen')) {
+            return redirect()->route('admin.settings');
+        }
+
+        $invoice = HelloCashInvoice::with(['reservation.dog.customer', 'payment'])->findOrFail($id);
+
+        if (($invoice->invoice_type ?? null) !== 'local') {
+            return redirect()->route('admin.invoices')->with('error', 'Nur lokale Rechnungen können neu generiert werden.');
+        }
+
+        if (($invoice->is_grouped ?? false) === true) {
+            return redirect()->route('admin.invoices')->with('error', 'Gruppierte Rechnungen können derzeit nicht manuell neu generiert werden.');
+        }
+
+        if (!$invoice->payment || !$invoice->reservation) {
+            return redirect()->route('admin.invoices')->with('error', 'Die Rechnung hat keine vollständige Zahlungs-/Reservierungsdatenbasis.');
+        }
+
+        return view('admin.invoices.regenerate', compact('invoice'));
+    }
+
+    /**
+     * Regenerate an existing local invoice with manual days/amount.
+     */
+    public function regenerate(Request $request, $id)
+    {
+        if (!General::permissions('Rechnungen')) {
+            return redirect()->route('admin.settings');
+        }
+
+        $request->validate([
+            'days' => 'required|integer|min:1',
+            'invoice_amount' => 'required|numeric|min:0',
+        ]);
+
+        $invoice = HelloCashInvoice::with(['reservation.dog.customer', 'payment'])->findOrFail($id);
+        $payment = $invoice->payment;
+        $reservation = $invoice->reservation;
+
+        if (($invoice->invoice_type ?? null) !== 'local') {
+            return back()->with('error', 'Nur lokale Rechnungen können neu generiert werden.');
+        }
+
+        if (($invoice->is_grouped ?? false) === true) {
+            return back()->with('error', 'Gruppierte Rechnungen können derzeit nicht manuell neu generiert werden.');
+        }
+
+        if (!$payment instanceof Payment || !$reservation instanceof Reservation) {
+            return back()->with('error', 'Die Rechnung hat keine vollständige Zahlungs-/Reservierungsdatenbasis.');
+        }
+
+        $result = $this->bankInvoiceService->regenerateLocalInvoice(
+            $invoice,
+            $reservation,
+            $payment,
+            [
+                'days' => (int) $request->days,
+                'invoice_amount' => round((float) $request->invoice_amount, 2),
+            ]
+        );
+
+        if (!($result['success'] ?? false)) {
+            return back()->withInput()->with('error', $result['error'] ?? 'Rechnung konnte nicht neu generiert werden.');
+        }
+
+        return redirect()->route('admin.invoices')->with('success', 'Rechnung wurde erfolgreich neu generiert.');
     }
 
     /**

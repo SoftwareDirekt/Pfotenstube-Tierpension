@@ -328,7 +328,7 @@
                                                 </td>
                                                 <td>
                                                     <div style="margin-bottom: 4px;">
-                                                        <input required type="number" step="0.10" class="form-control" id="invoice_amount{{$rowIndex}}" name="invoice_amount[]" value="{{ number_format($initial_gross, 2, '.', '')}}" readonly>
+                                                        <input required type="number" step="0.10" class="form-control" id="invoice_amount{{$rowIndex}}" name="invoice_amount[]" value="{{ number_format($initial_gross, 2, '.', '')}}">
                                                     </div>
                                                     <small id="vat_info{{$rowIndex}}" style="font-size: 0.75rem; color:#155724; display: block; margin-top: 4px;">Netto: {{ number_format($initial_net, 2, ',', '.') }}€ + MwSt: {{ number_format($initial_vat, 2, ',', '.') }}€</small>
                                                 </td>
@@ -423,8 +423,9 @@
         @endforeach
     @endif
     
-    // Track which received amounts have been manually edited
+    // Track which amounts have been manually edited
     var manuallyEditedReceived = {};
+    var manuallyEditedInvoice = {};
     
     function getNetFromGross(grossAmount) {
         var net = grossAmount / (1 + (vatPercentage / 100));
@@ -494,10 +495,18 @@
         var vatAmount = calculateVATFromNet(netTotal);
         var grossTotal = netTotal + vatAmount;
         grossTotal = parseFloat(grossTotal.toFixed(2));
+
+        if (manuallyEditedInvoice[index]) {
+            grossTotal = parseFloat($("#invoice_amount"+index).val()) || 0;
+            netTotal = getNetFromGross(grossTotal);
+            vatAmount = parseFloat((grossTotal - netTotal).toFixed(2));
+        }
         
         $("#net_amount"+index).val(netTotal.toFixed(2));
         $("#vat_amount_row"+index).val(vatAmount.toFixed(2));
-        $("#invoice_amount"+index).val(grossTotal.toFixed(2));
+        if (!manuallyEditedInvoice[index]) {
+            $("#invoice_amount"+index).val(grossTotal.toFixed(2));
+        }
         $("#vat_info"+index).html("Netto: " + netTotal.toFixed(2) + "€ + MwSt: " + vatAmount.toFixed(2) + "€").css("color", "#155724");
         
         // Update received amount based on wallet usage
@@ -788,6 +797,28 @@
             manuallyEditedReceived[index] = true;
             
             changeTotal();
+        });
+
+        // Allow manual invoice amount override per row.
+        $("input[name='invoice_amount[]']").on('input', function() {
+            var id = $(this).attr('id');
+            var index = id.replace('invoice_amount', '');
+            manuallyEditedInvoice[index] = true;
+
+            var customerId = $("tr:has(#invoice_amount"+index+")").data('customer-id');
+            var gross = parseFloat($(this).val()) || 0;
+            var net = getNetFromGross(gross);
+            var vat = parseFloat((gross - net).toFixed(2));
+
+            $("#net_amount"+index).val(net.toFixed(2));
+            $("#vat_amount_row"+index).val(vat.toFixed(2));
+            $("#vat_info"+index).html("Netto: " + net.toFixed(2) + "€ + MwSt: " + vat.toFixed(2) + "€").css("color", "#155724");
+
+            updateVATTotals();
+            changeTotal();
+            if (customerId) {
+                updateCustomerTotals(customerId);
+            }
         });
 
         // Prevent double submission (only on the checkout form)

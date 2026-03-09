@@ -70,43 +70,130 @@
     <div class="menu-inner-shadow"></div>
 
     <ul class="menu-inner py-1">
-      <!-- Dashboard -->
       @if($permissions['dashboard'])
-      <li class="menu-item active open">
+      <li class="menu-item {{ request()->routeIs('admin.dashboard') ? 'active open' : '' }}">
         <a href="{{route('admin.dashboard')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-view-dashboard-outline"></i>
-          <div data-i18n="Dashboard">Armaturenbrett</div>
+          <div data-i18n="Dashboard">Dashboard</div>
         </a>
       </li>
       @endif
 
-      <li class="menu-header fw-light mt-4">
-        <span class="menu-header-text">App-Seiten</span>
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Tierverwaltung</span>
       </li>
+
+      @if($permissions['customers'])
+      <li class="menu-item">
+        <a href="{{route('admin.customers')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-dog"></i>
+          <div>Tiere ({{$total_customers}}/{{$total_dogs}})</div>
+        </a>
+      </li>
+      @endif
 
       @if($permissions['rooms'])
       <li class="menu-item">
         <a href="{{route('admin.rooms')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-home-outline"></i>
-          <div data-i18n="Zimmer">Zimmer</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['customers'] )
-      <li class="menu-item">
-        <a href="{{route('admin.customers')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-account-multiple-outline"></i>
-          <div data-i18n="Kunde">Kunde ({{$total_customers}}/{{$total_dogs}})</div>
+          <div>Räume</div>
         </a>
       </li>
       @endif
 
       @if($permissions['reservations'])
       <li class="menu-item">
+        <a href="{{route('admin.dogs.in.rooms')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-paw"></i>
+          <div>Übersicht Tiere</div>
+        </a>
+      </li>
+      <li class="menu-item">
         <a href="{{route('admin.reservation', ['sl' => 3])}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-clipboard-check-outline"></i>
-          <div data-i18n="Reservierung">Reservierung ({{$total_reservations_count}})</div>
+          <i class="menu-icon tf-icons mdi mdi-swap-horizontal"></i>
+          <div>Tierübertragungen ({{$total_reservations_count}})</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['dog_calendar'])
+      <li class="menu-item">
+        <a href="{{route('admin.dog.calendar')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-calendar-heart"></i>
+          <div>Hundekalender</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['vandv'])
+      <li class="menu-item">
+        <a href="{{route('admin.v_v')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-dog"></i>
+          <div>V&amp;V</div>
+        </a>
+      </li>
+      @endif
+
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Tägliche Aufgaben</span>
+      </li>
+
+      @if($permissions['tasks'])
+      <li class="menu-item">
+        <a href="{{route('admin.tasks')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-checkbox-marked-outline"></i>
+          <div>Aufgaben</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['rankings'] && Session::has('lock'))
+      <li class="menu-item">
+        <a href="{{route('admin.dog.ranks')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-magnify"></i>
+          <div>Chipsuche</div>
+        </a>
+      </li>
+      @endif
+
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Personal</span>
+      </li>
+
+      @if(Auth::user()->permissions == null)
+      <li class="menu-item">
+        <a href="{{route('admin.employee.track')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-clock-outline"></i>
+          <div>Arbeitszeiterfassung</div>
+        </a>
+      </li>
+      @endif
+
+      <li class="menu-item">
+        <a href="{{route('admin.employee.track.monatsplan')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-calendar-month-outline"></i>
+          <div>Mitarbeiter Kalender</div>
+        </a>
+      </li>
+
+      @if($permissions['calendar'])
+      <li class="menu-item">
+        <a href="{{route('admin.calendar')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
+          <div>Erinnerungs Kalender</div>
+        </a>
+      </li>
+      @endif
+
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Finanzen</span>
+      </li>
+
+      @if($permissions['invoices'] && Session::has('lock'))
+      <li class="menu-item">
+        <a href="{{route('admin.invoices')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
+          <div>Rechnung</div>
         </a>
       </li>
       @endif
@@ -114,44 +201,8 @@
       @if($permissions['payments'])
       <li class="menu-item">
         <a href="{{route('admin.payment')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-currency-gbp"></i>
-          <div data-i18n="Zahlung">Zahlung</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['invoices'] && Session::has('lock'))
-      <li class="menu-item">
-        <a href="{{route('admin.invoices')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
-          <div data-i18n="Rechnungen">Rechnungen</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['report'] && Session::has('lock'))
-      <li class="menu-item">
-        <a href="{{route('admin.sales', ['year' => now()->year, 'month' => now()->month])}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-chart-bar"></i>
-          <div data-i18n="Verkaufsbericht">Verkaufsbericht</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['employees'] && Session::has('lock'))
-      <li class="menu-item">
-        <a href="{{route('admin.employees')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-clipboard-account-outline"></i>
-          <div data-i18n="Mitarbeiter">Mitarbeiter</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['tasks'])
-      <li class="menu-item">
-        <a href="{{route('admin.tasks')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-checkbox-marked-outline"></i>
-          <div data-i18n="Aufgaben hinzufugen">Aufgaben hinzufugen</div>
+          <i class="menu-icon tf-icons mdi mdi-currency-eur"></i>
+          <div>Zahlungen</div>
         </a>
       </li>
       @endif
@@ -160,92 +211,49 @@
       <li class="menu-item">
         <a href="{{route('admin.plans')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
-          <div data-i18n="Preisplan">Preisplan</div>
+          <div>Pläne</div>
         </a>
       </li>
       @endif
 
-      @if($permissions['rankings'] && Session::has('lock'))
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Verwaltung</span>
+      </li>
+
+      @if($permissions['employees'] && Session::has('lock'))
       <li class="menu-item">
-        <a href="{{route('admin.dog.ranks')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-star-outline"></i>
-          <div data-i18n="Hunderanking">Hunderanking</div>
+        <a href="{{route('admin.employees')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-account-cog-outline"></i>
+          <div>Benutzer Verwaltung</div>
         </a>
       </li>
       @endif
 
-      @if(Auth::user()->permissions == null)
+      @if($permissions['report'] && Session::has('lock'))
       <li class="menu-item">
-        <a href="{{route('admin.employee.track')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-timetable"></i>
-          <div data-i18n="Arbeitszeiterfassung">Arbeitszeiterfassung</div>
+        <a href="{{route('admin.sales', ['year' => now()->year, 'month' => now()->month])}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-chart-bar"></i>
+          <div>Verkaufsbericht</div>
         </a>
       </li>
       @endif
 
-      @if($permissions['calendar'])
-      <li class="menu-item">
-        <a href="{{route('admin.calendar')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
-          <div data-i18n="Kalender">Kalender</div>
-        </a>
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Einstellungen</span>
       </li>
-      @endif
-        {{------monatsplan------}}
-      {{-- @if($permissions['calendar']) --}}
 
-      {{-- <li class="menu-item">
-        <form action="{{ route('admin.employee.track.monatsplan') }}" method="POST" style="margin: 0;">
-            @csrf
-            <input type="hidden" name="current_month" value="{{ $currentMonth }}">
-            <button type="submit" class="menu-link" style="background: none; border: none; padding: 0; text-align: left;">
-                <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
-                <div>Monatsplan</div>
-            </button>
-        </form>
-    </li> --}}
-
-
-
-      <li class="menu-item">
-        <a href="{{route('admin.employee.track.monatsplan')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
-          <div >Monatsplan</div>
-        </a>
-      </li>
-      {{-- @endif --}}
-
-      @if($permissions['dog_calendar'])
-      <li class="menu-item">
-        <a href="{{route('admin.dog.calendar')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-calendar-plus-outline"></i>
-          <div data-i18n="HundeKalender">HundeKalender</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['vandv'])
-      <li class="menu-item rainbow">
-        <a href="{{route('admin.v_v')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-dog"></i>
-          <div data-i18n="HundeKalender">V&V</div>
-        </a>
-      </li>
-      @endif
-
-      {{-- @if($permissions['vandv']) --}}
       <li class="menu-item">
         <a href="{{route('admin.settings')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-cog"></i>
-          <div data-i18n="HundeKalender">Profil</div>
+          <div>Profil</div>
         </a>
       </li>
-      {{-- @endif --}}
+
       @if(Session::has('lock'))
       <li class="menu-item">
         <a href="{{route('admin.logout')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-logout"></i>
-          <div data-i18n="Ausloggen">Ausloggen</div>
+          <div>Ausloggen</div>
         </a>
       </li>
       @endif

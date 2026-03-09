@@ -85,7 +85,7 @@
                                         </a>
                                     </td>
                                     <td>
-                                        @if($invoice->is_grouped)
+                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
                                             {{-- Grouped invoice: show all reservation IDs as comma-separated links --}}
                                             @php
                                                 $resIds = $invoice->reservation_ids ?? [];
@@ -108,7 +108,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->is_grouped)
+                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
                                             {{-- Grouped invoice: show all payment IDs as comma-separated links --}}
                                             @if($invoice->payments->count() > 0)
                                                 @foreach($invoice->payments as $index => $pmt)
@@ -128,7 +128,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->is_grouped)
+                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
                                             {{-- Grouped invoice: show all dog IDs as comma-separated --}}
                                             @if($invoice->payments->count() > 0)
                                                 @php
@@ -155,7 +155,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($invoice->is_grouped && $invoice->customer)
+                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped && $invoice->customer)
                                             {{-- Grouped invoice: show customer directly --}}
                                             {{ $invoice->customer->name ?? 'N/A' }} ({{ $invoice->customer->id }})
                                         @elseif($invoice->reservation && $invoice->reservation->dog && $invoice->reservation->dog->customer)
@@ -175,6 +175,12 @@
                                            class="btn btn-sm btn-outline-primary">
                                             <i class="mdi mdi-download"></i> PDF
                                         </a>
+                                        @if(($invoice->invoice_type ?? null) === 'local' && !($invoice->is_grouped ?? false) && $invoice->payment && $invoice->reservation)
+                                            <a href="{{ route('admin.invoices.regenerate.form', $invoice->id) }}"
+                                               class="btn btn-sm btn-outline-warning ms-1">
+                                                <i class="mdi mdi-refresh"></i> Neu generieren
+                                            </a>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach

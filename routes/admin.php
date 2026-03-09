@@ -222,6 +222,8 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
 
         // Invoice Management
         Route::get('/invoices', [InvoicesController::class, 'index'])->name('invoices');
+        Route::get('/invoices/{id}/regenerate', [InvoicesController::class, 'regenerateForm'])->name('invoices.regenerate.form');
+        Route::post('/invoices/{id}/regenerate', [InvoicesController::class, 'regenerate'])->name('invoices.regenerate');
         Route::get('/invoices/{id}/view', [InvoicesController::class, 'view'])->name('invoices.view');
         Route::get('/invoices/{id}/download', [InvoicesController::class, 'download'])->name('invoices.download');
 
