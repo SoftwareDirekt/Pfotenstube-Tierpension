@@ -1586,9 +1586,9 @@
                                             class="form-control text-primary" value="0.00" readonly/>
                                     <label for="plan_cost">Planpreis (&euro;)</label>
                                 </div>
-                                <div class="text-end mb-2">
-                                    <button type="button" id="resetPlanPriceBtn" class="btn btn-sm btn-outline-secondary" style="display:none;">
-                                        Planpreis zurücksetzen
+                                <div class="text-end mt-n3 mb-2">
+                                    <button type="button" id="resetPlanPriceBtn" class="btn btn-link btn-sm p-0" style="display:none; text-decoration:none;">
+                                        Zurücksetzen
                                     </button>
                                 </div>
                             </div>
@@ -3388,7 +3388,9 @@
 
             $("#checkoutModal #resetPlanPriceBtn").on('click', function () {
                 manualTotalOverride = false;
-                recalcInvoiceTotals({forceAutoTotal: true});
+                updateManualResetButton();
+                // Trigger the standard plan recalculation path to restore original values.
+                $("#checkoutModal #price_plan").trigger('change');
             });
 
             $("#checkoutModal #received_amount").on('input change', function () {
