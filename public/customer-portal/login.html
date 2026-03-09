@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kundenportal Login</title>
+</head>
+<body>
+  <h1>Login</h1>
+  <p><a href="./registrieren.html">Zur Registrierung</a></p>
+  <p><a href="./konto.html">Zum Konto</a></p>
+
+  <form id="loginForm">
+    <div><input name="email" type="email" placeholder="E-Mail" required></div>
+    <div><input name="password" type="password" placeholder="Passwort" required></div>
+    <button type="submit">Einloggen</button>
+  </form>
+
+  <button id="logoutBtn">Token loeschen / Logout</button>
+  <pre id="status"></pre>
+
+  <script src="./assets/api-client.js"></script>
+  <script>
+    const statusEl = document.getElementById("status");
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(e.target).entries());
+      try {
+        const res = await CustomerPortalApi.request("/customer/auth/login", { method: "POST", body: payload });
+        CustomerPortalApi.setToken(res.token);
+        statusEl.textContent = "Login erfolgreich. Token gespeichert.";
+      } catch (err) {
+        statusEl.textContent = err.message;
+      }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      try {
+        if (CustomerPortalApi.getToken()) {
+          await CustomerPortalApi.request("/customer/auth/logout", { method: "POST", auth: true });
+        }
+      } catch (_) {
+      } finally {
+        CustomerPortalApi.clearToken();
+        statusEl.textContent = "Token entfernt.";
+      }
+    });
+  </script>
+</body>
+</html>

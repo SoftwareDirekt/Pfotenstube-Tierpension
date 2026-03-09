@@ -22,5 +22,10 @@ class Customer extends Model
     {
         return $this->hasMany(Dog::class);
     }
+
+    public function account()
+    {
+        return $this->hasOne(CustomerAccount::class);
+    }
 }
 

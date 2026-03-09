@@ -1,5 +1,12 @@
 <?php
 
+$frontendOrigins = env('FRONTEND_ORIGINS', '');
+$allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $frontendOrigins))));
+
+if (empty($allowedOrigins)) {
+    $allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+}
+
 return [
 
     /*
@@ -19,7 +26,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => $allowedOrigins,
 
     'allowed_origins_patterns' => [],
 
@@ -29,6 +36,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];

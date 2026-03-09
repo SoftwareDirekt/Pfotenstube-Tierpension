@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kundenportal Konto</title>
+</head>
+<body>
+  <h1>Mein Konto</h1>
+  <p><a href="./login.html">Login</a> | <a href="./reservieren.html">Reservierungen</a></p>
+  <button id="loadBtn">Konto laden</button>
+  <pre id="output"></pre>
+
+  <script src="./assets/api-client.js"></script>
+  <script>
+    const output = document.getElementById("output");
+    document.getElementById("loadBtn").addEventListener("click", async () => {
+      try {
+        const res = await CustomerPortalApi.request("/customer/me", { auth: true });
+        output.textContent = JSON.stringify(res, null, 2);
+      } catch (err) {
+        output.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>
