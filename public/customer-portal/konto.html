@@ -9,17 +9,53 @@
   <h1>Mein Konto</h1>
   <p><a href="./login.html">Login</a> | <a href="./reservieren.html">Reservierungen</a></p>
   <button id="loadBtn">Konto laden</button>
+  <button id="loadDogsBtn">Meine Hunde laden</button>
   <pre id="output"></pre>
+  <pre id="dogsOutput"></pre>
+
+  <h2>Hunde anlegen (mehrere möglich)</h2>
+  <form id="dogsForm">
+    <p>Pro Zeile ein Hund (Name Pflicht):</p>
+    <textarea id="dogsJson" rows="10" style="width:100%;">[
+  { "name": "Bello", "gender": "Rüde", "weight": "12kg" },
+  { "name": "Luna", "race": "Mischling" }
+]</textarea>
+    <div><button type="submit">Hunde speichern</button></div>
+  </form>
+  <pre id="dogsCreateOutput"></pre>
 
   <script src="./assets/api-client.js"></script>
   <script>
     const output = document.getElementById("output");
+    const dogsOutput = document.getElementById("dogsOutput");
+    const dogsCreateOutput = document.getElementById("dogsCreateOutput");
     document.getElementById("loadBtn").addEventListener("click", async () => {
       try {
         const res = await CustomerPortalApi.request("/customer/me", { auth: true });
         output.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
         output.textContent = err.message;
+      }
+    });
+
+    document.getElementById("loadDogsBtn").addEventListener("click", async () => {
+      try {
+        const res = await CustomerPortalApi.request("/customer/dogs", { auth: true });
+        dogsOutput.textContent = JSON.stringify(res, null, 2);
+      } catch (err) {
+        dogsOutput.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
+      }
+    });
+
+    document.getElementById("dogsForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const parsed = JSON.parse(document.getElementById("dogsJson").value);
+        const payload = Array.isArray(parsed) ? { dogs: parsed } : parsed;
+        const res = await CustomerPortalApi.request("/customer/dogs", { method: "POST", body: payload, auth: true });
+        dogsCreateOutput.textContent = JSON.stringify(res, null, 2);
+      } catch (err) {
+        dogsCreateOutput.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
   </script>

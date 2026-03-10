@@ -222,24 +222,26 @@ class CustomersController extends Controller
                 'picture' => $photo,
             ]);
 
-            // Sync customer to HelloCash
-            $result = $this->hellocashService->createUser($customer);
-            
-            if (!$result['success'] || empty($result['user_id'])) {
-                // HelloCash sync failed - rollback transaction
-                DB::rollBack();
-                $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
-                Log::error('HelloCash sync failed during customer creation', [
-                    'customer_name' => $request->name ?? 'Unknown',
-                    'error' => $errorMessage,
-                ]);
-                Session::flash('error', 'Der Kunde konnte nicht erstellt werden: ' . $errorMessage);
-                return redirect()->back()->withInput($request->except('picture', 'dogs'));
-            }
+            if ($this->isHelloCashSyncEnabled()) {
+                // Sync customer to HelloCash
+                $result = $this->hellocashService->createUser($customer);
+                
+                if (!$result['success'] || empty($result['user_id'])) {
+                    // HelloCash sync failed - rollback transaction
+                    DB::rollBack();
+                    $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
+                    Log::error('HelloCash sync failed during customer creation', [
+                        'customer_name' => $request->name ?? 'Unknown',
+                        'error' => $errorMessage,
+                    ]);
+                    Session::flash('error', 'Der Kunde konnte nicht erstellt werden: ' . $errorMessage);
+                    return redirect()->back()->withInput($request->except('picture', 'dogs'));
+                }
 
-            // Set HelloCash ID
-            $customer->hellocash_customer_id = (int)$result['user_id'];
-            $customer->save();
+                // Set HelloCash ID
+                $customer->hellocash_customer_id = (int)$result['user_id'];
+                $customer->save();
+            }
 
             if ($request->boolean('generate_access')) {
                 if (empty($customer->email)) {
@@ -613,44 +615,46 @@ class CustomersController extends Controller
             // Save customer updates
             $customer->save();
 
-            // Sync customer update to HelloCash
-            if (!empty($customer->hellocash_customer_id)) {
-                // Update existing customer in HelloCash
-                $result = $this->hellocashService->updateUser($customer->hellocash_customer_id, $customer);
-                
-                if (!$result['success']) {
-                    // HelloCash Update Failed - Rollback Transaction
-                    DB::rollBack();
-                    $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Aktualisierung';
-                    Log::error('HelloCash update failed during customer update', [
-                        'customer_id' => $customer->id,
-                        'customer_name' => $customer->name,
-                        'hellocash_customer_id' => $customer->hellocash_customer_id,
-                        'error' => $errorMessage,
-                    ]);
-                    Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
-                    return redirect()->back()->withInput($request->except('picture'));
+            if ($this->isHelloCashSyncEnabled()) {
+                // Sync customer update to HelloCash
+                if (!empty($customer->hellocash_customer_id)) {
+                    // Update existing customer in HelloCash
+                    $result = $this->hellocashService->updateUser($customer->hellocash_customer_id, $customer);
+                    
+                    if (!$result['success']) {
+                        // HelloCash Update Failed - Rollback Transaction
+                        DB::rollBack();
+                        $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Aktualisierung';
+                        Log::error('HelloCash update failed during customer update', [
+                            'customer_id' => $customer->id,
+                            'customer_name' => $customer->name,
+                            'hellocash_customer_id' => $customer->hellocash_customer_id,
+                            'error' => $errorMessage,
+                        ]);
+                        Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
+                        return redirect()->back()->withInput($request->except('picture'));
+                    }
+                } else {
+                    // Create new customer in HelloCash if they don't have an ID yet
+                    $result = $this->hellocashService->createUser($customer);
+                    
+                    if (!$result['success'] || empty($result['user_id'])) {
+                        // HelloCash Sync Failed - Rollback Transaction
+                        DB::rollBack();
+                        $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
+                        Log::error('HelloCash sync failed during customer update', [
+                            'customer_id' => $customer->id,
+                            'customer_name' => $customer->name,
+                            'error' => $errorMessage,
+                        ]);
+                        Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
+                        return redirect()->back()->withInput($request->except('picture'));
+                    }
+                    
+                    // Set HelloCash ID and save
+                    $customer->hellocash_customer_id = (int)$result['user_id'];
+                    $customer->save();
                 }
-            } else {
-                // Create new customer in HelloCash if they don't have an ID yet
-                $result = $this->hellocashService->createUser($customer);
-                
-                if (!$result['success'] || empty($result['user_id'])) {
-                    // HelloCash Sync Failed - Rollback Transaction
-                    DB::rollBack();
-                    $errorMessage = $result['error'] ?? 'Unbekannter Fehler bei der Registrierkasse-Synchronisation';
-                    Log::error('HelloCash sync failed during customer update', [
-                        'customer_id' => $customer->id,
-                        'customer_name' => $customer->name,
-                        'error' => $errorMessage,
-                    ]);
-                    Session::flash('error', 'Der Kunde konnte nicht aktualisiert werden: ' . $errorMessage);
-                    return redirect()->back()->withInput($request->except('picture'));
-                }
-                
-                // Set HelloCash ID and save
-                $customer->hellocash_customer_id = (int)$result['user_id'];
-                $customer->save();
             }
 
             // All Operations Successful - Commit Transaction
@@ -1725,5 +1729,10 @@ class CustomersController extends Controller
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    private function isHelloCashSyncEnabled(): bool
+    {
+        return filter_var(config('services.hellocash.sync_enabled', true), FILTER_VALIDATE_BOOLEAN);
     }
 }

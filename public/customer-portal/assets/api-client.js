@@ -24,7 +24,7 @@ const CustomerPortalApi = (() => {
   }
 
   async function request(path, { method = "GET", body, auth = false } = {}) {
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
     if (auth && getToken()) headers.Authorization = `Bearer ${getToken()}`;
 
     const response = await fetch(`${getApiBase()}${path}`, {
@@ -35,7 +35,10 @@ const CustomerPortalApi = (() => {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.message || "Anfrage fehlgeschlagen.");
+      const error = new Error(data.message || "Anfrage fehlgeschlagen.");
+      error.status = response.status;
+      error.errors = data.errors || null;
+      throw error;
     }
     return data;
   }

@@ -28,10 +28,10 @@
       const payload = Object.fromEntries(new FormData(e.target).entries());
       try {
         const res = await CustomerPortalApi.request("/customer/auth/login", { method: "POST", body: payload });
-        CustomerPortalApi.setToken(res.token);
+        CustomerPortalApi.setToken(res.data?.token);
         statusEl.textContent = "Login erfolgreich. Token gespeichert.";
       } catch (err) {
-        statusEl.textContent = err.message;
+        statusEl.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
 

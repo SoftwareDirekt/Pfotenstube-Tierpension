@@ -3,14 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Concerns\ApiJsonResponses;
 use App\Models\Dog;
+use App\Models\Plan;
 use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class CustomerReservationController extends Controller
 {
+    use ApiJsonResponses;
+
     public function index(Request $request): JsonResponse
     {
         $account = $request->user();
@@ -23,21 +28,25 @@ class CustomerReservationController extends Controller
             ->orderByDesc('checkin_date')
             ->paginate(20);
 
-        return response()->json([
-            'success' => true,
-            'data' => $reservations,
+        return $this->successResponse('Reservierungen erfolgreich geladen.', [
+            'reservations' => $reservations,
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'dog_id' => 'required|integer|exists:dogs,id',
             'checkin_date' => 'required|date',
             'checkout_date' => 'required|date|after_or_equal:checkin_date',
             'plan_id' => 'nullable|integer|exists:plans,id',
         ]);
 
+        if ($validator->fails()) {
+            return $this->errorResponse('Validierungsfehler bei der Reservierung.', $validator->errors(), 422);
+        }
+
+        $data = $validator->validated();
         $account = $request->user();
 
         $dog = Dog::where('id', $data['dog_id'])
@@ -45,10 +54,11 @@ class CustomerReservationController extends Controller
             ->first();
 
         if (!$dog) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Dieser Hund gehoert nicht zu deinem Konto.',
-            ], 403);
+            return $this->errorResponse(
+                'Dieser Hund gehört nicht zu deinem Konto.',
+                ['dog_id' => ['Ungültiger Hund für dieses Konto.']],
+                403
+            );
         }
 
         $checkin = Carbon::parse($data['checkin_date'])->startOfDay()->addMinutes(5);
@@ -68,18 +78,37 @@ class CustomerReservationController extends Controller
             ->exists();
 
         if ($hasConflict) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Fuer den Zeitraum existiert bereits eine Reservierung.',
-            ], 422);
+            return $this->errorResponse(
+                'Für den Zeitraum existiert bereits eine Reservierung.',
+                ['checkin_date' => ['Überschneidung mit bestehender Reservierung.']],
+                422
+            );
         }
 
-        $planId = $data['plan_id'] ?? $dog->reg_plan ?? $dog->day_plan;
+        $planId = $data['plan_id'] ?? null;
         if (!$planId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bitte zuerst einen gueltigen Preisplan waehlen.',
-            ], 422);
+            $plans = Plan::orderBy('id')->pluck('id')->values();
+            if ($plans->count() < 2) {
+                return $this->errorResponse(
+                    'Es sind nicht genug Preispläne vorhanden. Bitte Tagestarif und Pensionstarif anlegen.',
+                    ['plans' => ['Mindestens zwei Pläne erforderlich.']],
+                    422
+                );
+            }
+
+            $stayDays = Carbon::parse($data['checkin_date'])->startOfDay()
+                ->diffInDays(Carbon::parse($data['checkout_date'])->startOfDay()) + 1;
+
+            // 1 Tag => 1. Plan, >1 Tag => 2. Plan
+            $planId = $stayDays === 1 ? (int) $plans[0] : (int) $plans[1];
+        }
+
+        if (!$planId) {
+            return $this->errorResponse(
+                'Bitte zuerst einen gültigen Preisplan wählen.',
+                ['plan_id' => ['Kein gültiger Plan verfügbar.']],
+                422
+            );
         }
 
         $reservation = Reservation::create([
@@ -90,9 +119,7 @@ class CustomerReservationController extends Controller
             'status' => 3,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Reservierung wurde erstellt.',
+        return $this->successResponse('Reservierung wurde erstellt.', [
             'reservation' => $reservation->load(['dog', 'plan']),
         ], 201);
     }

@@ -31,9 +31,9 @@
     document.getElementById("loadDogs").addEventListener("click", async () => {
       try {
         const res = await CustomerPortalApi.request("/customer/dogs", { auth: true });
-        dogsOutput.textContent = JSON.stringify(res, null, 2);
+        dogsOutput.textContent = JSON.stringify(res.data?.dogs ?? [], null, 2);
       } catch (err) {
-        dogsOutput.textContent = err.message;
+        dogsOutput.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
 
@@ -45,16 +45,16 @@
         const res = await CustomerPortalApi.request("/customer/reservations", { method: "POST", body: payload, auth: true });
         reservationsOutput.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
-        reservationsOutput.textContent = err.message;
+        reservationsOutput.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
 
     document.getElementById("loadReservations").addEventListener("click", async () => {
       try {
         const res = await CustomerPortalApi.request("/customer/reservations", { auth: true });
-        reservationsOutput.textContent = JSON.stringify(res, null, 2);
+        reservationsOutput.textContent = JSON.stringify(res.data?.reservations ?? res.data ?? {}, null, 2);
       } catch (err) {
-        reservationsOutput.textContent = err.message;
+        reservationsOutput.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
   </script>

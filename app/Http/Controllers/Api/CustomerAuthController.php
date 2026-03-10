@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Concerns\ApiJsonResponses;
 use App\Models\CustomerAccount;
 use App\Services\CustomerPortal\AccountLinkService;
 use App\Services\CustomerPortal\VerificationCodeService;
@@ -10,9 +11,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class CustomerAuthController extends Controller
 {
+    use ApiJsonResponses;
+
     public function __construct(
         private readonly VerificationCodeService $verificationCodeService,
         private readonly AccountLinkService $accountLinkService
@@ -21,10 +25,10 @@ class CustomerAuthController extends Controller
 
     public function register(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
-            'password' => 'required|string|min:10|confirmed',
+            'password' => 'required|string|min:8|confirmed',
             'phone' => 'nullable|string|max:50',
             'street' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:255',
@@ -33,6 +37,16 @@ class CustomerAuthController extends Controller
             'type' => 'nullable|in:Stammkunde,Organisation',
             'privacy_accepted' => 'required|accepted',
         ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validierungsfehler bei der Registrierung.',
+                $validator->errors(),
+                422
+            );
+        }
+
+        $data = $validator->validated();
 
         $account = DB::transaction(function () use ($data) {
             $account = CustomerAccount::where('email', $data['email'])->first();
@@ -50,68 +64,79 @@ class CustomerAuthController extends Controller
                 ]);
             }
 
+            // Falls kein Type geliefert wird, immer Stammkunde setzen.
+            $data['type'] = $data['type'] ?? 'Stammkunde';
             $this->accountLinkService->linkOrCreateCustomerForAccount($account, $data);
             $this->verificationCodeService->issueCode($account);
 
             return $account;
         });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registrierung gestartet. Bitte E-Mail-Code bestaetigen.',
+        return $this->successResponse('Registrierung gestartet. Bitte E-Mail-Code bestätigen.', [
             'account_id' => $account->id,
         ]);
     }
 
     public function verifyEmailCode(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
             'code' => 'required|string|size:6',
         ]);
 
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validierungsfehler bei der Code-Bestätigung.',
+                $validator->errors(),
+                422
+            );
+        }
+
+        $data = $validator->validated();
+
         $account = CustomerAccount::where('email', $data['email'])->first();
         if (!$account) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ungueltige Anfrage.',
+            return $this->errorResponse('Ungültige Anfrage.', [
+                'email' => ['Kein Konto mit dieser E-Mail gefunden.'],
             ], 422);
         }
 
         $isValid = $this->verificationCodeService->verifyCode($account, $data['code']);
         if (!$isValid) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Code ist ungueltig oder abgelaufen.',
+            return $this->errorResponse('Code ist ungültig oder abgelaufen.', [
+                'code' => ['Der Bestätigungscode ist ungültig oder abgelaufen.'],
             ], 422);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'E-Mail wurde erfolgreich bestaetigt.',
-        ]);
+        return $this->successResponse('E-Mail wurde erfolgreich bestätigt.');
     }
 
     public function login(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
             'password' => 'required|string',
         ]);
 
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validierungsfehler beim Login.',
+                $validator->errors(),
+                422
+            );
+        }
+
+        $data = $validator->validated();
+
         $account = CustomerAccount::with('customer')->where('email', $data['email'])->first();
         if (!$account || !Hash::check($data['password'], $account->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'E-Mail oder Passwort ist ungueltig.',
+            return $this->errorResponse('E-Mail oder Passwort ist ungültig.', [
+                'email' => ['E-Mail oder Passwort ist ungültig.'],
             ], 422);
         }
 
         if (!$account->email_verified_at || $account->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bitte zuerst E-Mail bestaetigen.',
-            ], 403);
+            return $this->errorResponse('Bitte zuerst E-Mail bestätigen.', null, 403);
         }
 
         $account->last_login_at = now();
@@ -119,8 +144,7 @@ class CustomerAuthController extends Controller
 
         $token = $account->createToken('customer-portal')->plainTextToken;
 
-        return response()->json([
-            'success' => true,
+        return $this->successResponse('Login erfolgreich.', [
             'token' => $token,
             'account' => [
                 'id' => $account->id,
@@ -134,32 +158,35 @@ class CustomerAuthController extends Controller
     {
         $request->user()->currentAccessToken()?->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Erfolgreich abgemeldet.',
-        ]);
+        return $this->successResponse('Erfolgreich abgemeldet.');
     }
 
     public function resendCode(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
         ]);
 
+        if ($validator->fails()) {
+            return $this->errorResponse(
+                'Validierungsfehler beim erneuten Code-Versand.',
+                $validator->errors(),
+                422
+            );
+        }
+
+        $data = $validator->validated();
+
         $account = CustomerAccount::where('email', $data['email'])->first();
         if (!$account) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ungueltige Anfrage.',
+            return $this->errorResponse('Ungültige Anfrage.', [
+                'email' => ['Kein Konto mit dieser E-Mail gefunden.'],
             ], 422);
         }
 
         $this->verificationCodeService->issueCode($account);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Neuer Code wurde gesendet.',
-        ]);
+        return $this->successResponse('Neuer Code wurde gesendet.');
     }
 
     public function me(Request $request): JsonResponse
@@ -167,8 +194,7 @@ class CustomerAuthController extends Controller
         /** @var \App\Models\CustomerAccount $account */
         $account = $request->user()->load('customer');
 
-        return response()->json([
-            'success' => true,
+        return $this->successResponse('Konto erfolgreich geladen.', [
             'account' => [
                 'id' => $account->id,
                 'email' => $account->email,

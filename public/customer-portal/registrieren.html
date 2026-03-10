@@ -15,9 +15,13 @@
   <form id="registerForm">
     <div><input name="name" placeholder="Name" required></div>
     <div><input name="email" type="email" placeholder="E-Mail" required></div>
-    <div><input name="password" type="password" placeholder="Passwort" required minlength="10"></div>
-    <div><input name="password_confirmation" type="password" placeholder="Passwort wiederholen" required minlength="10"></div>
+    <div><input name="password" type="password" placeholder="Passwort" required minlength="8"></div>
+    <div><input name="password_confirmation" type="password" placeholder="Passwort wiederholen" required minlength="8"></div>
     <div><input name="phone" placeholder="Telefon"></div>
+    <div><input name="street" placeholder="Straße"></div>
+    <div><input name="city" placeholder="Stadt"></div>
+    <div><input name="zipcode" placeholder="Postleitzahl"></div>
+    <div><input name="country" placeholder="Land"></div>
     <div><label><input name="privacy_accepted" type="checkbox" required> Ich akzeptiere die Datenschutzerklaerung</label></div>
     <button type="submit">Registrieren</button>
   </form>
@@ -53,7 +57,7 @@
         const res = await CustomerPortalApi.request("/customer/auth/register", { method: "POST", body: payload });
         statusEl.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
-        statusEl.textContent = err.message;
+        statusEl.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
 
@@ -64,7 +68,7 @@
         const res = await CustomerPortalApi.request("/customer/auth/verify-email-code", { method: "POST", body: payload });
         statusEl.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
-        statusEl.textContent = err.message;
+        statusEl.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
 
@@ -74,7 +78,7 @@
         const res = await CustomerPortalApi.request("/customer/auth/resend-code", { method: "POST", body: { email } });
         statusEl.textContent = JSON.stringify(res, null, 2);
       } catch (err) {
-        statusEl.textContent = err.message;
+        statusEl.textContent = `${err.message}\n${JSON.stringify(err.errors || {}, null, 2)}`;
       }
     });
   </script>
