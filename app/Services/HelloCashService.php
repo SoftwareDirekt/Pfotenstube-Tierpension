@@ -667,4 +667,135 @@ class HelloCashService
             return $value !== null;
         }, ARRAY_FILTER_USE_BOTH);
     }
+
+    /**
+     * Syncs a customer to HelloCash.
+     * Strategy:
+     * 1) If local hellocash_customer_id exists -> update remote.
+     * 2) Else try create.
+     * 3) If create fails (e.g. duplicate), try to find existing remote user by email and link/update.
+     */
+    public function syncCustomer(Customer $customer): array
+    {
+        if (!empty($customer->hellocash_customer_id)) {
+            $updateResult = $this->updateUser((int) $customer->hellocash_customer_id, $customer);
+            if ($updateResult['success']) {
+                return [
+                    'success' => true,
+                    'user_id' => (int) $customer->hellocash_customer_id,
+                    'source' => 'updated_existing_link',
+                    'data' => $updateResult['data'] ?? null,
+                ];
+            }
+        }
+
+        $createResult = $this->createUser($customer);
+        if ($createResult['success'] && !empty($createResult['user_id'])) {
+            return [
+                'success' => true,
+                'user_id' => (int) $createResult['user_id'],
+                'source' => 'created',
+                'data' => $createResult['data'] ?? null,
+            ];
+        }
+
+        $existingUserId = $this->findUserIdByEmail($customer->email);
+        if ($existingUserId) {
+            $updateResult = $this->updateUser($existingUserId, $customer);
+            if ($updateResult['success']) {
+                return [
+                    'success' => true,
+                    'user_id' => (int) $existingUserId,
+                    'source' => 'linked_existing_by_email',
+                    'data' => $updateResult['data'] ?? null,
+                ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'error' => $createResult['error'] ?? 'Fehler bei der Registrierkasse-Synchronisation. Bitte versuchen Sie es erneut.',
+            'status_code' => $createResult['status_code'] ?? null,
+        ];
+    }
+
+    private function findUserIdByEmail(?string $email): ?int
+    {
+        if (empty($email) || empty($this->apiKey)) {
+            return null;
+        }
+
+        $queryVariants = [
+            ['email' => $email],
+            ['user_email' => $email],
+            ['search' => $email],
+            ['q' => $email],
+        ];
+
+        foreach ($queryVariants as $query) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                ])->timeout(10)->get($this->baseUrl . '/users', $query);
+
+                if (!$response->successful()) {
+                    continue;
+                }
+
+                $json = $response->json();
+                $userId = $this->extractUserIdFromUsersResponse($json, $email);
+                if ($userId !== null) {
+                    return $userId;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('HelloCash user lookup failed', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function extractUserIdFromUsersResponse(mixed $json, string $email): ?int
+    {
+        if (!is_array($json)) {
+            return null;
+        }
+
+        $candidateCollections = [];
+
+        if (isset($json['users']) && is_array($json['users'])) {
+            $candidateCollections[] = $json['users'];
+        }
+        if (isset($json['data']) && is_array($json['data'])) {
+            $candidateCollections[] = $json['data'];
+        }
+        if (array_is_list($json)) {
+            $candidateCollections[] = $json;
+        }
+
+        foreach ($candidateCollections as $collection) {
+            foreach ($collection as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $rowEmail = $row['user_email'] ?? $row['email'] ?? null;
+                $rowUserId = $row['user_id'] ?? $row['id'] ?? null;
+                if ($rowUserId === null) {
+                    continue;
+                }
+
+                if ($rowEmail !== null && strcasecmp((string) $rowEmail, $email) !== 0) {
+                    continue;
+                }
+
+                return (int) $rowUserId;
+            }
+        }
+
+        return null;
+    }
 }
