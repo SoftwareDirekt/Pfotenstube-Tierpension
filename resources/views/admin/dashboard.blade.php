@@ -193,7 +193,7 @@
                             Mitarbeiter
                         </button>
 
-                        @if(Session::has('lock'))
+                        @if(true)
                             <button id="logoutsessionbutton"
                                     style="border-radius:0;border-top-right-radius:0px!important;background-color: black"
                                     class="btn btn-dark py-2 px-3 fs-5">

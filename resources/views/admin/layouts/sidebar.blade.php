@@ -16,25 +16,8 @@
     'vandv' => true,
   ];
 
-  $pages = Auth::user()->pages;
-  if(count($pages) > 0)
-  {
-    $pages = $pages->toArray();
-    $permissions['dashboard'] = (in_array('Armaturenbrett', $pages)) ? true : false;
-    $permissions['rooms'] = (in_array('Zimmer', $pages)) ? true : false;
-    $permissions['customers'] = (in_array('Kunde', $pages)) ? true : false;
-    $permissions['reservations'] = (in_array('Reservierung', $pages)) ? true : false;
-    $permissions['payments'] = (in_array('Zahlung', $pages)) ? true : false;
-    $permissions['invoices'] = (in_array('Rechnungen', $pages)) ? true : false;
-    $permissions['employees'] = (in_array('Mitarbeiter', $pages)) ? true : false;
-    $permissions['report'] = (in_array('Verkaufsbericht', $pages)) ? true : false;
-    $permissions['tasks'] = (in_array('Aufgaben hinzufugen', $pages)) ? true : false;
-    $permissions['plans'] = (in_array('Preisplane', $pages)) ? true : false;
-    $permissions['rankings'] = (in_array('Hunde bleiben', $pages)) ? true : false;
-    $permissions['vandv'] = (in_array('Verstorbene Hunde', $pages)) ? true : false;
-    $permissions['calendar'] = (in_array('Kalender', $pages)) ? true : false;
-    $permissions['dog_calendar'] = (in_array('Hundekalender', $pages)) ? true : false;
-  }
+  // PIN and page permission lock is intentionally disabled:
+  // all menu entries stay visible for all users.
 
 @endphp
 <aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
@@ -147,7 +130,7 @@
       </li>
       @endif
 
-      @if($permissions['rankings'] && Session::has('lock'))
+      @if($permissions['rankings'])
       <li class="menu-item">
         <a href="{{route('admin.dog.ranks')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-magnify"></i>
@@ -189,7 +172,7 @@
         <span class="menu-header-text">Finanzen</span>
       </li>
 
-      @if($permissions['invoices'] && Session::has('lock'))
+      @if($permissions['invoices'])
       <li class="menu-item">
         <a href="{{route('admin.invoices')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
@@ -207,7 +190,7 @@
       </li>
       @endif
 
-      @if($permissions['plans'] && Session::has('lock'))
+      @if($permissions['plans'])
       <li class="menu-item">
         <a href="{{route('admin.plans')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
@@ -220,7 +203,7 @@
         <span class="menu-header-text">Verwaltung</span>
       </li>
 
-      @if($permissions['employees'] && Session::has('lock'))
+      @if($permissions['employees'])
       <li class="menu-item">
         <a href="{{route('admin.employees')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-account-cog-outline"></i>
@@ -229,7 +212,7 @@
       </li>
       @endif
 
-      @if($permissions['report'] && Session::has('lock'))
+      @if($permissions['report'])
       <li class="menu-item">
         <a href="{{route('admin.sales', ['year' => now()->year, 'month' => now()->month])}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-chart-bar"></i>
@@ -249,7 +232,7 @@
         </a>
       </li>
 
-      @if(Session::has('lock'))
+      @if(true)
       <li class="menu-item">
         <a href="{{route('admin.logout')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-logout"></i>

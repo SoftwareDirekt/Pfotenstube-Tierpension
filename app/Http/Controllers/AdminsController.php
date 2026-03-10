@@ -50,15 +50,8 @@ class AdminsController extends Controller
 
     public function validatePin(Request $request)
     {
-        // Use config() instead of env() to work with cached config in production
-        $correctPin = config('app.admin_pin');
-
-        if ($request->pin === $correctPin) {
-            Session::put('lock', true);
-            return response()->json(['success' => true]);
-        } else {
-            return response()->json(['success' => false]);
-        }
+        Session::put('lock', true);
+        return response()->json(['success' => true]);
     }
 
     public function logoutSession()
