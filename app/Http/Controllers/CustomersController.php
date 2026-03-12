@@ -14,10 +14,8 @@ use App\Models\Reservation;
 use App\Models\Payment;
 use App\Models\Vaccination;
 use App\Models\DogDocument;
-use App\Models\CustomerAccount;
 use App\Helpers\General;
 use App\Services\HelloCashService;
-use App\Services\CustomerPortal\VerificationCodeService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -26,12 +24,10 @@ use DB;
 class CustomersController extends Controller
 {
     protected $hellocashService;
-    protected $verificationCodeService;
 
-    public function __construct(HelloCashService $hellocashService, VerificationCodeService $verificationCodeService)
+    public function __construct(HelloCashService $hellocashService)
     {
         $this->hellocashService = $hellocashService;
-        $this->verificationCodeService = $verificationCodeService;
     }
 
     public function customers(Request $request)
@@ -243,25 +239,6 @@ class CustomersController extends Controller
                 $customer->save();
             }
 
-            if ($request->boolean('generate_access')) {
-                if (empty($customer->email)) {
-                    DB::rollBack();
-                    Session::flash('error', 'Fuer den Zugang ist eine E-Mail-Adresse erforderlich.');
-                    return redirect()->back()->withInput($request->except('picture', 'dogs'));
-                }
-
-                $generatedPassword = 'Pfote!' . random_int(100000, 999999);
-                $createdAccount = CustomerAccount::updateOrCreate(
-                    ['email' => $customer->email],
-                    [
-                        'customer_id' => $customer->id,
-                        'password' => $generatedPassword,
-                        'status' => 'pending',
-                        'email_verified_at' => null,
-                    ]
-                );
-            }
-
             // Commit transaction
             DB::commit();
             
@@ -279,23 +256,6 @@ class CustomersController extends Controller
             return redirect()->back()->withInput($request->except('picture', 'dogs'));
         }
 
-        if ($createdAccount && $request->boolean('send_access_email')) {
-            try {
-                Mail::raw(
-                    "Dein Kundenkonto wurde erstellt.\n\nE-Mail: {$createdAccount->email}\nTemporaeres Passwort: {$generatedPassword}\n\nBitte nach dem ersten Login Passwort aendern.",
-                    static function ($message) use ($createdAccount): void {
-                        $message->to($createdAccount->email)->subject('Deine Zugangsdaten');
-                    }
-                );
-                $this->verificationCodeService->issueCode($createdAccount);
-            } catch (\Exception $e) {
-                Log::warning('Access email for customer account could not be sent', [
-                    'customer_id' => $createdAccount->customer_id,
-                    'error' => $e->getMessage(),
-                ]);
-                Session::flash('warning', 'Kunde wurde erstellt, aber Zugangsmail konnte nicht gesendet werden.');
-            }
-        }
 
         // Second Transaction: Dog Creation
         if(isset($request->dogs) && is_array($request->dogs) && count($request->dogs) > 0)

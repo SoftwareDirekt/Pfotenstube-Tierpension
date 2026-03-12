@@ -13,7 +13,8 @@ class Reservation extends Model
     // Reservation status constants
     const STATUS_ACTIVE = 1;
     const STATUS_CHECKED_OUT = 2;
-    const STATUS_CANCELLED = 3;
+    const STATUS_RESERVED = 3;
+    const STATUS_CANCELLED = 4;
 
     protected $guarded = [];
 
