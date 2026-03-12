@@ -48,4 +48,30 @@ return [
         'test_mode' => env('HELLOCASH_TEST_MODE', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pfotenstube Homepage API Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Pfotenstube Homepage API integration.
+    |
+    */
+    'pfotenstube' => [
+        'api_token' => env('PFOTENSTUBE_API_TOKEN'),
+        'webhook_secret' => env('PFOTENSTUBE_WEBHOOK_SECRET'),
+        'homepage_url' => env('PFOTENSTUBE_HOMEPAGE_URL'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Breeding Shelter URL
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for the Breeding Shelter URL, used for switching between systems.
+    |
+    */
+    'breeding_shelter' => [
+        'url' => env('BREEDING_SHELTER_URL'),
+    ],
+
 ];

@@ -11,6 +11,15 @@
 
         <ul class="navbar-nav flex-row align-items-center ms-auto">
         
+        <!-- Switch to Breeding Shelter -->
+        <li class="nav-item me-2">
+            <a class="nav-link btn btn-success text-white m-0 p-0 m-md-2 p-md-2" 
+            href="{{ config('services.breeding_shelter.url') }}">
+                <i class="mdi mdi-open-in-new mdi-24px"></i>
+                <span class="d-none d-md-inline ms-1">Zum Zuchtsystem</span>
+            </a>
+        </li>
+
         <!-- Notifications -->
         <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-2">
             <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">

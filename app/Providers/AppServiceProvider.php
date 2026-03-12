@@ -29,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         $this->validateVATConfiguration();
         
         if (
+            !$this->app->runningInConsole() &&
             Schema::hasTable('customers') &&
             Schema::hasTable('dogs') &&
             Schema::hasTable('reservations') &&

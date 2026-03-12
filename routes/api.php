@@ -3,9 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Jobs\SyncCustomersToHelloCash;
-use App\Http\Controllers\Api\CustomerAuthController;
-use App\Http\Controllers\Api\CustomerReservationController;
-use App\Http\Controllers\Api\CustomerDogController;
+use App\Http\Controllers\Api\SyncController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,20 +22,8 @@ Route::post('/hellocash/sync-customers', function () {
     return response()->json(['message' => 'HelloCash customer sync job has been dispatched. Check logs for progress.']);
 });
 
-Route::prefix('customer/auth')->group(function () {
-    Route::post('/register', [CustomerAuthController::class, 'register'])->middleware('throttle:8,1');
-    Route::post('/verify-email-code', [CustomerAuthController::class, 'verifyEmailCode'])->middleware('throttle:10,1');
-    Route::post('/login', [CustomerAuthController::class, 'login'])->middleware('throttle:10,1');
-    Route::post('/resend-code', [CustomerAuthController::class, 'resendCode'])->middleware('throttle:5,1');
-});
-
-Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
-    Route::get('/me', [CustomerAuthController::class, 'me']);
-    Route::post('/auth/logout', [CustomerAuthController::class, 'logout']);
-
-    Route::get('/reservations', [CustomerReservationController::class, 'index']);
-    Route::post('/reservations', [CustomerReservationController::class, 'store'])->middleware('throttle:12,1');
-
-    Route::get('/dogs', [CustomerDogController::class, 'index']);
-    Route::post('/dogs', [CustomerDogController::class, 'store'])->middleware('throttle:10,1');
+// Sync from Pfotenstube Homepage
+Route::prefix('v1/external-sync')->middleware('verify.homepage')->group(function () {
+    Route::post('/reservation', [SyncController::class, 'syncReservation']);
+    Route::post('/reservation/cancel', [SyncController::class, 'cancelReservation']);
 });

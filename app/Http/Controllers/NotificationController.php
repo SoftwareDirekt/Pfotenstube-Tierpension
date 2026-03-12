@@ -16,16 +16,19 @@ class NotificationController extends Controller
         }
         
         $today = Carbon::today();
+        
+        $notifications = Notification::where(function ($query) use ($today) {
+            $query->where('type', 'vaccination_alert')
+                ->whereHas('vaccination', function ($q) use ($today) {
+                    $q->whereDate('next_vaccination_date', '<=', $today->copy()->addDays(3));
+                });
+        })
+        ->orWhereIn('type', ['new_reservation', 'reservation_cancelled'])
+        ->orderBy('created_at', 'desc')
+        ->limit(20)
+        ->get();
 
-        $vaccinationAlerts = Notification::where('type', 'vaccination_alert')
-            ->whereHas('vaccination', function ($query) use ($today) {
-                $query->whereDate('next_vaccination_date', '<=', $today->copy()->addDays(3));
-            })
-            ->orderBy('created_at', 'desc')
-            ->limit(15)
-            ->get();
-
-        return response()->json($vaccinationAlerts);
+        return response()->json($notifications);
     }
 
     public function markAsRead(Request $request)
@@ -63,8 +66,7 @@ class NotificationController extends Controller
             return response()->json(['error' => 'Nicht autorisiert'], 401);
         }
         
-        Notification::where('type', 'vaccination_alert')
-            ->where('read', false)
+        Notification::where('read', false)
             ->update(['read' => true]);
 
         return response()->json(['success' => true]);

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('dog_id')->constrained()->onDelete('cascade');
             $table->foreignId('vaccination_id')->nullable()->constrained()->onDelete('cascade');
-            $table->enum('type', ['vaccination_alert']);
+            $table->string('type');
             $table->string('title');
             $table->text('message');
             $table->boolean('read')->default(false);

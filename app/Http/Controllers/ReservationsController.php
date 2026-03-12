@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\Friend;
 use App\Helpers\General;
 use App\Services\VisitCounterService;
+use App\Services\HomepageSyncService;
 use Illuminate\Support\Facades\DB;
 use App\Models\Customer;
 use App\Models\Preference;
@@ -27,13 +28,15 @@ use function PHPSTORM_META\type;
 
 class ReservationsController extends Controller
 {
+    protected $homepageSyncService;
     protected $hellocashService;
     protected $bankInvoiceService;
 
-    public function __construct(HelloCashService $hellocashService, BankInvoiceService $bankInvoiceService)
+    public function __construct(HelloCashService $hellocashService, BankInvoiceService $bankInvoiceService, HomepageSyncService $homepageSyncService)
     {
         $this->hellocashService = $hellocashService;
         $this->bankInvoiceService = $bankInvoiceService;
+        $this->homepageSyncService = $homepageSyncService;
     }
 
     public function reservation(Request $request)
@@ -202,9 +205,14 @@ class ReservationsController extends Controller
                 return back();
             }
             
+            // Push cancellation to Homepage if remote ID exists before deleting
+            if ($data->remote_pfotenstube_homepage_id) {
+                $this->homepageSyncService->updateStatus($data, 'storniert');
+            }
+
             // Hard delete if no payments (not soft delete)
             $data->forceDelete();
-            Session::flash('error', 'Reservierung erfolgreich gelöscht!');
+            Session::flash('success', 'Reservierung erfolgreich gelöscht!');
         }
 
         return back();
@@ -228,6 +236,11 @@ class ReservationsController extends Controller
             
             $data->status = 4;
             $data->save();
+
+            // Sync with Homepage if it's a remote reservation
+            if ($data->remote_pfotenstube_homepage_id) {
+                $this->homepageSyncService->updateStatus($data, 'storniert');
+            }
         }
 
         Session::flash('success', 'Reservierung erfolgreich abgebrochen!');
@@ -507,6 +520,12 @@ class ReservationsController extends Controller
             $reservation->room_id = $request->room_id;
             $reservation->status = 1;
             $reservation->save();
+
+            // Sync with Homepage if it's a remote reservation
+            if ($reservation->remote_pfotenstube_homepage_id) {
+                // Status 1 means the reservation is now in a room (confirmed)
+                $this->homepageSyncService->updateStatus($reservation, 'bestätigt');
+            }
 
             DB::commit();
 
@@ -892,6 +911,12 @@ class ReservationsController extends Controller
             $reservation->days_counted = true;
             $reservation->save();
 
+            // Sync with Homepage if it's a remote reservation
+            if ($reservation->remote_pfotenstube_homepage_id) {
+                // Status 2 means the reservation is completed
+                $this->homepageSyncService->updateStatus($reservation, 'abgeschlossen');
+            }
+
             // Update dog's default plan based on stay length
             if ($reservation->dog) {
                 if ($days > 1) {
@@ -1142,6 +1167,12 @@ class ReservationsController extends Controller
         }
         
         $res->save();
+
+        // Sync with Homepage if it's a remote reservation
+        if ($res->remote_pfotenstube_homepage_id && $res->status == 1) {
+            // Status 1 means the reservation is now in a room (confirmed)
+            $this->homepageSyncService->updateStatus($res, 'bestätigt');
+        }
 
         return response()->json([
             'showModal' => $showModal,
@@ -1410,6 +1441,11 @@ class ReservationsController extends Controller
                     "visit_counted" => true,
                     "days_counted" => true
                 ]);
+
+                // Sync with Homepage if it's a remote reservation
+                if ($reservation->remote_pfotenstube_homepage_id) {
+                    $this->homepageSyncService->updateStatus($reservation, 'abgeschlossen');
+                }
 
                 $special_cost = isset($request->special_cost[$key]) ? floatval($request->special_cost[$key]) : 0;
                 $base_cost = isset($request->base_cost[$key]) ? floatval($request->base_cost[$key]) : 0;
