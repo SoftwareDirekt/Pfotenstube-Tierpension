@@ -15,6 +15,8 @@ class Reservation extends Model
     const STATUS_CHECKED_OUT = 2;
     const STATUS_RESERVED = 3;
     const STATUS_CANCELLED = 4;
+    /** Awaiting manual confirmation (e.g. Pfotenstube homepage booking). */
+    const STATUS_PENDING_CONFIRMATION = 5;
 
     protected $guarded = [];
 

@@ -190,6 +190,9 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         // Reservation Management
         Route::get('/reservation', [ReservationsController::class, 'reservation'])->name('reservation');
         Route::prefix('reservation')->name('reservation.')->group(function () {
+            Route::get('/homepage-pending', [ReservationsController::class, 'homepage_pending_reservations'])->name('homepage.pending');
+            Route::post('/homepage-pending/confirm', [ReservationsController::class, 'homepage_pending_confirm'])->name('homepage.pending.confirm');
+            Route::post('/homepage-pending/reject', [ReservationsController::class, 'homepage_pending_reject'])->name('homepage.pending.reject');
             Route::post('/dashboard', [ReservationsController::class, 'add_reservation_dashboard'])->name('dashboard');
             Route::get('/export', [ReservationsController::class, 'export'])->name('export');
             Route::get('/add', [ReservationsController::class, 'add_reservation_view'])->name('add.view');

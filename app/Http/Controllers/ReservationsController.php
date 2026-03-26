@@ -23,6 +23,9 @@ use App\Services\BankInvoiceService;
 use App\Helpers\VATCalculator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\HomepageReservationConfirmedMail;
+use App\Mail\HomepageReservationCancelledMail;
 
 use function PHPSTORM_META\type;
 
@@ -248,6 +251,99 @@ class ReservationsController extends Controller
         return back();
     }
 
+    public function homepage_pending_reservations()
+    {
+        if (! General::permissions('Reservierung')) {
+            return redirect()->route('admin.settings');
+        }
+
+        $reservations = Reservation::with(['dog.customer', 'plan'])
+            ->where('status', Reservation::STATUS_PENDING_CONFIRMATION)
+            ->whereNotNull('remote_pfotenstube_homepage_id')
+            ->orderBy('checkin_date')
+            ->get();
+
+        return view('admin.reservation.homepage_pending', compact('reservations'));
+    }
+
+    public function homepage_pending_confirm(Request $request)
+    {
+        if (! General::permissions('Reservierung')) {
+            return redirect()->route('admin.settings');
+        }
+
+        $request->validate(['id' => 'required|exists:reservations,id']);
+
+        $reservation = Reservation::with('dog.customer')->findOrFail($request->id);
+        if ((int) $reservation->status !== Reservation::STATUS_PENDING_CONFIRMATION
+            || empty($reservation->remote_pfotenstube_homepage_id)) {
+            Session::flash('error', 'Diese Anfrage kann nicht bestätigt werden.');
+
+            return back();
+        }
+
+        $reservation->status = Reservation::STATUS_RESERVED;
+        $reservation->save();
+
+        $this->homepageSyncService->updateStatus($reservation, 'reserviert');
+        $this->tryMailHomepageReservationConfirmed($reservation);
+
+        Session::flash('success', 'Reservierung bestätigt. Der Kunde wurde per E-Mail informiert.');
+
+        return back();
+    }
+
+    public function homepage_pending_reject(Request $request)
+    {
+        if (! General::permissions('Reservierung')) {
+            return redirect()->route('admin.settings');
+        }
+
+        $request->validate(['id' => 'required|exists:reservations,id']);
+
+        $reservation = Reservation::with('dog.customer')->findOrFail($request->id);
+        if ((int) $reservation->status !== Reservation::STATUS_PENDING_CONFIRMATION
+            || empty($reservation->remote_pfotenstube_homepage_id)) {
+            Session::flash('error', 'Diese Anfrage kann nicht abgelehnt werden.');
+
+            return back();
+        }
+
+        $reservation->status = Reservation::STATUS_CANCELLED;
+        $reservation->save();
+
+        $this->homepageSyncService->updateStatus($reservation, 'storniert');
+        $this->tryMailHomepageReservationCancelled($reservation);
+
+        Session::flash('success', 'Anfrage abgelehnt. Der Kunde wurde per E-Mail informiert.');
+
+        return back();
+    }
+
+    private function tryMailHomepageReservationConfirmed(Reservation $reservation): void
+    {
+        try {
+            $email = $reservation->dog?->customer?->email;
+            if ($email) {
+                Mail::to($email)->send(new HomepageReservationConfirmedMail($reservation));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Homepage reservation confirm mail failed: '.$e->getMessage());
+        }
+    }
+
+    private function tryMailHomepageReservationCancelled(Reservation $reservation): void
+    {
+        try {
+            $email = $reservation->dog?->customer?->email;
+            if ($email) {
+                Mail::to($email)->send(new HomepageReservationCancelledMail($reservation));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Homepage reservation cancel mail failed: '.$e->getMessage());
+        }
+    }
+
     public function edit_reservation($id)
     {
         if(!General::permissions('Reservierung'))
@@ -451,6 +547,15 @@ class ReservationsController extends Controller
             
             $dog_id = $reservation->dog_id;
             $oldStatus = $reservation->status;
+
+            if ((int) $reservation->status === Reservation::STATUS_PENDING_CONFIRMATION) {
+                DB::rollBack();
+
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Diese Online-Anfrage muss zuerst unter „Pfotenstube-Anfragen“ bestätigt werden.',
+                ], 422);
+            }
 
             $isCheckin = ($reservation->status != 1) || is_null($reservation->room_id);
 
@@ -1093,6 +1198,13 @@ class ReservationsController extends Controller
         $res = Reservation::findOrFail($id);
         $dog_id = $res->dog_id;
         $oldStatus = $res->status;
+
+        if ((int) $res->status === Reservation::STATUS_PENDING_CONFIRMATION) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Diese Online-Anfrage muss zuerst unter „Pfotenstube-Anfragen“ bestätigt werden.',
+            ], 422);
+        }
 
         if ($request->drag_type === 'checkin') {
             $alreadyCheckedIn = Reservation::where('dog_id', $dog_id)

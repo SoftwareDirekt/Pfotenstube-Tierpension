@@ -73,4 +73,21 @@ class Dog extends Model
     {
         return $this->hasMany(DogDocument::class, 'dog_id');
     }
+
+    /**
+     * Web-relative path (same pattern as other dog images) for a vaccine pass file stored in vaccine_pass_page1/2.
+     */
+    public function vaccinePassPublicPath(?string $storedRelative): ?string
+    {
+        if ($storedRelative === null || trim($storedRelative) === '') {
+            return null;
+        }
+
+        return 'uploads/users/dogs/'.ltrim(str_replace('\\', '/', $storedRelative), '/');
+    }
+
+    public function hasHomepageVaccinePass(): bool
+    {
+        return filled($this->vaccine_pass_page1) || filled($this->vaccine_pass_page2);
+    }
 }
