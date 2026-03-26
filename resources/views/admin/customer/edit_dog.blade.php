@@ -400,6 +400,7 @@
                     </div>
                 </div>
                 <hr>
+                @include('admin.customer.partials.homepage_vaccine_pass_readonly', ['dog' => $dog])
                 <p id="vaccination_saved" class="text-success" style="display:none;">
                     <i class="far fa-check-circle"></i>
                     Impfung erfolgreich gespeichert

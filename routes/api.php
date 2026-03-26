@@ -26,4 +26,5 @@ Route::post('/hellocash/sync-customers', function () {
 Route::prefix('v1/external-sync')->middleware('verify.homepage')->group(function () {
     Route::post('/reservation', [SyncController::class, 'syncReservation']);
     Route::post('/reservation/cancel', [SyncController::class, 'cancelReservation']);
+    Route::post('/dog', [SyncController::class, 'syncDog']);
 });

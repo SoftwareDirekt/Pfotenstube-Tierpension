@@ -1335,6 +1335,16 @@
                             
                             <!-- Vaccinations Section -->
                             <h4 class="text-start">Impfungen</h4>
+                            <div id="dogInfo-homepage-vaccine-pass" class="mb-3 d-none">
+                                <div class="alert alert-secondary border mb-0" role="region" aria-label="Impfpass Kundenportal">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                        <div>
+                                            <h6 class="alert-heading mb-1">Impfpass (Kundenportal)</h6>
+                                        </div>
+                                    </div>
+                                    <div id="dogInfo-homepage-vaccine-pass-content" class="row g-3"></div>
+                                </div>
+                            </div>
                             <div class="mb-3">
                                 <form id="vaccinationForm" class="vaccination-form py-2 mb-3" style="width:100%">
                                     @csrf
@@ -2362,6 +2372,45 @@
             }
         }
 
+        function homepageVaccinePassAssetUrl(path) {
+            if (!path) return '';
+            return 'uploads/users/dogs/' + String(path).replace(/^\/+/, '');
+        }
+
+        function displayHomepageVaccinePass(dog) {
+            var wrap = $('#dogInfo-homepage-vaccine-pass');
+            var content = $('#dogInfo-homepage-vaccine-pass-content');
+            if (!wrap.length || !content.length) {
+                return;
+            }
+            var p1 = dog.vaccine_pass_page1 || null;
+            var p2 = dog.vaccine_pass_page2 || null;
+            if (!p1 && !p2) {
+                wrap.addClass('d-none');
+                content.empty();
+                return;
+            }
+            wrap.removeClass('d-none');
+            var html = '';
+            function cell(label, path) {
+                if (!path) return '';
+                var u = homepageVaccinePassAssetUrl(path);
+                var isPdf = /\.pdf$/i.test(String(path));
+                var block = '<div class="col-md-6">';
+                block += '<p class="small fw-semibold mb-2 text-body-secondary">' + label + '</p>';
+                if (isPdf) {
+                    block += '<a href="' + u + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary"><i class="fa fa-file-pdf"></i> PDF anzeigen</a>';
+                } else {
+                    block += '<a href="' + u + '" target="_blank" rel="noopener noreferrer" class="d-inline-block"><img src="' + u + '" alt="" class="img-fluid rounded border" style="max-height:260px"/></a>';
+                }
+                block += '</div>';
+                return block;
+            }
+            html += cell('Seite 1', p1);
+            html += cell('Seite 2', p2);
+            content.html(html);
+        }
+
         function dogInfo(id) {
             // get Dog details
             $.ajax({
@@ -2544,6 +2593,8 @@
                         $("#dogInfo #note_id").val(res.dog.id);
                         $("#dogInfo #res_id").val(res.id);
                         $("#vaccination_dog_id").val(dog.id);
+
+                        displayHomepageVaccinePass(dog);
 
                         fetchVaccinations(dog.id);
                         checkVaccinationAlerts(dog.id);
@@ -4003,13 +4054,20 @@
                 type: 'GET',
                 success: function(res) {
                     currentDogData = res;
-                    if (res && res.dog && res.dog.documents) {
-                        displayDogDocuments(res.dog.documents);
+                    if (res && res.dog) {
+                        displayHomepageVaccinePass(res.dog);
+                        if (res.dog.documents) {
+                            displayDogDocuments(res.dog.documents);
+                        } else {
+                            displayDogDocuments([]);
+                        }
                     } else {
+                        displayHomepageVaccinePass({});
                         displayDogDocuments([]);
                     }
                 },
                 error: function() {
+                    displayHomepageVaccinePass({});
                     displayDogDocuments([]);
                 }
             });

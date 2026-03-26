@@ -15,6 +15,7 @@
 
     @yield('title')
       <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="homepage-pending-url" content="{{ route('admin.reservation.homepage.pending') }}" />
 
     <meta name="description" content="" />
 

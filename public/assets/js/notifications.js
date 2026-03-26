@@ -26,7 +26,7 @@ function loadNotifications() {
                 if (notification.type === 'vaccination_alert') {
                     iconClass = 'mdi-needle text-danger';
                 } else if (notification.type === 'new_reservation') {
-                    iconClass = 'mdi-calendar-plus text-success';
+                    iconClass = 'mdi-calendar-clock text-warning';
                 } else if (notification.type === 'reservation_cancelled') {
                     iconClass = 'mdi-calendar-remove text-danger';
                 }
@@ -66,6 +66,14 @@ function loadNotifications() {
 
                 // Mark as read when clicked
                 markAsRead(id, $(this));
+
+                if (type === 'new_reservation') {
+                    const url = $('meta[name="homepage-pending-url"]').attr('content');
+                    if (url) {
+                        window.location.href = url;
+                        return;
+                    }
+                }
 
                 if (dogId && typeof dogInfo === 'function') {
                     dogInfo(dogId);

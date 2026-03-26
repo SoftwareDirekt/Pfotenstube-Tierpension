@@ -97,6 +97,12 @@
           <div>Reservierung ({{$total_reservations_count}})</div>
         </a>
       </li>
+      <li class="menu-item">
+        <a href="{{route('admin.reservation.homepage.pending')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-web"></i>
+          <div>Pfotenstube-Anfragen</div>
+        </a>
+      </li>
       @endif
 
       @if($permissions['dog_calendar'])
