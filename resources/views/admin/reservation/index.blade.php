@@ -178,6 +178,9 @@
                                         <i class="fa fa-edit"></i>
                                     </a>
                                 @endif
+                                <a href="{{ route('admin.reservation.pflegevertrag.show', $r->id) }}" class="mx-1" title="Pflegevereinbarung">
+                                    <i class="fa fa-file text-success"></i>
+                                </a>
                                 {{-- Hide cancel button for checked-out (status 2) and cancelled (status 4) reservations --}}
                                 @if ($r->status != 2 && $r->status != 4)
                                     <form

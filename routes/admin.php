@@ -1,23 +1,24 @@
 <?php
 
+use App\Http\Controllers\AdminsController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\EmployeeTrackController;
 use App\Http\Controllers\EventController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\AdminsController;
-use App\Http\Controllers\RoomsController;
-use App\Http\Controllers\CustomersController;
-use App\Http\Controllers\PlansController;
-use App\Http\Controllers\TasksController;
-use App\Http\Controllers\ReservationsController;
+use App\Http\Controllers\InvoicesController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentsController;
+use App\Http\Controllers\PflegevertragController;
+use App\Http\Controllers\PlansController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ReservationsController;
+use App\Http\Controllers\RoomsController;
+use App\Http\Controllers\TasksController;
+use App\Http\Controllers\TimerController;
 use App\Http\Controllers\TodosController;
 use App\Http\Controllers\VaccinationController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\TimerController;
-use App\Http\Controllers\InvoicesController;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,25 +35,27 @@ Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route('admin.dashboard');
     }
+
     return redirect()->route('admin.login.view');
 });
 
 Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
-    
+
     // Public Admin Routes (No Authentication Required)
     Route::get('/', function () {
         if (Auth::check()) {
             return redirect()->route('admin.dashboard');
         }
+
         return to_route('admin.login.view');
     });
-    
+
     Route::get('/login', [AdminsController::class, 'login_view'])->name('login.view');
     Route::post('/login', [AdminsController::class, 'login'])->name('login');
 
     // Authenticated Admin Routes
     Route::middleware('AdminAuth')->group(function () {
-        
+
         // Dashboard & Settings
         Route::get('/dashboard', [AdminsController::class, 'dashboard'])->name('dashboard');
         Route::get('/settings', [AdminsController::class, 'admin_settings'])->name('settings');
@@ -101,7 +104,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::post('/dog/delete', [CustomersController::class, 'delete_dog'])->name('delete_dog');
             Route::post('/dog/adoption', [CustomersController::class, 'update_dog_adoption'])->name('update_dog_adoption');
             Route::post('/dog/death', [CustomersController::class, 'update_dog_death'])->name('update_dog_death');
-        }); 
+        });
 
         // Dog Documents
         Route::prefix('dogs')->name('dog.documents.')->group(function () {
@@ -205,6 +208,14 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::get('/{id}/fetch/all', [ReservationsController::class, 'fetch_reservation'])->name('fetchOne');
             Route::post('/customer/balance', [ReservationsController::class, 'check_balance'])->name('balance');
             Route::post('/checkout', [ReservationsController::class, 'checkout'])->name('checkout');
+            // Pflegevereinbarung
+            Route::get('/{id}/pflegevertrag', [PflegevertragController::class, 'show'])->name('pflegevertrag.show');
+            Route::post('/{id}/pflegevertrag', [PflegevertragController::class, 'saveForm'])->name('pflegevertrag.save');
+            Route::post('/{id}/pflegevertrag/preview-pdf', [PflegevertragController::class, 'previewPdf'])->name('pflegevertrag.preview');
+            Route::get('/{id}/pflegevertrag/download', [PflegevertragController::class, 'downloadFinal'])->name('pflegevertrag.download');
+            Route::post('/{id}/pflegevertrag/sign-intake', [PflegevertragController::class, 'signIntake'])->name('pflegevertrag.sign.intake');
+            Route::post('/{id}/pflegevertrag/sign-checkout', [PflegevertragController::class, 'signCheckout'])->name('pflegevertrag.sign.checkout');
+            Route::post('/{id}/pflegevertrag/email', [PflegevertragController::class, 'sendEmail'])->name('pflegevertrag.email');
         });
         Route::post('/reservation/update/date', [ReservationsController::class, 'update_date'])->name('res.date.update');
 
