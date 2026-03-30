@@ -14,6 +14,7 @@
         <!-- Switch to Breeding Shelter -->
         <li class="nav-item me-2">
             <a class="nav-link btn btn-success text-white m-0 p-0 m-md-2 p-md-2" 
+            target="_blank"
             href="{{ config('services.breeding_shelter.url') }}">
                 <i class="mdi mdi-open-in-new mdi-24px"></i>
                 <span class="d-none d-md-inline ms-1">Zum Zuchtsystem</span>

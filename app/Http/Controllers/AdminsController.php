@@ -2,27 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\General;
+use App\Models\Admin;
+use App\Models\Customer;
+use App\Models\Dog;
+use App\Models\Event;
 use App\Models\Page;
+use App\Models\Plan;
+use App\Models\Preference;
+use App\Models\Reservation;
+use App\Models\Room;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\Visit;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Facades\DB;
-use App\Helpers\General;
-use App\Models\Admin;
-use App\Models\User;
-use App\Models\Dog;
-use App\Models\Task;
-use App\Models\Room;
-use App\Models\Todo;
-use App\Models\Customer;
-use App\Models\Visit;
-use App\Models\Event;
-use App\Models\Reservation;
-use App\Models\Plan;
-use App\Models\Payment;
-use App\Models\Preference;
-use Carbon\Carbon;
-use Log;
+use Illuminate\Support\Facades\Storage;
 
 class AdminsController extends Controller
 {
@@ -38,19 +35,20 @@ class AdminsController extends Controller
             'password' => 'required',
         ]);
 
-        if(Auth::attempt(['email' => $request->email, 'password' => $request->password], $request->remember))
-        {
+        if (Auth::attempt(['email' => $request->email, 'password' => $request->password], $request->remember)) {
             return to_route('admin.dashboard');
         }
 
         Session::flash('error', 'Ungültige E-Mail-Adresse oder Passwort');
+
         return back();
     }
-    ///pin functionality
+    // /pin functionality
 
     public function validatePin(Request $request)
     {
         Session::put('lock', true);
+
         return response()->json(['success' => true]);
     }
 
@@ -61,11 +59,9 @@ class AdminsController extends Controller
         return response()->json(['success' => true]);
     }
 
-
     public function dashboard()
     {
-        if(!General::permissions('Armaturenbrett'))
-        {
+        if (! General::permissions('Armaturenbrett')) {
             return to_route('admin.settings');
         }
         $currentMonth = Carbon::now()->month;
@@ -78,8 +74,7 @@ class AdminsController extends Controller
         $today = Carbon::now()->toDateString();
         $customerBalanceCache = [];
 
-        foreach($reservations as $obj)
-        {
+        foreach ($reservations as $obj) {
             // check for checkin date
             $checkin_check = $obj->checkin_date;
             $checkout_check = $obj->checkout_date;
@@ -88,8 +83,7 @@ class AdminsController extends Controller
 
             $dog_id = $obj->dog_id;
 
-            if(isset($obj->dog->customer))
-            {
+            if (isset($obj->dog->customer)) {
                 $customer_id = $obj->dog->customer->id;
                 $obj->totalAmount = $this->calculateCustomerBalance($customer_id, $customerBalanceCache);
             }
@@ -118,48 +112,42 @@ class AdminsController extends Controller
         }
 
         // Get Dogs in Rooms
-        $rooms = Room::where('status', 1)->orderBy('order','asc')->get();
+        $rooms = Room::where('status', 1)->orderBy('order', 'asc')->get();
         $total_room_occupacy = 0;
         $total_out = 0;
         $total_orgs = 0;
         $fetched_dogs = [];
 
-        foreach($rooms as $room)
-        {
+        foreach ($rooms as $room) {
             $reservations_data = Reservation::with('plan', 'dog.customer')
-            ->selectRaw('MAX(id) as id, dog_id, MAX(room_id) as room_id, MAX(checkin_date) as checkin_date, MAX(checkout_date) as checkout_date, MAX(plan_id) as plan_id, MAX(status) as status, MAX(created_at) as created_at')
-            ->whereHas('dog')
-            ->where('room_id', $room->id)
-            ->where('status', 1)
-            ->groupBy('dog_id')
-            ->orderBy('id','desc')
-            ->get();
+                ->selectRaw('MAX(id) as id, dog_id, MAX(room_id) as room_id, MAX(checkin_date) as checkin_date, MAX(checkout_date) as checkout_date, MAX(plan_id) as plan_id, MAX(status) as status, MAX(created_at) as created_at')
+                ->whereHas('dog')
+                ->where('room_id', $room->id)
+                ->where('status', 1)
+                ->groupBy('dog_id')
+                ->orderBy('id', 'desc')
+                ->get();
 
             $room->reservations = $reservations_data;
             $total_room_occupacy += count($reservations_data);
 
-            if(count($room->reservations) > 0)
-            {
-                foreach($room->reservations as $key => $res)
-                {
-                    if(!isset($res->dog))
-                    {
+            if (count($room->reservations) > 0) {
+                foreach ($room->reservations as $key => $res) {
+                    if (! isset($res->dog)) {
                         continue;
                     }
-                    if(in_array($res->dog_id, $fetched_dogs))
-                    {
+                    if (in_array($res->dog_id, $fetched_dogs)) {
                         $room->reservations->forget($key);
+
                         continue;
                     }
 
                     array_push($fetched_dogs, $res->dog_id);
 
-                    if(isset($res->dog->customer))
-                    {
+                    if (isset($res->dog->customer)) {
                         $customer_id = $res->dog->customer->id;
                         $res->totalAmount = $this->calculateCustomerBalance($customer_id, $customerBalanceCache);
                     }
-
 
                     $now = Carbon::now();
                     $checkout_date = Carbon::parse($res->checkout_date)->endOfDay();
@@ -174,8 +162,7 @@ class AdminsController extends Controller
                     if ($interval->days == 0) {
                         $color = 'danger';
                         $total_out = $total_out + 1;
-                    }
-                    elseif ($interval->invert == 1) {
+                    } elseif ($interval->invert == 1) {
                         $color = 'danger';
                         $total_out = $total_out + 1;
                     }
@@ -198,12 +185,12 @@ class AdminsController extends Controller
 
         $plans = Plan::orderBy('id', 'asc')->get();
         $dogs = Dog::with('customer')->get();
-        $tasks = Task::orderBy('created_at','desc')->get();
-        $users = User::orderBy('created_at','desc')->get();
+        $tasks = Task::orderBy('created_at', 'desc')->get();
+        $users = User::orderBy('created_at', 'desc')->get();
         $total_reservations = count($reservations);
         $daysCalculationMode = config('app.days_calculation_mode', 'inclusive');
-        
-        return view('admin.dashboard', compact('currentMonth','reservations' , 'dogs', 'tasks','rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users', 'daysCalculationMode'));
+
+        return view('admin.dashboard', compact('currentMonth', 'reservations', 'dogs', 'tasks', 'rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users', 'daysCalculationMode'));
 
     }
 
@@ -215,7 +202,7 @@ class AdminsController extends Controller
 
         // Use customer balance column directly (accounts for settlements and wallet)
         $customer = Customer::find($customerId);
-        $balance = $customer ? (float)($customer->balance ?? 0) : 0;
+        $balance = $customer ? (float) ($customer->balance ?? 0) : 0;
 
         $cache[$customerId] = $balance;
 
@@ -225,6 +212,7 @@ class AdminsController extends Controller
     public function admin_settings()
     {
         $user = Auth::user();
+
         return view('admin.auth.settings', compact('user'));
     }
 
@@ -236,12 +224,12 @@ class AdminsController extends Controller
 
         try {
             $user = Auth::user();
-            
+
             // Only allow employees to update their own profile
             if ($user->role != 2) {
                 abort(403, 'Nur Mitarbeiter können ihr Profil hier bearbeiten.');
             }
-            
+
             $user->name = $request->name;
             $user->save();
 
@@ -253,16 +241,18 @@ class AdminsController extends Controller
             }
 
             Session::flash('success', 'Profilinformationen erfolgreich aktualisiert.');
+
             return redirect()->back();
         } catch (\Exception $e) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Fehler beim Aktualisieren: ' . $e->getMessage(),
+                    'message' => 'Fehler beim Aktualisieren: '.$e->getMessage(),
                 ], 500);
             }
 
-            Session::flash('error', 'Fehler beim Aktualisieren der Profilinformationen: ' . $e->getMessage());
+            Session::flash('error', 'Fehler beim Aktualisieren der Profilinformationen: '.$e->getMessage());
+
             return redirect()->back()->withInput();
         }
     }
@@ -275,12 +265,12 @@ class AdminsController extends Controller
 
         try {
             $user = Auth::user();
-            
+
             // Only allow admins to update preferences
             if ($user->role != 1) {
                 abort(403, 'Nur Administratoren können Präferenzen bearbeiten.');
             }
-            
+
             Preference::set('vat_percentage', $request->vat_percentage, 'float', 'Mehrwertsteuer-Satz in Prozent');
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -291,16 +281,18 @@ class AdminsController extends Controller
             }
 
             Session::flash('success', 'Präferenzen erfolgreich gespeichert');
+
             return redirect()->back();
         } catch (\Exception $e) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Fehler beim Speichern: ' . $e->getMessage(),
+                    'message' => 'Fehler beim Speichern: '.$e->getMessage(),
                 ], 500);
             }
 
             Session::flash('error', 'Fehler beim Speichern der Präferenzen');
+
             return redirect()->back();
         }
     }
@@ -313,16 +305,16 @@ class AdminsController extends Controller
                 'required',
                 'different:currentPassword',
                 'string',
-                'min:8',            
+                'min:8',
             ],
             'confirmPassword' => 'required|same:newPassword',
         ]);
 
         $admin = Auth::user();
 
-        if (!password_verify($request->currentPassword, $admin->password))
-        {
+        if (! password_verify($request->currentPassword, $admin->password)) {
             Session::flash('error', 'Das aktuelle Passwort ist falsch.');
+
             return redirect()->back()->withInput();
         }
 
@@ -335,6 +327,7 @@ class AdminsController extends Controller
         $admin->save();
 
         Session::flash('success', 'Passwort erfolgreich aktualisiert.');
+
         return redirect()->back();
     }
 
@@ -350,6 +343,8 @@ class AdminsController extends Controller
             'iban' => 'nullable|string|max:34',
             'bic' => 'nullable|string|max:11',
             'picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'signature_upload' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'signature_data' => 'nullable|string',
         ], [
             'company_name.required' => 'Der Firmenname ist erforderlich, da er auf Rechnungen verwendet wird.',
             'company_email.required' => 'Die Firmen-E-Mail ist erforderlich, da sie auf Rechnungen verwendet wird.',
@@ -357,12 +352,12 @@ class AdminsController extends Controller
 
         try {
             $user = Auth::user();
-            
+
             // Only allow admins to update company info
             if ($user->role != 1) {
                 abort(403, 'Nur Administratoren können Firmeninformationen bearbeiten.');
             }
-            
+
             // Update basic info
             $user->company_name = $request->company_name;
             $user->company_email = $request->company_email;
@@ -376,21 +371,48 @@ class AdminsController extends Controller
             // Handle picture upload
             if ($request->hasFile('picture')) {
                 // Delete old picture if exists
-                if ($user->picture && file_exists(public_path('uploads/users/' . $user->picture))) {
-                    unlink(public_path('uploads/users/' . $user->picture));
+                if ($user->picture && file_exists(public_path('uploads/users/'.$user->picture))) {
+                    unlink(public_path('uploads/users/'.$user->picture));
                 }
 
                 $file = $request->file('picture');
-                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                
+                $filename = time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+
                 // Ensure uploads/users directory exists
                 $uploadPath = public_path('uploads/users');
-                if (!file_exists($uploadPath)) {
+                if (! file_exists($uploadPath)) {
                     mkdir($uploadPath, 0755, true);
                 }
-                
+
                 $file->move($uploadPath, $filename);
                 $user->picture = $filename;
+            }
+
+            // Save signature either from canvas (preferred) or uploaded image.
+            if ($request->filled('signature_data')) {
+                $binary = null;
+                $payload = $request->input('signature_data');
+                if (preg_match('/^data:image\/png;base64,(.+)$/is', $payload, $m)) {
+                    $binary = base64_decode($m[1], true);
+                } else {
+                    $binary = base64_decode((string) $payload, true);
+                }
+
+                if ($binary !== false && strlen($binary) > 50) {
+                    if ($user->signature) {
+                        Storage::disk('public')->delete($user->signature);
+                    }
+                    $relative = 'signatures/users/'.time().'_'.uniqid().'.png';
+                    Storage::disk('public')->put($relative, $binary);
+                    $user->signature = $relative;
+                }
+            } elseif ($request->hasFile('signature_upload')) {
+                if ($user->signature) {
+                    Storage::disk('public')->delete($user->signature);
+                }
+                $file = $request->file('signature_upload');
+                $relative = $file->store('signatures/users', 'public');
+                $user->signature = $relative;
             }
 
             $user->save();
@@ -408,16 +430,18 @@ class AdminsController extends Controller
             }
 
             Session::flash('success', 'Grundinformationen erfolgreich aktualisiert.');
+
             return redirect()->back();
         } catch (\Exception $e) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Fehler beim Aktualisieren: ' . $e->getMessage(),
+                    'message' => 'Fehler beim Aktualisieren: '.$e->getMessage(),
                 ], 500);
             }
 
-            Session::flash('error', 'Fehler beim Aktualisieren der Grundinformationen: ' . $e->getMessage());
+            Session::flash('error', 'Fehler beim Aktualisieren der Grundinformationen: '.$e->getMessage());
+
             return redirect()->back()->withInput();
         }
     }
@@ -426,51 +450,51 @@ class AdminsController extends Controller
     {
         Auth::logout();
 
-        Session::flash('success' , 'Du hast dich erfolgreich abgemeldet.');
+        Session::flash('success', 'Du hast dich erfolgreich abgemeldet.');
+
         return redirect('/admin/login');
     }
-    
+
     public function employees(Request $request)
     {
-        if(!General::permissions('Mitarbeiter'))
-        {
+        if (! General::permissions('Mitarbeiter')) {
             return to_route('admin.settings');
         }
 
-        if($request->ajax())
-        {
-            $keyword = isset($request->keyword) ? $request->keyword :"";
+        if ($request->ajax()) {
+            $keyword = isset($request->keyword) ? $request->keyword : '';
             $order = isset($request->order) ? $request->order : 'asc';
 
             $where = [];
-            if(isset($request->keyword) && $request->keyword != '')
-            {
+            if (isset($request->keyword) && $request->keyword != '') {
                 $where = function ($query) use ($request) {
-                    $query->where('name', 'like', '%' . $request->keyword . '%')
-                        ->orWhere('email', 'like', '%'. $request->keyword. '%')
-                        ->orWhere('phone', 'like', '%'. $request->keyword. '%');
+                    $query->where('name', 'like', '%'.$request->keyword.'%')
+                        ->orWhere('email', 'like', '%'.$request->keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$request->keyword.'%');
                 };
             }
 
             $users = User::where($where)
-            ->where('role', 2)
-            ->orderBy('id', $order)->get();
+                ->where('role', 2)
+                ->orderBy('id', $order)->get();
+
             return $users;
         }
 
-        $users = User::where('role', 2)->orderBy('id','desc')->paginate(20);
+        $users = User::where('role', 2)->orderBy('id', 'desc')->paginate(20);
+
         return view('admin.employees', compact('users'));
     }
 
     public function add_employees(Request $request)
     {
-        if(!General::permissions('Mitarbeiter'))
-        {
+        if (! General::permissions('Mitarbeiter')) {
             return to_route('admin.settings');
         }
 
         $pages = Page::all();
-        return view('admin.employees-add',compact('pages'));
+
+        return view('admin.employees-add', compact('pages'));
     }
 
     public function post_employees(Request $request)
@@ -482,10 +506,10 @@ class AdminsController extends Controller
             'password' => 'required',
         ]);
 
-        $ex = explode("@", $request->email);
+        $ex = explode('@', $request->email);
         $username = $ex[0];
 
-        $user = new User();
+        $user = new User;
         $user->name = $request->name;
         $user->email = $request->email;
         $user->username = $username;
@@ -495,28 +519,28 @@ class AdminsController extends Controller
         $user->city = $request->city;
         $user->country = $request->country;
         $user->phone = $request->phone;
-        $user->permissions = isset($request->permissions) && !empty($request->permissions) ? json_encode($request->permissions) : null;
+        $user->permissions = isset($request->permissions) && ! empty($request->permissions) ? json_encode($request->permissions) : null;
 
-        if(isset($request->picture) && $request->picture != null)
-        {
+        if (isset($request->picture) && $request->picture != null) {
             try {
                 $picture = $request->picture;
                 $originalName = $picture->getClientOriginalName();
                 $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                $picture_name = uniqid() . '_' . $sanitizedName;
-                
+                $picture_name = uniqid().'_'.$sanitizedName;
+
                 $uploadPath = public_path('uploads/users');
-                if (!file_exists($uploadPath)) {
-                    if (!mkdir($uploadPath, 0755, true)) {
+                if (! file_exists($uploadPath)) {
+                    if (! mkdir($uploadPath, 0755, true)) {
                         throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
                     }
                 }
-                
+
                 $picture->move($uploadPath, $picture_name);
                 $user->picture = $picture_name;
             } catch (\Exception $e) {
-                \Log::error('User picture upload failed: ' . $e->getMessage());
-                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: ' . $e->getMessage());
+                \Log::error('User picture upload failed: '.$e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: '.$e->getMessage());
+
                 return back();
             }
         }
@@ -524,71 +548,72 @@ class AdminsController extends Controller
         $user->save();
 
         Session::flash('success', 'Benutzer erfolgreich hinzugefügt');
+
         return back();
 
     }
 
     public function edit_employees($id)
     {
-        if(!General::permissions('Mitarbeiter'))
-        {
+        if (! General::permissions('Mitarbeiter')) {
             return to_route('admin.settings');
         }
 
         $user = User::where('id', $id)->first();
         $pages = Page::all();
-        return view('admin.employees-edit', compact(['user','pages']));
+
+        return view('admin.employees-edit', compact(['user', 'pages']));
     }
+
     public function update_employees(Request $request)
     {
         $request->validate([
             'name' => 'required',
-            'email' => 'required|email|unique:users,email,' . $request->id,
+            'email' => 'required|email|unique:users,email,'.$request->id,
         ]);
 
         $user = User::find($request->id);
         $user->name = $request->name;
-        
+
         // Update email if changed
         if ($request->email && $request->email != $user->email) {
             $user->email = $request->email;
             // Update username based on email
-            $ex = explode("@", $request->email);
+            $ex = explode('@', $request->email);
             $user->username = $ex[0];
         }
-        
+
         $user->department = $request->department;
         $user->address = $request->address;
         $user->city = $request->city;
         $user->country = $request->country;
         $user->phone = $request->phone;
-        $user->permissions = isset($request->permissions) && !empty($request->permissions) ? json_encode($request->permissions) : null;
+        $user->permissions = isset($request->permissions) && ! empty($request->permissions) ? json_encode($request->permissions) : null;
 
-        if($request->password != null)
-        {
+        if ($request->password != null) {
             $user->password = bcrypt($request->password);
         }
 
-        if(isset($request->picture) && $request->picture != null)
-        {
+        if (isset($request->picture) && $request->picture != null) {
             try {
                 $picture = $request->picture;
                 $originalName = $picture->getClientOriginalName();
                 $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-                $picture_name = uniqid() . '_' . $sanitizedName;
-                
+                $picture_name = uniqid().'_'.$sanitizedName;
+
                 $uploadPath = public_path('uploads/users');
-                if (!file_exists($uploadPath)) {
-                    if (!mkdir($uploadPath, 0755, true)) {
+                if (! file_exists($uploadPath)) {
+                    if (! mkdir($uploadPath, 0755, true)) {
                         throw new \Exception('Fehler beim Erstellen des Upload-Verzeichnisses');
                     }
                 }
-                
+
                 $picture->move($uploadPath, $picture_name);
                 $user->picture = $picture_name;
             } catch (\Exception $e) {
-                \Log::error('User picture upload failed: ' . $e->getMessage());
-                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: ' . $e->getMessage());
+                \Log::error('User picture upload failed: '.$e->getMessage());
+                Session::flash('error', 'Fehler beim Hochladen des Benutzerbildes: '.$e->getMessage());
+
                 return back();
             }
         }
@@ -596,6 +621,7 @@ class AdminsController extends Controller
         $user->save();
 
         Session::flash('success', 'Benutzer erfolgreich aktualisiert');
+
         return to_route('admin.employees');
     }
 
@@ -603,12 +629,12 @@ class AdminsController extends Controller
     {
 
         $user = User::where('id', $request->id)->first();
-        if($user)
-        {
+        if ($user) {
             $user->delete();
         }
 
         Session::flash('error', 'Benutzer erfolgreich gelöscht');
+
         return to_route('admin.employees');
     }
 
@@ -626,10 +652,10 @@ class AdminsController extends Controller
         // }
 
         $user = User::find($uId);
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Benutzer nicht gefunden.'
+                'message' => 'Benutzer nicht gefunden.',
             ]);
         }
 
@@ -648,8 +674,8 @@ class AdminsController extends Controller
                 'message' => 'Anwesenheit gestartet. Du bist jetzt eingecheckt.',
                 'user' => [
                     'name' => $user->name,
-                    'picture' => $user->picture ? asset('uploads/users/' . $user->picture) : null
-                ]
+                    'picture' => $user->picture ? asset('uploads/users/'.$user->picture) : null,
+                ],
             ]);
         }
 
@@ -663,6 +689,7 @@ class AdminsController extends Controller
         if ($event) {
             $event->end = now();
             $event->save();
+
             return response()->json(['success' => true, 'message' => 'Anwesenheit erfolgreich beendet. Du wurdest ausgecheckt.']);
         }
 
@@ -677,12 +704,13 @@ class AdminsController extends Controller
             ELSE "none" END as status'))
             ->get();
 
-        $statuses = $statuses->map(function($eventStatus) {
+        $statuses = $statuses->map(function ($eventStatus) {
             $user = User::find($eventStatus->uid);
             $eventStatus->user = [
                 'name' => $user->name,
-                'picture' => $user->picture ? asset('uploads/users/' . $user->picture) : null,
+                'picture' => $user->picture ? asset('uploads/users/'.$user->picture) : null,
             ];
+
             return $eventStatus;
         });
 
@@ -696,15 +724,16 @@ class AdminsController extends Controller
             ['backgroundColor' => '#00FF00', 'color' => '#000000'],
             // Add all other colors here
         ];
+
         return $colorCodes[array_rand($colorCodes)];
     }
 
-    //plan room
+    // plan room
     public function updateRoomCondition(Request $request)
     {
         $room = Room::find($request->room_id);
 
-        if (!$room) {
+        if (! $room) {
             return response()->json(['status' => 'error', 'message' => 'Room not found.'], 404);
         }
 
@@ -713,7 +742,4 @@ class AdminsController extends Controller
 
         return response()->json(['status' => 'success', 'room_condition' => $room->room_condition], 200);
     }
-
-
-
 }

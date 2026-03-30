@@ -124,6 +124,31 @@
                                                     </div>
                                                 @endif
                                             </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label">Signatur <span class="text-primary">(zeichnen oder hochladen)</span></label>
+                                                <div class="d-flex justify-content-start">
+                                                    <canvas id="signature-pad" class="border rounded bg-white" style="width:220px; height:110px; touch-action:none;"></canvas>
+                                                    @if($user->signature)
+                                                        <div class="mx-4">
+                                                            <img src="{{ asset('storage/' . $user->signature) }}" alt="Signatur" style="max-width: 100px; max-height: 100px; border-radius: 5px; border: 1px solid #ddd; background: #fff;">
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                                <div class="mt-2 d-flex gap-2">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clear-signature">Leeren</button>
+                                                </div>
+                                                <input type="hidden" id="signature_data" name="signature_data" value="">
+                                                <div class="mt-2">
+                                                    <input type="file" class="form-control" id="signature_upload" name="signature_upload" accept="image/png,image/jpeg,image/jpg">
+                                                    <small class="text-muted">Wenn eine Zeichnung vorhanden ist, wird diese bevorzugt gespeichert.</small>
+                                                </div>
+                                                @error('signature_upload')
+                                                    <p class="formError">*{{$message}}</p>
+                                                @enderror
+                                                @error('signature_data')
+                                                    <p class="formError">*{{$message}}</p>
+                                                @enderror
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -281,7 +306,32 @@
 @endsection
 @section('extra_js')
 <script src="assets/vendor/libs/select2/select2.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script>
+    let signaturePad = null;
+
+    function setupSignaturePad() {
+        const canvas = document.getElementById('signature-pad');
+        if (!canvas || typeof SignaturePad === 'undefined') return;
+
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * ratio;
+        canvas.height = rect.height * ratio;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(ratio, ratio);
+
+        signaturePad = new SignaturePad(canvas, {
+            minWidth: 0.6,
+            maxWidth: 2.2,
+            backgroundColor: 'rgb(255,255,255)'
+        });
+
+        document.getElementById('clear-signature')?.addEventListener('click', function () {
+            signaturePad.clear();
+        });
+    }
+
     // Handle employee info form submission
     $('#employeeInfoForm').on('submit', function(e) {
         e.preventDefault();
@@ -315,6 +365,12 @@
         e.preventDefault();
         var form = $(this);
         var formData = new FormData(this);
+
+        if (signaturePad && !signaturePad.isEmpty()) {
+            formData.set('signature_data', signaturePad.toDataURL('image/png'));
+        } else {
+            formData.set('signature_data', '');
+        }
         
         $.ajax({
             url: form.attr('action'),
@@ -389,6 +445,10 @@
                 alert(errorMsg);
             }
         });
+    });
+
+    $(document).ready(function() {
+        setupSignaturePad();
     });
 </script>
 @endsection
