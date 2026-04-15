@@ -10,6 +10,7 @@
     'report' => true,
     'tasks' => true,
     'plans' => true,
+    'additional_costs' => true,
     'rankings' => true,
     'calendar' => true,
     'dog_calendar' => true,
@@ -178,15 +179,6 @@
         <span class="menu-header-text">Finanzen</span>
       </li>
 
-      @if($permissions['invoices'])
-      <li class="menu-item">
-        <a href="{{route('admin.invoices')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
-          <div>Rechnungen</div>
-        </a>
-      </li>
-      @endif
-
       @if($permissions['payments'])
       <li class="menu-item">
         <a href="{{route('admin.payment')}}" class="menu-link">
@@ -196,11 +188,29 @@
       </li>
       @endif
 
+      @if($permissions['invoices'])
+      <li class="menu-item">
+        <a href="{{route('admin.invoices')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
+          <div>Rechnungen</div>
+        </a>
+      </li>
+      @endif
+
       @if($permissions['plans'])
       <li class="menu-item">
         <a href="{{route('admin.plans')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
           <div>Preisplan</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['additional_costs'])
+      <li class="menu-item">
+        <a href="{{route('admin.additional-costs')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-tag-outline"></i>
+          <div>Zusatzkosten</div>
         </a>
       </li>
       @endif

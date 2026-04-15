@@ -7,6 +7,13 @@
     .table-responsive {
         overflow-x: auto;
     }
+    /* Gruppen-Rechnungen (Anzahlung/Checkout über reservation_groups) */
+    tr.invoice-row-group {
+        background-color: rgba(13, 110, 253, 0.09) !important;
+    }
+    tr.invoice-row-group td {
+        border-color: rgba(13, 110, 253, 0.12);
+    }
 </style>
 @endsection
 @section('body')
@@ -46,9 +53,11 @@
                     <div class="col-md-3">
                         <div class="form-floating form-floating-outline my-3">
                             <select name="invoice_type" class="form-control">
-                                <option value="all" {{ request('invoice_type') == 'all' || !request('invoice_type') ? 'selected' : '' }}>Alle Typen</option>
-                                <option value="local" {{ request('invoice_type') == 'local' ? 'selected' : '' }}>Lokal</option>
-                                <option value="cashier" {{ request('invoice_type') == 'cashier' ? 'selected' : '' }}>Registrierkasse</option>
+                                <option value="all"        {{ request('invoice_type', 'all') === 'all'        ? 'selected' : '' }}>Alle Typen</option>
+                                <option value="advance"    {{ request('invoice_type') === 'advance'    ? 'selected' : '' }}>Anzahlung</option>
+                                <option value="checkout"   {{ request('invoice_type') === 'checkout'   ? 'selected' : '' }}>Schlussrechnung</option>
+                                <option value="final"      {{ request('invoice_type') === 'final'      ? 'selected' : '' }}>Interne</option>
+                                <option value="hellocash"  {{ request('invoice_type') === 'hellocash'  ? 'selected' : '' }}>Registrierkasse</option>
                             </select>
                             <label for="invoice_type">Rechnungstyp</label>
                         </div>
@@ -66,127 +75,104 @@
                         <tr>
                             <th>Rechnung #</th>
                             <th>Reservierung ID</th>
-                            <th>Zahlung ID</th>
                             <th>Hund ID</th>
                             <th>Kunde</th>
+                            <th>Typ</th>
                             <th>Erstellt am</th>
+                            <th>Status</th>
                             <th>Aktionen</th>
                         </tr>
                     </thead>
                     <tbody class="table-border-bottom-0">
                         @if(count($invoices) > 0)
                             @foreach($invoices as $invoice)
-                                <tr>
+                                @php
+                                    $isGroupInvoice = (bool) $invoice->reservation_group_id;
+                                    $group = $invoice->reservationGroup;
+                                    $groupResIds = $group ? $group->reservations->sortBy('id')->pluck('id')->values() : collect();
+                                    $groupDogIds = $group ? $group->reservations->pluck('dog_id')->filter()->unique()->sort()->values() : collect();
+                                @endphp
+                                <tr class="{{ $isGroupInvoice ? 'invoice-row-group' : '' }}">
                                     <td>
                                         <a href="{{ route('admin.invoices.view', $invoice->id) }}" 
                                            target="_blank" 
                                            class="text-primary text-decoration-none fw-bold">
                                             #{{ $invoice->formatted_invoice_number }}
                                         </a>
+                                        @if($isGroupInvoice)
+                                            <span class="badge bg-label-primary ms-1" title="Gruppenrechnung">G-{{ $invoice->reservation_group_id }}</span>
+                                        @endif
                                     </td>
                                     <td>
-                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
-                                            {{-- Grouped invoice: show all reservation IDs as comma-separated links --}}
-                                            @php
-                                                $resIds = $invoice->reservation_ids ?? [];
-                                            @endphp
-                                            @if(count($resIds) > 0)
-                                                @foreach($resIds as $index => $resId)
-                                                    <a href="{{ route('admin.reservation', ['status' => ['all'], 'keyword' => $resId, 'date_range' => '', 'per_page' => 30]) }}" 
-                                                       class="text-primary text-decoration-none">{{ $resId }}</a>{{ $index < count($resIds) - 1 ? ', ' : '' }}
-                                                @endforeach
-                                            @else
-                                                <span class="text-muted">N/A</span>
-                                            @endif
-                                        @elseif($invoice->reservation)
+                                        @if($invoice->reservation)
                                             <a href="{{ route('admin.reservation', ['status' => ['all'], 'keyword' => $invoice->reservation->id, 'date_range' => '', 'per_page' => 30]) }}" 
                                                class="text-primary text-decoration-none">
                                                 {{ $invoice->reservation->id }}
                                             </a>
+                                        @elseif($groupResIds->isNotEmpty())
+                                            @foreach($groupResIds as $idx => $rid)
+                                                @if($idx > 0)<span class="text-muted">, </span>@endif
+                                                <a href="{{ route('admin.reservation', ['status' => ['all'], 'keyword' => $rid, 'date_range' => '', 'per_page' => 30]) }}"
+                                                   class="text-primary text-decoration-none">{{ $rid }}</a>
+                                            @endforeach
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">-</span>
                                         @endif
                                     </td>
                                     <td>
-                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
-                                            {{-- Grouped invoice: show all payment IDs as comma-separated links --}}
-                                            @if($invoice->payments->count() > 0)
-                                                @foreach($invoice->payments as $index => $pmt)
-                                                    <a href="{{ route('admin.payment', ['id' => $pmt->id]) }}" 
-                                                       class="text-primary text-decoration-none">{{ $pmt->id }}</a>{{ $index < $invoice->payments->count() - 1 ? ', ' : '' }}
-                                                @endforeach
-                                            @else
-                                                <span class="text-muted">N/A</span>
-                                            @endif
-                                        @elseif($invoice->payment)
-                                            <a href="{{ route('admin.payment', ['id' => $invoice->payment->id]) }}" 
-                                               class="text-primary text-decoration-none">
-                                                {{ $invoice->payment->id }}
-                                            </a>
+                                        @if($invoice->reservation?->dog)
+                                            {{ $invoice->reservation->dog->id }}
+                                        @elseif($groupDogIds->isNotEmpty())
+                                            {{ $groupDogIds->implode(', ') }}
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">-</span>
                                         @endif
                                     </td>
                                     <td>
-                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped)
-                                            {{-- Grouped invoice: show all dog IDs as comma-separated --}}
-                                            @if($invoice->payments->count() > 0)
-                                                @php
-                                                    $dogIds = $invoice->payments
-                                                        ->map(fn($p) => $p->reservation?->dog?->id)
-                                                        ->filter()
-                                                        ->unique()
-                                                        ->values();
-                                                @endphp
-                                                @if($dogIds->count() > 0)
-                                                    @foreach($dogIds as $index => $dogId)
-                                                        {{ $dogId }}{{ $index < $dogIds->count() - 1 ? ', ' : '' }}
-                                                    @endforeach
-                                                @else
-                                                    <span class="text-muted">N/A</span>
-                                                @endif
-                                            @else
-                                                <span class="text-muted">N/A</span>
-                                            @endif
-                                        @elseif($invoice->reservation && $invoice->reservation->dog)
-                                            {{ $invoice->reservation->dog->id ?? 'N/A' }}
-                                        @else
-                                            <span class="text-muted">N/A</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @if(($supportsGroupedInvoices ?? false) && $invoice->is_grouped && $invoice->customer)
-                                            {{-- Grouped invoice: show customer directly --}}
-                                            {{ $invoice->customer->name ?? 'N/A' }} ({{ $invoice->customer->id }})
-                                        @elseif($invoice->reservation && $invoice->reservation->dog && $invoice->reservation->dog->customer)
-                                            {{-- Single invoice: show customer via reservation --}}
-                                            {{ $invoice->reservation->dog->customer->name ?? 'N/A' }} ({{ $invoice->reservation->dog->customer->id }})
+                                        @if($invoice->reservation?->dog?->customer)
+                                            {{ $invoice->reservation->dog->customer->name }} ({{ $invoice->reservation->dog->customer->id }})
                                         @elseif($invoice->customer)
-                                            {{ $invoice->customer->name ?? 'N/A' }} ({{ $invoice->customer->id }})
+                                            {{ $invoice->customer->name }} ({{ $invoice->customer->id }})
+                                        @elseif($group?->customer)
+                                            {{ $group->customer->name }} ({{ $group->customer->id }})
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($invoice->type === 'hellocash')
+                                            Registrierkasse
+                                        @elseif($invoice->type === 'advance')
+                                            Anzahlung
+                                        @elseif($invoice->type === 'checkout')
+                                            Schlussrechnung
+                                        @elseif($invoice->type === 'final')
+                                            Interne
+                                        @else
+                                            Lokal
                                         @endif
                                     </td>
                                     <td>
                                         {{ $invoice->created_at->format('d.m.Y H:i') }}
                                     </td>
                                     <td>
+                                        @if(($invoice->status ?? 'paid') === 'cancelled')
+                                            <span class="badge bg-danger">Storniert</span>
+                                        @else
+                                            <span class="badge bg-success">Bezahlt</span>
+                                        @endif
+                                    </td>
+                                    <td>
                                         <a href="{{ route('admin.invoices.download', $invoice->id) }}" 
                                            class="btn btn-sm btn-outline-primary">
                                             <i class="mdi mdi-download"></i> PDF
                                         </a>
-                                        @if(($invoice->invoice_type ?? null) === 'local' && !($invoice->is_grouped ?? false) && $invoice->payment && $invoice->reservation)
-                                            <a href="{{ route('admin.invoices.regenerate.form', $invoice->id) }}"
-                                               class="btn btn-sm btn-outline-warning ms-1">
-                                                <i class="mdi mdi-refresh"></i> Neu generieren
-                                            </a>
-                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
                         @else
                             <tr>
-                                <td colspan="7" class="text-center py-4">
+                                <td colspan="8" class="text-center py-4">
                                     <p class="text-muted">Keine Rechnungen gefunden.</p>
                                 </td>
                             </tr>

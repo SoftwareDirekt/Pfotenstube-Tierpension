@@ -1,152 +1,248 @@
 @extends('admin.layouts.app')
 @section('title')
-    <title>Zimmer Management</title>
+    <title>Checkout</title>
 @endsection
 @section('extra_css')
+<link rel="stylesheet" href="assets/vendor/libs/select2/select2.css" />
 <style>
-    /* Customer name column - max width with text wrapping */
-    #myTable tbody td:nth-child(3) {
-        max-width: 250px;
-        word-wrap: break-word;
-        word-break: break-word;
-        white-space: normal;
-        line-height: 1.4;
-    }
-    
-    /* Price plan selector - make it bigger */
-    #myTable tbody td:nth-child(5) select {
-        min-width: 120px;
-        width: auto;
-    }
-    
-    /* Ensure table cells don't overflow */
-    #myTable td {
-        vertical-align: middle;
-        padding: 10px 8px;
-    }
-    
-    /* Customer group header styling */
-    .customer-group-header {
-        background-color: #f8f9fa;
+    #myTable td, #myTable th { vertical-align: middle; }
+    .customer-group-header { background-color: #eef2f7; font-weight: 600; border-top: 2px solid #d0d8e4; }
+    .additional-cost-input .input-group-text { min-width: 140px; }
+
+    .plan-tag {
+        display: inline-block;
+        background: #e8f4fd;
+        border: 1px solid #bee3f8;
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 0.82rem;
         font-weight: 600;
-        border-top: 3px solid #dee2e6;
-        border-bottom: 1px solid #dee2e6;
+        color: #1a4a72;
+        white-space: nowrap;
     }
-    
-    .customer-group-header td {
-        padding: 16px 12px;
-        vertical-align: middle;
+    .plan-price-label {
+        font-size: 0.72rem;
+        color: #718096;
+        margin-top: 3px;
     }
-    
-    .customer-group-header + tr {
-        border-top: 1px solid #e9ecef;
+    .readonly-amount {
+        background-color: #f1f5f9 !important;
+        color: #374151 !important;
+        border-color: #d1d5db !important;
+        cursor: default;
+        font-weight: 600;
     }
-    
-    .customer-info {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .customer-name {
-        font-size: 1rem;
-        margin-bottom: 4px;
-    }
-    
-    .customer-balance {
+    .amount-received-display {
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-weight: 700;
+        color: #15803d;
         font-size: 0.9rem;
-        font-weight: 500;
-    }
-    
-    .customer-balance.positive {
-        color: #198754;
-    }
-    
-    .customer-balance.negative {
-        color: #dc3545;
-    }
-    
-    .wallet-section {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 4px 0;
-    }
-    
-    .wallet-checkbox {
-        margin-bottom: 4px;
-    }
-    
-    .wallet-breakdown {
-        font-size: 0.85rem;
-        padding: 6px 8px;
-        background-color: #e7f3ff;
-        border-radius: 4px;
-        margin-top: 4px;
-        border-left: 3px solid #0d6efd;
-    }
-    
-    .wallet-breakdown small {
+        text-align: center;
+        min-width: 90px;
         display: block;
-        line-height: 1.5;
     }
-    
-    /* HelloCash section styling */
-    .hellocash-section {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+    #myTable thead th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+    #myTable tbody tr:not(.customer-group-header):hover { background-color: #fafbfc; }
+    .vat-info-text { font-size: 0.72rem; color: #155724; display: block; margin-top: 4px; }
+    .checkout-bulk-only .bulk-customer-card { border-radius: 12px; border: 1px solid #e2e8f0; background: linear-gradient(135deg, #f8fafc 0%, #fff 100%); }
+    .checkout-bulk-only .bulk-summary-bar { background: #f1f5f9; border-radius: 0 0 12px 12px; }
+    .checkout-bulk-only.checkout-bulk-full {
+        width: 100%;
+        max-width: 100%;
+        min-height: calc(100vh - 5.5rem);
+        margin-left: 0;
+        margin-right: 0;
+        box-sizing: border-box;
     }
-    
-    .hellocash-section .form-check-label {
-        color: #6c757d;
-    }
-    
-    .hellocash-section .form-check-input:checked + .form-check-label {
-        color: #198754;
-        font-weight: 500;
-    }
-    
-    /* Add spacing between rows */
-    #myTable tbody tr:not(.customer-group-header) {
-        border-bottom: 1px solid #f0f0f0;
-    }
-    
-    #myTable tbody tr:not(.customer-group-header):hover {
-        background-color: #f8f9fa;
-    }
-    
-    /* Improve input field spacing */
-    #myTable tbody input[type="number"],
-    #myTable tbody select {
-        margin-bottom: 4px;
-    }
-    
-    /* VAT info spacing */
-    #myTable tbody small {
-        display: block;
-        margin-top: 6px;
-        line-height: 1.4;
-    }
-    
-    /* Table header spacing */
-    #myTable thead th {
-        padding: 12px 8px;
-        font-weight: 600;
-    }
-    
-    /* Add margin after customer group */
-    .customer-group-header ~ tr[data-customer-id] {
-        padding-left: 8px;
-    }
-    
-    /* Summary section improvements */
-    .checkoutTotal {
-        padding-top: 8px;
-    }
+    .checkout-bulk-only .bulk-customer-meta { line-height: 1.55; }
+    .checkout-bulk-only .bulk-customer-meta .bulk-customer-meta-line { display: block; }
 </style>
 @endsection
 @section('body')
+@if(!empty($bulkCheckoutOnly))
+@php
+    $c = $checkoutCustomer ?? null;
+    $vatPct = $vatPercentage ?? 20;
+    $vatModeBulk = config('app.vat_calculation_mode', 'exclusive');
+    $sumDue = 0;
+    $sumPaid = 0;
+    $sumRem = 0;
+    $sumDogLine = 0;
+    foreach ($reservationGroups ?? [] as $gData) {
+        $g = $gData['group'];
+        $sumDue += (float) $g->total_due;
+        $paid = (float) $g->activeEntries()->sum('amount');
+        $sumPaid += $paid;
+        $sumRem += max(0, round((float) $g->total_due - $paid, 2));
+        foreach ($gData['reservations'] as $obj) {
+            $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
+            $now = \Carbon\Carbon::now()->startOfDay();
+            $daysDiff = $checkinDate->diffInDays($now);
+            $days_between = ($daysDiff === 0) ? 1 : ((config('app.days_calculation_mode', 'inclusive') === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+            $plan_price = $obj->plan?->price ?? 0;
+            $basePrice = (double) $plan_price * (int) $days_between;
+            if ($vatModeBulk === 'inclusive') {
+                $sumDogLine += $basePrice;
+            } else {
+                $sumDogLine += $basePrice * (1 + ($vatPct / 100));
+            }
+        }
+    }
+@endphp
+<div class="container-fluid flex-grow-1 py-3 checkout-bulk-only checkout-bulk-full">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3 mt-3">
+        <div>
+            <h4 class="mb-0">Mehrfachkasse</h4>
+            <p class="text-muted small mb-0">Gruppen-Checkout für einen Kunden</p>
+        </div>
+        <a href="{{ route('admin.dogs.in.rooms') }}" class="btn btn-outline-secondary btn-sm">Zurück zur Auswahl</a>
+    </div>
+
+    <div class="card bulk-customer-card shadow-sm mb-4">
+        <div class="card-body py-4 px-4">
+            <div class="row align-items-start g-4">
+                <div class="col-12 col-lg-7">
+                    <h4 class="mb-3">{{ $c->name ?? 'Kunde' }}</h4>
+                    @if($c)
+                        <div class="bulk-customer-meta text-body-secondary d-flex flex-column gap-2">
+                            <span class="bulk-customer-meta-line">Kunden-Nr. {{ $c->id_number ?? '—' }}</span>
+                            <span class="bulk-customer-meta-line">Telefonnummer {{ $c->phone ? $c->phone : '—' }}</span>
+                        </div>
+                    @endif
+                </div>
+                <div class="col-12 col-lg-5 text-lg-end">
+                    <div class="small text-muted">Summe Gruppe(n)</div>
+                    <div class="fs-4 fw-bold text-primary">{{ number_format($sumDue, 2, ',', '.') }}€</div>
+                    <div class="small">Bezahlt: <span class="text-success">{{ number_format($sumPaid, 2, ',', '.') }}€</span></div>
+                    <div class="small">Rest: <span class="{{ $sumRem > 0.01 ? 'text-danger' : 'text-success' }} fw-semibold">{{ number_format($sumRem, 2, ',', '.') }}€</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 flex-grow-1 d-flex flex-column">
+                <div class="card-header bg-white border-bottom py-3">
+                    <strong>Gruppen & Hunde</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive text-nowrap">
+                        <table class="table mb-0" id="myTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Hund ID</th>
+                                    <th>Hund Name</th>
+                                    <th>Termine</th>
+                                    <th>Preisplan</th>
+                                    <th>Positionsbetrag</th>
+                                    <th class="text-end" style="min-width: 280px;">Gruppe / Zahlung</th>
+                                </tr>
+                            </thead>
+                            <tbody class="table-border-bottom-0">
+                                @foreach($reservationGroups as $gid => $gData)
+                                    @php
+                                        $grp = $gData['group'];
+                                        $grpCustomer = $gData['customer'];
+                                        $grpReservations = $gData['reservations'];
+                                        $grpTotalDue = (float) $grp->total_due;
+                                        $grpPaid = (float) $grp->activeEntries()->sum('amount');
+                                        $grpRemaining = max(0, round($grpTotalDue - $grpPaid, 2));
+                                        $grpDogNames = collect($grpReservations)->map(fn ($r) => $r->dog?->name ?? '?')->implode(', ');
+                                    @endphp
+                                    <tr class="customer-group-header" style="background-color: #dbeafe;">
+                                        <td colspan="4">
+                                            <i class="mdi mdi-account-group me-1"></i>
+                                            <strong>Gruppe G-{{ $grp->id }}</strong>
+                                            <span class="text-muted ms-2">({{ count($grpReservations) }} Hunde: {{ $grpDogNames }})</span>
+                                        </td>
+                                        <td class="fw-bold align-middle">
+                                            {{ number_format($grpTotalDue, 2, ',', '.') }}€
+                                            <div class="small fw-normal text-muted">Bezahlt {{ number_format($grpPaid, 2, ',', '.') }}€ · Rest {{ number_format($grpRemaining, 2, ',', '.') }}€</div>
+                                        </td>
+                                        <td class="text-end align-middle">
+                                            @if($grpRemaining > 0.01)
+                                                <form action="{{ route('admin.dogs.rooms.group-checkout') }}" method="POST" class="d-inline-flex flex-wrap align-items-center justify-content-end gap-2" onsubmit="this.querySelector('button').disabled=true;">
+                                                    @csrf
+                                                    <input type="hidden" name="group_id" value="{{ $grp->id }}">
+                                                    <select name="gateway" class="form-control form-control-sm" style="width:auto;">
+                                                        <option value="Bar">Bar</option>
+                                                        <option value="Bank">Bank</option>
+                                                    </select>
+                                                    <input type="number" name="received_amount" step="0.01" value="{{ number_format($grpRemaining, 2, '.', '') }}" class="form-control form-control-sm" style="width:110px;">
+                                                    <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                                                        <i class="mdi mdi-check-all me-1"></i>Gruppen-Checkout
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <form action="{{ route('admin.dogs.rooms.group-checkout') }}" method="POST" class="d-inline" onsubmit="this.querySelector('button').disabled=true;">
+                                                    @csrf
+                                                    <input type="hidden" name="group_id" value="{{ $grp->id }}">
+                                                    <input type="hidden" name="received_amount" value="0">
+                                                    <input type="hidden" name="gateway" value="Bar">
+                                                    <button type="submit" class="btn btn-sm btn-success text-nowrap">
+                                                        <i class="mdi mdi-check-all me-1"></i>Gruppen-Checkout (bezahlt)
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    @foreach($grpReservations as $obj)
+                                        @php
+                                            $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
+                                            $now = \Carbon\Carbon::now()->startOfDay();
+                                            $daysDiff = $checkinDate->diffInDays($now);
+                                            $days_between = ($daysDiff === 0) ? 1 : ((config('app.days_calculation_mode', 'inclusive') === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+                                            $plan_title = $obj->plan?->title ?? '';
+                                            $plan_price = $obj->plan?->price ?? 0;
+                                            $basePrice = (double) $plan_price * (int) $days_between;
+                                            if ($vatModeBulk === 'inclusive') {
+                                                $g = $basePrice;
+                                            } else {
+                                                $g = $basePrice * (1 + ($vatPct / 100));
+                                            }
+                                        @endphp
+                                        <tr style="background-color:#f0f7ff;">
+                                            <td>{{ $obj->dog->id }}</td>
+                                            <td>{{ $obj->dog->name }}</td>
+                                            <td>({{ $days_between }} Tage)</td>
+                                            <td>
+                                                <div class="plan-tag">{{ $plan_title ?: 'Kein Plan' }}</div>
+                                                <div class="plan-price-label">€{{ number_format($plan_price, 2, ',', '.') }} / Tag</div>
+                                            </td>
+                                            <td class="fw-bold">{{ number_format($g, 2, ',', '.') }}€</td>
+                                            <td class="text-muted small text-end">via Gruppe G-{{ $grp->id }}</td>
+                                        </tr>
+                                    @endforeach
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bulk-summary-bar border-0 py-3 px-4">
+                    <div class="row text-center text-md-start g-2">
+                        <div class="col-6 col-md-3">
+                            <div class="small text-muted">Hunde-Zeilen (Brutto-Ansicht)</div>
+                            <div class="fw-bold">{{ number_format($sumDogLine, 2, ',', '.') }}€</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="small text-muted">Gruppe gesamt</div>
+                            <div class="fw-bold">{{ number_format($sumDue, 2, ',', '.') }}€</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="small text-muted">Anzahlungen</div>
+                            <div class="fw-bold text-success">{{ number_format($sumPaid, 2, ',', '.') }}€</div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="small text-muted">Offen</div>
+                            <div class="fw-bold {{ $sumRem > 0.01 ? 'text-danger' : 'text-success' }}">{{ number_format($sumRem, 2, ',', '.') }}€</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+</div>
+@else
 <div class="container-fluid flex-grow-1 container-p-y">
     <div class="row">
         <div class="col-12">
@@ -157,7 +253,7 @@
                             <h5 class="card-header">Hunde in den Zimmern</h5>
                         </div>
                     </div>
-                    <form action="{{route('admin.dogs.rooms.checkout-update')}}" method="POST">
+                    <form action="{{route('admin.dogs.rooms.checkout-update')}}" method="POST" autocomplete="off">
                         @csrf
                         <div class="table-responsive text-nowrap mb-2">
                             <table class="table" id="myTable">
@@ -167,94 +263,144 @@
                                         <th>Hund Name</th>
                                         <th>Kunde</th>
                                         <th>Termine</th>
-                                        <th>Preispläne</th>
-                                        <th>Zahlungsart</th>
+                                        <th>Preisplaene</th>
                                         <th>Rabatt</th>
-                                        <th>Zusätzliche Kosten</th>
+                                        <th>Zusatzkosten</th>
                                         <th>Rechnungsbetrag</th>
+                                        <th>Anzahlung</th>
+                                        <th>Restbetrag</th>
+                                        <th>Zahlungsart</th>
                                         <th>Betrag Erhalten</th>
                                     </tr>
                                 </thead>
                                 <tbody class="table-border-bottom-0">
-                                    @php 
+                                    @php
                                         $total = 0;
                                         $vatPercentage = $vatPercentage ?? 20;
                                         $vatMode = config('app.vat_calculation_mode', 'exclusive');
                                         $rowIndex = 0;
                                     @endphp
+
+                                    {{-- ═══ Grouped reservations (one block per group) ═══ --}}
+                                    @if(isset($reservationGroups) && count($reservationGroups) > 0)
+                                        @foreach($reservationGroups as $gid => $gData)
+                                            @php
+                                                $grp = $gData['group'];
+                                                $grpCustomer = $gData['customer'];
+                                                $grpReservations = $gData['reservations'];
+                                                $grpTotalDue = (float) $grp->total_due;
+                                                $grpPaid = (float) $grp->activeEntries()->sum('amount');
+                                                $grpRemaining = max(0, round($grpTotalDue - $grpPaid, 2));
+                                                $grpDogNames = collect($grpReservations)->map(fn($r) => $r->dog?->name ?? '?')->implode(', ');
+                                            @endphp
+                                            <tr class="customer-group-header" style="background-color: #dbeafe;">
+                                                <td colspan="6">
+                                                    <i class="mdi mdi-account-group me-1"></i>
+                                                    <strong>Gruppe G-{{ $grp->id }}: {{ $grpCustomer ? $grpCustomer->name : 'Kein Kunde' }}</strong>
+                                                    <span class="text-muted ms-2">({{ count($grpReservations) }} Hunde: {{ $grpDogNames }})</span>
+                                                </td>
+                                                <td colspan="2" class="text-end fw-bold">
+                                                    Gesamt: {{ number_format($grpTotalDue, 2, ',', '.') }}€
+                                                    <br><small class="text-success">Bezahlt: {{ number_format($grpPaid, 2, ',', '.') }}€</small>
+                                                    <br><small class="{{ $grpRemaining > 0.01 ? 'text-danger' : 'text-success' }}">Rest: {{ number_format($grpRemaining, 2, ',', '.') }}€</small>
+                                                </td>
+                                                <td colspan="4" class="text-end">
+                                                    @if($grpRemaining > 0.01)
+                                                    <form action="{{ route('admin.dogs.rooms.group-checkout') }}" method="POST" class="d-inline-flex align-items-center gap-2" onsubmit="this.querySelector('button').disabled=true;">
+                                                        @csrf
+                                                        <input type="hidden" name="group_id" value="{{ $grp->id }}">
+                                                        <select name="gateway" class="form-control form-control-sm" style="width:auto;">
+                                                            <option value="Bar">Bar</option>
+                                                            <option value="Bank">Bank</option>
+                                                        </select>
+                                                        <input type="number" name="received_amount" step="0.01" value="{{ number_format($grpRemaining, 2, '.', '') }}" class="form-control form-control-sm" style="width:110px;">
+                                                        <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                                                            <i class="mdi mdi-check-all me-1"></i>Gruppen-Checkout
+                                                        </button>
+                                                    </form>
+                                                    @else
+                                                    <form action="{{ route('admin.dogs.rooms.group-checkout') }}" method="POST" class="d-inline" onsubmit="this.querySelector('button').disabled=true;">
+                                                        @csrf
+                                                        <input type="hidden" name="group_id" value="{{ $grp->id }}">
+                                                        <input type="hidden" name="received_amount" value="0">
+                                                        <input type="hidden" name="gateway" value="Bar">
+                                                        <button type="submit" class="btn btn-sm btn-success text-nowrap">
+                                                            <i class="mdi mdi-check-all me-1"></i>Gruppen-Checkout (bezahlt)
+                                                        </button>
+                                                    </form>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                            @foreach($grpReservations as $obj)
+                                                @php
+                                                    $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
+                                                    $now = \Carbon\Carbon::now()->startOfDay();
+                                                    $daysDiff = $checkinDate->diffInDays($now);
+                                                    $days_between = ($daysDiff === 0) ? 1 : ((config('app.days_calculation_mode','inclusive') === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+                                                    $plan_title = $obj->plan?->title ?? '';
+                                                    $plan_price = $obj->plan?->price ?? 0;
+                                                    $basePrice = (double)$plan_price * (int)$days_between;
+                                                    if ($vatMode === 'inclusive') { $g = $basePrice; } else { $g = $basePrice * (1 + ($vatPercentage / 100)); }
+                                                    $total += $g;
+                                                @endphp
+                                                <tr style="background-color:#f0f7ff;">
+                                                    <td>{{ $obj->dog->id }}</td>
+                                                    <td>{{ $obj->dog->name }}</td>
+                                                    <td>{{ $obj->dog->customer->name ?? 'N/A' }}</td>
+                                                    <td>({{ $days_between }} Tage)</td>
+                                                    <td>
+                                                        <div class="plan-tag">{{ $plan_title ?: 'Kein Plan' }}</div>
+                                                        <div class="plan-price-label">€{{ number_format($plan_price, 2, ',', '.') }} / Tag</div>
+                                                    </td>
+                                                    <td>—</td>
+                                                    <td>—</td>
+                                                    <td class="fw-bold">{{ number_format($g, 2, ',', '.') }}€</td>
+                                                    <td colspan="4" class="text-muted small">via Gruppe</td>
+                                                </tr>
+                                            @endforeach
+                                        @endforeach
+
+                                        {{-- Separator --}}
+                                        @if(count($groupedReservations ?? []) > 0)
+                                        <tr><td colspan="12" style="border-top:3px solid #d0d8e4; padding:6px 0;"><strong class="text-muted">Einzelreservierungen</strong></td></tr>
+                                        @endif
+                                    @endif
+
+                                    {{-- ═══ Ungrouped reservations (existing per-dog rows) ═══ --}}
                                     @if(isset($groupedReservations))
                                         @foreach($groupedReservations as $customerId => $group)
                                             @php
                                                 $customer = $group['customer'];
-                                                $customerBalance = $group['balance'];
                                                 $customerReservations = $group['reservations'];
                                             @endphp
-                                            
-                                            {{-- Customer Group Header --}}
+
                                             <tr class="customer-group-header">
-                                                <td colspan="3">
-                                                    <div class="customer-info">
-                                                        <div class="customer-name">
-                                                            <strong>{{ $customer ? $customer->name . ' (ID: ' . $customer->id . ')' : 'Kein Kunde' }}</strong>
-                                                        </div>
-                                                        <div>
-                                                            <span class="customer-balance {{ $customerBalance >= 0 ? 'positive' : 'negative' }}" id="customer_balance_{{ $customerId }}" data-original-balance="{{ $customerBalance }}">
-                                                                Saldo: {{ $customerBalance >= 0 ? '+' : '' }}{{ number_format($customerBalance, 2, ',', '.') }}€
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                <td colspan="8">
+                                                    <strong>{{ $customer ? $customer->name . ' (ID: ' . $customer->id . ')' : 'Kein Kunde' }}</strong>
                                                 </td>
-                                                <td colspan="7">
-                                                    <div class="d-flex justify-content-end align-items-start gap-4">
-                                                        {{-- HelloCash / Registrierkasse Checkbox --}}
-                                                        <div class="hellocash-section">
-                                                            <div class="form-check mt-1">
-                                                                <input class="form-check-input" type="checkbox" name="send_to_hellocash[{{ $customerId }}]" id="send_to_hellocash_{{ $customerId }}" value="1" onchange="handleHelloCashChange('{{ $customerId }}')">
-                                                                <label class="form-check-label" for="send_to_hellocash_{{ $customerId }}">
-                                                                    <i class="bx bx-receipt me-1"></i>Registrierkasse
-                                                                </label>
-                                                            </div>
-                                                            <small id="hellocash_info_{{ $customerId }}" class="text-muted" style="display: none; font-size: 0.75rem;">
-                                                                <i class="bx bx-info-circle"></i> Zahlungsart wird auf Bar fixiert
-                                                            </small>
-                                                        </div>
-                                                        
-                                                        {{-- Wallet Section --}}
-                                                        <div class="wallet-section">
-                                                            @if($customer && $customerBalance > 0)
-                                                                <div class="form-check wallet-checkbox">
-                                                                    <input class="form-check-input" type="checkbox" name="use_wallet[{{ $customerId }}]" id="use_wallet_{{ $customerId }}" value="1" onchange="handleWalletChange('{{ $customerId }}')">
-                                                                    <label class="form-check-label" for="use_wallet_{{ $customerId }}">
-                                                                        Guthaben verwenden (<span id="wallet_available_{{ $customerId }}">{{ number_format($customerBalance, 2, ',', '.') }}</span>€)
-                                                                    </label>
-                                                                </div>
-                                                            @endif
-                                                            <div id="wallet_breakdown_{{ $customerId }}" class="wallet-breakdown" style="display: none;">
-                                                                <small>
-                                                                    <strong>Guthaben:</strong> <span id="wallet_used_{{ $customerId }}">0.00</span>€<br>
-                                                                    <strong>Bar:</strong> <span id="cash_payment_{{ $customerId }}">0.00</span>€
-                                                                </small>
-                                                            </div>
-                                                        </div>
+                                                <td colspan="4" class="text-end">
+                                                    <div class="form-check mt-1 d-inline-block">
+                                                        <input class="form-check-input" type="checkbox" name="send_to_hellocash[{{ $customerId }}]" id="send_to_hellocash_{{ $customerId }}" value="1">
+                                                        <label class="form-check-label" for="send_to_hellocash_{{ $customerId }}">
+                                                            <i class="bx bx-receipt me-1"></i>Registrierkasse (nur Bar)
+                                                        </label>
                                                     </div>
                                                 </td>
                                             </tr>
-                                            
+
                                             @foreach($customerReservations as $obj)
                                             @php
-                                                // Calculate days based on configuration
                                                 $checkinDate = \Carbon\Carbon::parse($obj->checkin_date)->startOfDay();
                                                 $now = \Carbon\Carbon::now()->startOfDay();
                                                 $daysDiff = $checkinDate->diffInDays($now);
-                                                
+
                                                 if ($daysDiff === 0) {
                                                     $days_between = 1;
                                                 } else {
                                                     $calculationMode = config('app.days_calculation_mode', 'inclusive');
                                                     $days_between = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
-                                                } 
+                                                }
 
-                                                // Determine current plan ID and price
                                                 $current_plan_id = null;
                                                 if(isset($obj->plan) && $obj->plan != null)
                                                 {
@@ -275,10 +421,9 @@
                                                     $plan_price = $obj->dog->day_plan_obj->price ?? 0;
                                                     $current_plan_id = $obj->dog->day_plan ?? null;
                                                 }
-                                                
-                                                // Calculate initial amounts based on VAT mode
+
                                                 $basePrice = (double)$plan_price * (int)$days_between;
-                                                
+
                                                 if ($vatMode === 'inclusive') {
                                                     $initial_net = \App\Helpers\VATCalculator::getNetFromGross($basePrice, $vatPercentage);
                                                     $initial_vat = $basePrice - $initial_net;
@@ -288,8 +433,10 @@
                                                     $initial_vat = \App\Helpers\VATCalculator::calculateVATAmount($initial_net, $vatPercentage);
                                                     $initial_gross = $initial_net + $initial_vat;
                                                 }
-                                                
+
                                                 $total = $total + $initial_gross;
+                                                $advancePaid = $obj->total_paid ?? 0;
+                                                $remaining = max(0, $initial_gross - $advancePaid);
                                             @endphp
                                             <tr data-customer-id="{{ $customerId }}">
                                                 <td>{{$obj->dog->id}}</td>
@@ -297,26 +444,12 @@
                                                 <td>{{$obj->dog->customer->name ?? 'N/A'}} ({{$obj->dog->customer->id ?? 'N/A'}})</td>
                                                 <td>({{$days_between}} Tage)</td>
                                                 <td>
-                                                    <select class="form-control form-control-sm" id="plan_id{{$rowIndex}}" name="plan_id[]" onchange="updatePlanCost('{{$rowIndex}}')">
-                                                        @foreach($plans as $plan)
-                                                            <option value="{{$plan->id}}" 
-                                                                data-price="{{$plan->price}}"
-                                                                data-flat-rate="{{$plan->flat_rate}}"
-                                                                {{ ($current_plan_id == $plan->id) ? 'selected' : '' }}>
-                                                                {{$plan->title}}
-                                                            </option>
-                                                        @endforeach
-                                                    </select>
+                                                    <div class="plan-tag">{{ $plan_title ?: 'Kein Plan' }}</div>
+                                                    <div class="plan-price-label">€{{ number_format($plan_price, 2, ',', '.') }} / Tag</div>
+                                                    <input type="hidden" name="plan_id[]" value="{{ $current_plan_id }}">
                                                 </td>
                                                 <td>
-                                                    <select class="form-control payment-method-select" data-customer-id="{{ $customerId }}" id="payment_method_select_{{ $rowIndex }}" onchange="updatePaymentMethod('{{ $rowIndex }}')">
-                                                        <option selected value="Bar">Bar</option>
-                                                        <option value="Bank">Banküberweisung</option>
-                                                    </select>
-                                                    <input type="hidden" name="payment_method[]" id="payment_method_{{ $rowIndex }}" value="Bar">
-                                                </td>
-                                                <td>
-                                                    <select required class="form-control" id="discount_select{{$rowIndex}}" onchange="updateDiscount('{{$rowIndex}}', '{{$customerId}}')">
+                                                    <select required class="form-control" id="discount_select{{$rowIndex}}" onchange="updateDiscount('{{$rowIndex}}')">
                                                         <option selected value="0">0%</option>
                                                         <option value="10">10%</option>
                                                         <option value="15">15%</option>
@@ -324,16 +457,48 @@
                                                     <input type="hidden" name="discount[]" id="discount{{$rowIndex}}" value="0">
                                                 </td>
                                                 <td>
-                                                    <input type="number" step="0.10" class="form-control" id="special_cost{{$rowIndex}}" name="special_cost[]" value="0.00" oninput="recalculateRow('{{$rowIndex}}', '{{$customerId}}')">
+                                                    <select multiple class="form-control additional-cost-select" id="additional_cost_select{{$rowIndex}}" name="additional_costs[{{$rowIndex}}][]" data-row="{{$rowIndex}}" data-placeholder="Zusatzkosten wählen...">
+                                                        @foreach($additionalCosts as $cost)
+                                                            <option value="{{$cost->id}}" data-price="{{$cost->price}}">{{$cost->title}}</option>
+                                                        @endforeach
+                                                    </select>
+                                                    <div id="additional_cost_inputs{{$rowIndex}}" class="mt-2 additional-cost-input"></div>
                                                 </td>
                                                 <td>
                                                     <div style="margin-bottom: 4px;">
                                                         <input required type="number" step="0.10" class="form-control" id="invoice_amount{{$rowIndex}}" name="invoice_amount[]" value="{{ number_format($initial_gross, 2, '.', '')}}">
                                                     </div>
-                                                    <small id="vat_info{{$rowIndex}}" style="font-size: 0.75rem; color:#155724; display: block; margin-top: 4px;">Netto: {{ number_format($initial_net, 2, ',', '.') }}€ + MwSt: {{ number_format($initial_vat, 2, ',', '.') }}€</small>
+                                                    <small id="vat_info{{$rowIndex}}" class="vat-info-text">Netto: {{ number_format($initial_net, 2, ',', '.') }}€ + MwSt: {{ number_format($initial_vat, 2, ',', '.') }}€</small>
                                                 </td>
                                                 <td>
-                                                    <input required type="number" step="0.01" class="form-control" id="received_amount{{$rowIndex}}" name="received_amount[]" value="{{ number_format($initial_gross, 2, '.', '')}}" oninput="changeTotal();">
+                                                    <span id="advance_paid_display{{$rowIndex}}">{{ number_format($advancePaid, 2, ',', '.') }}</span>€
+                                                    <input type="hidden" id="advance_paid{{$rowIndex}}" value="{{ number_format($advancePaid, 2, '.', '') }}">
+                                                </td>
+                                                <td>
+                                                    <span id="remaining_display{{$rowIndex}}">{{ number_format($remaining, 2, ',', '.') }}</span>€
+                                                    <input type="hidden" id="remaining_value{{$rowIndex}}" value="{{ number_format($remaining, 2, '.', '') }}">
+                                                </td>
+                                                <td>
+                                                    <select class="form-control" name="payment_mode[]" id="payment_mode{{$rowIndex}}" onchange="toggleRowPaymentMode('{{$rowIndex}}')">
+                                                        <option selected value="single">Einfach</option>
+                                                        <option value="split">Split</option>
+                                                    </select>
+                                                    <div class="mt-2" id="payment_method_wrapper{{$rowIndex}}">
+                                                        <select class="form-control" name="payment_method[]" id="payment_method{{$rowIndex}}">
+                                                            <option selected value="Bar">Bar</option>
+                                                            <option value="Bank">Bankueberweisung</option>
+                                                        </select>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div id="payment_amount_single{{$rowIndex}}">
+                                                        <span class="amount-received-display" id="payment_amount_display{{$rowIndex}}">{{ number_format($remaining, 2, ',', '.') }}€</span>
+                                                        <input type="hidden" id="payment_amount{{$rowIndex}}" name="payment_amount[]" value="{{ number_format($remaining, 2, '.', '')}}">
+                                                    </div>
+                                                    <div id="payment_amount_split{{$rowIndex}}" style="display:none;">
+                                                        <input readonly type="number" step="0.01" class="form-control mb-2 readonly-amount" id="payment_amount_cash{{$rowIndex}}" name="payment_amount_cash[]" placeholder="Bar">
+                                                        <input readonly type="number" step="0.01" class="form-control readonly-amount" id="payment_amount_bank{{$rowIndex}}" name="payment_amount_bank[]" placeholder="Bank">
+                                                    </div>
                                                 </td>
                                                 <input type="hidden" class="form-control" name="res_id[]" value="{{$obj->id}}">
                                                 <input type="hidden" class="form-control" name="base_cost[]" id="base_cost{{$rowIndex}}" value="{{ number_format($basePrice, 2, '.', '')}}">
@@ -345,11 +510,6 @@
                                             </tr>
                                             @php $rowIndex++; @endphp
                                             @endforeach
-                                        @endforeach
-                                    @else
-                                        {{-- Fallback for old structure --}}
-                                        @foreach($reservations ?? [] as $obj)
-                                            {{-- Keep old structure as fallback --}}
                                         @endforeach
                                     @endif
                                 </tbody>
@@ -384,7 +544,7 @@
                                 </table>
                             </div>
                         </div>
-                        
+
                         <div class="d-flex justify-content-end mt-3">
                             <button type="submit" id="checkoutSubmitBtn" class="btn btn-primary px-4 py-2">
                                 <span id="submitBtnText" aria-live="polite" aria-atomic="true">Aktualisieren</span>
@@ -397,491 +557,224 @@
         </div>
     </div>
 </div>
+@endif
 @endsection
 @section('extra_js')
-
+@if(!empty($bulkCheckoutOnly))
+@else
 <script>
-    // Invoices are displayed at the top of the page for user to open manually
-    // No auto-opening to avoid popup blocker issues
-    @if(Session::has('bulk_checkout_invoices'))
-        $(document).ready(function() {
-            var invoices = @json(Session::get('bulk_checkout_invoices'));
-        });
-    @endif
-</script>
-
-<script>
-    // Store VAT settings from backend
     var vatPercentage = {{ $vatPercentage ?? 20 }};
     var vatMode = '{{ config("app.vat_calculation_mode", "exclusive") }}';
-    
-    // Store customer balances
-    var customerBalances = {};
-    @if(isset($groupedReservations))
-        @foreach($groupedReservations as $customerId => $group)
-            customerBalances[{{ $customerId }}] = {{ $group['balance'] }};
-        @endforeach
-    @endif
-    
-    // Track which amounts have been manually edited
-    var manuallyEditedReceived = {};
     var manuallyEditedInvoice = {};
-    
+
     function getNetFromGross(grossAmount) {
         var net = grossAmount / (1 + (vatPercentage / 100));
         return parseFloat(net.toFixed(2));
     }
-    
+
     function calculateVATFromNet(netAmount) {
         return parseFloat((netAmount * (vatPercentage / 100)).toFixed(2));
     }
-    
-    function updateDiscount(index, customerId) {
-        var discountSelect = $("#discount_select"+index);
+
+    function updateDiscount(index) {
+        var discountSelect = $("#discount_select" + index);
         var discountValue = parseInt(discountSelect.val()) || 0;
-        // Update the hidden field that gets submitted
-        $("#discount"+index).val(discountValue);
-        recalculateRow(index, customerId);
-    }
-    
-    function updatePlanCost(index)
-    {
-        var planSelect = $("#plan_id"+index);
-        var selectedOption = planSelect.find('option:selected');
-        var planPrice = parseFloat(selectedOption.data('price')) || 0;
-        var isFlatRate = parseInt(selectedOption.data('flat-rate')) === 1;
-        var days = parseInt($("#days"+index).val()) || 1;
-        var customerId = $("tr:has(#plan_id"+index+")").data('customer-id');
-        
-        // For flat rate plans, don't multiply by days
-        var newBaseCost = isFlatRate ? planPrice : (planPrice * days);
-        
-        $("#base_cost"+index).val(newBaseCost.toFixed(2));
-        $("#plan_price"+index).val(planPrice.toFixed(2));
-        
-        // Hide/disable discount section for flat rate plans
-        var discountSelect = $("#discount_select"+index);
-        if (isFlatRate) {
-            discountSelect.val('0').prop('disabled', true).css('opacity', '0.6');
-            // Force hidden field to 0 for flat rate
-            $("#discount"+index).val('0');
-        } else {
-            discountSelect.prop('disabled', false).css('opacity', '1');
-        }
-        
-        recalculateRow(index, customerId);
+        $("#discount" + index).val(discountValue);
+        recalculateRow(index);
     }
 
-    function recalculateRow(index, customerId)
-    {
-        var baseCost = parseFloat($("#base_cost"+index).val()) || 0;
-        var specialCost = parseFloat($("#special_cost"+index).val()) || 0;
-        var discount = parseInt($("#discount"+index).val()) || 0;
-        
-        var netTotal;
-        if (vatMode === 'inclusive') {
-            var baseNet = getNetFromGross(baseCost);
-            var specialNet = getNetFromGross(specialCost);
-            netTotal = baseNet + specialNet;
-        } else {
-            netTotal = baseCost + specialCost;
-        }
-        
-        if(discount > 0) {
-            netTotal = netTotal * (1 - (discount / 100));
-        }
-        netTotal = parseFloat(netTotal.toFixed(2));
-        
-        var vatAmount = calculateVATFromNet(netTotal);
-        var grossTotal = netTotal + vatAmount;
-        grossTotal = parseFloat(grossTotal.toFixed(2));
-
-        if (manuallyEditedInvoice[index]) {
-            grossTotal = parseFloat($("#invoice_amount"+index).val()) || 0;
-            netTotal = getNetFromGross(grossTotal);
-            vatAmount = parseFloat((grossTotal - netTotal).toFixed(2));
-        }
-        
-        $("#net_amount"+index).val(netTotal.toFixed(2));
-        $("#vat_amount_row"+index).val(vatAmount.toFixed(2));
-        if (!manuallyEditedInvoice[index]) {
-            $("#invoice_amount"+index).val(grossTotal.toFixed(2));
-        }
-        $("#vat_info"+index).html("Netto: " + netTotal.toFixed(2) + "€ + MwSt: " + vatAmount.toFixed(2) + "€").css("color", "#155724");
-        
-        // Update received amount based on wallet usage
-        updateReceivedAmountForRow(index, customerId, grossTotal);
-        
-        updateVATTotals();
-        changeTotal();
-        updateCustomerTotals(customerId);
-    }
-    
-    function updateReceivedAmountForRow(index, customerId, grossTotal) {
-        // Skip if user has manually edited this field
-        if (manuallyEditedReceived[index]) {
-            return;
-        }
-        
-        var useWallet = $("#use_wallet_" + customerId).is(':checked');
-        var customerBalance = customerBalances[customerId] || 0;
-        
-        if (useWallet && customerBalance > 0) {
-            // Calculate wallet usage for this customer's total
-            var customerTotal = getCustomerTotal(customerId);
-            var walletUsed = Math.min(customerBalance, customerTotal);
-            var cashNeeded = Math.max(0, customerTotal - walletUsed);
-            
-            // Distribute cash needed proportionally
-            var cashPerRow = customerTotal > 0 ? (cashNeeded / customerTotal) : 0;
-            var rowCash = grossTotal * cashPerRow;
-            $("#received_amount"+index).val(rowCash.toFixed(2));
-        } else {
-            $("#received_amount"+index).val(grossTotal.toFixed(2));
-        }
-    }
-    
-    function getCustomerTotal(customerId) {
-        var total = 0;
-        $("tr[data-customer-id='" + customerId + "']").each(function() {
-            var index = $(this).find('.customer-row').val();
-            if (index !== undefined) {
-                total += parseFloat($("#invoice_amount" + index).val()) || 0;
+    function updateAdditionalCosts(index) {
+        var select = $("#additional_cost_select" + index);
+        var container = $("#additional_cost_inputs" + index);
+        var existingValues = {};
+        container.find('input').each(function() {
+            var name = $(this).attr('name') || '';
+            var match = name.match(/additional_cost_values\[\d+\]\[(\d+)\]/);
+            if (match) {
+                existingValues[match[1]] = $(this).val();
             }
+        });
+        container.empty();
+
+        select.find('option:selected').each(function() {
+            var costId = $(this).val();
+            var price = parseFloat($(this).data('price')) || 0;
+            var selectedPrice = existingValues[costId];
+            if (selectedPrice === undefined || selectedPrice === null || selectedPrice === '') {
+                selectedPrice = $(this).data('selected-price');
+            }
+            if (selectedPrice === undefined || selectedPrice === null || selectedPrice === '') {
+                selectedPrice = price;
+            }
+            selectedPrice = parseFloat(selectedPrice) || 0;
+            var title = $(this).text();
+
+            var input = '<div class="input-group input-group-sm mb-1">'
+                + '<span class="input-group-text">' + title + '</span>'
+                + '<input type="number" step="0.01" class="form-control additional-cost-input" '
+                + 'name="additional_cost_values[' + index + '][' + costId + ']" value="' + selectedPrice.toFixed(2) + '" />'
+                + '</div>';
+            container.append(input);
+        });
+
+        recalculateRow(index);
+    }
+
+    function sumAdditionalCosts(index) {
+        var total = 0;
+        $("#additional_cost_inputs" + index + " input").each(function() {
+            total += parseFloat($(this).val()) || 0;
         });
         return total;
     }
-    
-    function handleWalletChange(customerId) {
-        var useWallet = $("#use_wallet_" + customerId).is(':checked');
-        var customerBalance = customerBalances[customerId] || 0;
-        var customerTotal = getCustomerTotal(customerId);
-        
-        // Clear manual edit flags for this customer's rows when wallet is toggled
-        $("tr[data-customer-id='" + customerId + "']").each(function() {
-            var index = $(this).find('.customer-row').val();
-            if (index !== undefined) {
-                delete manuallyEditedReceived[index];
-            }
-        });
-        
-        if (useWallet && customerBalance > 0) {
-            $("#wallet_breakdown_" + customerId).show();
-            var walletUsed = Math.min(customerBalance, customerTotal);
-            var newBalance = customerBalance - walletUsed;
-            updateCustomerSaldoDisplay(customerId, newBalance);
+
+    function toggleRowPaymentMode(index) {
+        var mode = $("#payment_mode" + index).val();
+        if (mode === 'split') {
+            $("#payment_amount_single" + index).hide();
+            $("#payment_amount_split" + index).show();
+            $("#payment_method_wrapper" + index).hide();
+
+            var remaining = parseFloat($("#remaining_value" + index).val()) || 0;
+            $("#payment_amount_cash" + index).val(remaining.toFixed(2));
+            $("#payment_amount_bank" + index).val('0.00');
         } else {
-            $("#wallet_breakdown_" + customerId).hide();
-            // Restore original balance when wallet is unchecked
-            updateCustomerSaldoDisplay(customerId, customerBalance);
-            // Reset received amounts to invoice amounts
-            $("tr[data-customer-id='" + customerId + "']").each(function() {
-                var index = $(this).find('.customer-row').val();
-                if (index !== undefined) {
-                    var invoiceAmount = parseFloat($("#invoice_amount" + index).val()) || 0;
-                    $("#received_amount" + index).val(invoiceAmount.toFixed(2));
-                }
-            });
-        }
-        
-        updateCustomerTotals(customerId);
-    }
-    
-    function updateCustomerTotals(customerId) {
-        var customerTotal = getCustomerTotal(customerId);
-        var useWallet = $("#use_wallet_" + customerId).is(':checked');
-        var customerBalance = customerBalances[customerId] || 0;
-        
-        if (useWallet && customerBalance > 0) {
-            var walletUsed = Math.min(customerBalance, customerTotal);
-            var cashNeeded = Math.max(0, customerTotal - walletUsed);
-            var newBalance = customerBalance - walletUsed;
-            
-            $("#wallet_used_" + customerId).text(walletUsed.toFixed(2));
-            $("#cash_payment_" + customerId).text(cashNeeded.toFixed(2));
-            
-            // Update saldo display
-            updateCustomerSaldoDisplay(customerId, newBalance);
-            
-            // Update received amounts for this customer's rows proportionally (only if not manually edited)
-            var cashPerRow = customerTotal > 0 ? (cashNeeded / customerTotal) : 0;
-            $("tr[data-customer-id='" + customerId + "']").each(function() {
-                var index = $(this).find('.customer-row').val();
-                if (index !== undefined && !manuallyEditedReceived[index]) {
-                    var rowTotal = parseFloat($("#invoice_amount" + index).val()) || 0;
-                    var rowCash = rowTotal * cashPerRow;
-                    $("#received_amount" + index).val(rowCash.toFixed(2));
-                }
-            });
-        }
-        // When wallet is NOT used, DO NOT reset received amounts - let user edit freely
-        
-        changeTotal();
-    }
-    
-    function updateCustomerSaldoDisplay(customerId, newBalance) {
-        var balanceElement = $("#customer_balance_" + customerId);
-        
-        if (balanceElement.length) {
-            var balanceText = (newBalance >= 0 ? '+' : '') + newBalance.toFixed(2).replace('.', ',') + '€';
-            var balanceClass = newBalance >= 0 ? 'positive' : 'negative';
-            
-            balanceElement
-                .text('Saldo: ' + balanceText)
-                .removeClass('positive negative')
-                .addClass(balanceClass);
+            $("#payment_amount_single" + index).show();
+            $("#payment_amount_split" + index).hide();
+            $("#payment_method_wrapper" + index).show();
         }
     }
-    
+
+    function recalculateRow(index)
+    {
+        var baseCost = parseFloat($("#base_cost" + index).val()) || 0;
+        var additionalTotal = sumAdditionalCosts(index);
+        var discount = parseInt($("#discount" + index).val()) || 0;
+
+        var netTotal;
+        if (vatMode === 'inclusive') {
+            netTotal = getNetFromGross(baseCost + additionalTotal);
+        } else {
+            netTotal = baseCost + additionalTotal;
+        }
+
+        if (discount > 0) {
+            netTotal = netTotal * (1 - (discount / 100));
+        }
+        netTotal = parseFloat(netTotal.toFixed(2));
+
+        var vatAmount = calculateVATFromNet(netTotal);
+        var grossTotal = parseFloat((netTotal + vatAmount).toFixed(2));
+
+        if (manuallyEditedInvoice[index]) {
+            grossTotal = parseFloat($("#invoice_amount" + index).val()) || 0;
+            netTotal = getNetFromGross(grossTotal);
+            vatAmount = parseFloat((grossTotal - netTotal).toFixed(2));
+        }
+
+        $("#net_amount" + index).val(netTotal.toFixed(2));
+        $("#vat_amount_row" + index).val(vatAmount.toFixed(2));
+        if (!manuallyEditedInvoice[index]) {
+            $("#invoice_amount" + index).val(grossTotal.toFixed(2));
+        }
+        $("#vat_info" + index).html("Netto: " + netTotal.toFixed(2) + "€ + MwSt: " + vatAmount.toFixed(2) + "€");
+
+        var advancePaid = parseFloat($("#advance_paid" + index).val()) || 0;
+        var remaining = grossTotal - advancePaid;
+        if (remaining < 0) {
+            remaining = 0;
+        }
+        $("#remaining_value" + index).val(remaining.toFixed(2));
+        $("#remaining_display" + index).text(remaining.toFixed(2).replace('.', ',') + '€');
+
+        $("#payment_amount" + index).val(remaining.toFixed(2));
+        var displayVal = remaining.toFixed(2).replace('.', ',') + '€';
+        $("#payment_amount_display" + index).text(displayVal);
+
+        toggleRowPaymentMode(index);
+        updateVATTotals();
+        updateGrandTotal();
+    }
+
     function updateVATTotals()
     {
         var totalNet = 0;
         var totalVat = 0;
         var totalGross = 0;
-        
+
         $("input[id^='net_amount']").each(function() {
             totalNet += parseFloat($(this).val()) || 0;
         });
-        
+
         $("input[id^='vat_amount_row']").each(function() {
             totalVat += parseFloat($(this).val()) || 0;
         });
-        
+
         $("input[id^='invoice_amount']").each(function() {
             totalGross += parseFloat($(this).val()) || 0;
         });
-        
+
         $("#vat_net_total").text(totalNet.toFixed(2) + "€");
         $("#vat_total").text(totalVat.toFixed(2) + "€");
         $("#vat_gross_total").text(totalGross.toFixed(2) + "€");
     }
 
-    function changeTotal()
+    function updateGrandTotal()
     {
-        var total = 0;
-        var inputs = $("input[name='received_amount[]']");
-        inputs.map((i, item) => {
-            var val = (item.value == '' || item.value == undefined) ? 0 : item.value;
-            total += parseFloat(val);
+        var totalGross = 0;
+        $("input[id^='invoice_amount']").each(function() {
+            totalGross += parseFloat($(this).val()) || 0;
         });
-        $("#totalAmount").text(total.toFixed(2).replace('.', ',') + "€");
-        
-        // Update projected balance for each customer
-        updateAllCustomerBalances();
+        $("#totalAmount").text(totalGross.toFixed(2).replace('.', ',') + "€");
     }
-    
-    function updateAllCustomerBalances() {
-        // Get all unique customer IDs
-        var customerIds = [];
-        $(".customer-group-header").each(function() {
-            var row = $(this).next("tr");
-            var customerId = row.data('customer-id');
-            if (customerId && customerIds.indexOf(customerId) === -1) {
-                customerIds.push(customerId);
-            }
+
+    function initPage() {
+        $('.additional-cost-select').each(function() {
+            var index = $(this).data('row');
+            $(this).val(null).trigger('change');
+            $('#additional_cost_inputs' + index).empty();
+            recalculateRow(index);
         });
-        
-        // Also get from data attributes directly
-        $("tr[data-customer-id]").each(function() {
-            var customerId = $(this).data('customer-id');
-            if (customerId && customerIds.indexOf(customerId) === -1) {
-                customerIds.push(customerId);
-            }
-        });
-        
-        // Update balance for each customer
-        customerIds.forEach(function(customerId) {
-            updateCustomerBalanceDisplay(customerId);
-        });
-    }
-    
-    function updateCustomerBalanceDisplay(customerId) {
-        var existingBalance = customerBalances[customerId] || 0;
-        var useWallet = $("#use_wallet_" + customerId).is(':checked');
-        
-        // Calculate totals for this customer
-        var customerInvoiceTotal = 0;
-        var customerReceivedTotal = 0;
-        
-        $("tr[data-customer-id='" + customerId + "']").each(function() {
-            var index = $(this).find('.customer-row').val();
-            if (index !== undefined) {
-                customerInvoiceTotal += parseFloat($("#invoice_amount" + index).val()) || 0;
-                customerReceivedTotal += parseFloat($("#received_amount" + index).val()) || 0;
-            }
-        });
-        
-        // Calculate wallet usage
-        var walletUsed = 0;
-        if (useWallet && existingBalance > 0) {
-            walletUsed = Math.min(existingBalance, customerInvoiceTotal);
-        }
-        
-        // Calculate effective received (wallet + cash)
-        var effectiveReceived = walletUsed + customerReceivedTotal;
-        
-        // Calculate advance payment or remaining
-        var advancePayment = 0;
-        var currentRemaining = 0;
-        
-        if (effectiveReceived > customerInvoiceTotal) {
-            // Customer paid more (advance payment)
-            advancePayment = effectiveReceived - customerInvoiceTotal;
-        } else if (effectiveReceived < customerInvoiceTotal) {
-            // Customer paid less (still owes)
-            currentRemaining = customerInvoiceTotal - effectiveReceived;
-        }
-        
-        // Calculate projected balance: existing + advance - remaining - walletUsed
-        // Positive = customer credit (GREEN), Negative = customer debt (RED)
-        var currentNetBalance = advancePayment - currentRemaining - walletUsed;
-        var projectedBalance = existingBalance + currentNetBalance;
-        
-        // Update display
-        var balanceElement = $("#customer_balance_" + customerId);
-        var sign = projectedBalance >= 0 ? '+' : '';
-        var formattedBalance = sign + projectedBalance.toFixed(2).replace('.', ',') + '€';
-        balanceElement.text('Saldo: ' + formattedBalance);
-        
-        // Update color
-        balanceElement.removeClass('positive negative');
-        if (projectedBalance > 0) {
-            balanceElement.addClass('positive');
-        } else if (projectedBalance < 0) {
-            balanceElement.addClass('negative');
-        }
     }
 
     $(document).ready(function(){
-        // Initialize VAT totals on page load for all rows
-        var maxIndex = 0;
-        $("input[id^='base_cost']").each(function() {
-            var id = $(this).attr('id');
-            var index = id.replace('base_cost', '');
-            maxIndex = Math.max(maxIndex, parseInt(index) || 0);
-        });
-        
-        // Recalculate all rows to initialize VAT and flat rate states
-        for(var i = 0; i <= maxIndex; i++) {
-            if($("#base_cost"+i).length) {
-                // Initialize flat rate discount state
-                var planSelect = $("#plan_id"+i);
-                var selectedOption = planSelect.find('option:selected');
-                var isFlatRate = parseInt(selectedOption.data('flat-rate')) === 1;
-                var discountSelect = $("#discount_select"+i);
-                if (isFlatRate) {
-                    discountSelect.val('0').prop('disabled', true).css('opacity', '0.6');
-                    // Force hidden field to 0 for flat rate
-                    $("#discount"+i).val('0');
-                } else {
-                    discountSelect.prop('disabled', false).css('opacity', '1');
-                }
-                
-                var customerId = $("tr:has(#base_cost"+i+")").data('customer-id');
-                if (customerId) {
-                    recalculateRow(i, customerId);
-                } else {
-                    recalculateRow(i, null);
-                }
-            }
-        }
-        
-        
-        // Update grand total when received amounts change (allow manual edits)
-        $("input[name='received_amount[]']").on('input', function() {
-            // Extract the row index from the id (e.g., "received_amount0" -> "0")
-            var id = $(this).attr('id');
-            var index = id.replace('received_amount', '');
-            
-            // Mark this field as manually edited
-            manuallyEditedReceived[index] = true;
-            
-            changeTotal();
+        $('.additional-cost-select').each(function() {
+            var $sel = $(this);
+            var index = $sel.data('row');
+            $sel.select2({
+                width: '100%',
+                placeholder: $sel.data('placeholder'),
+                allowClear: true,
+                closeOnSelect: false
+            });
+            $sel.on('change', function() {
+                updateAdditionalCosts(index);
+            });
         });
 
-        // Allow manual invoice amount override per row.
-        $("input[name='invoice_amount[]']").on('input', function() {
-            var id = $(this).attr('id');
-            var index = id.replace('invoice_amount', '');
+        initPage();
+
+        window.addEventListener('pageshow', function(e) {
+            if (e.persisted) {
+                initPage();
+            }
+        });
+
+        $(document).on('input', "input[id^='invoice_amount']", function() {
+            var index = $(this).attr('id').replace('invoice_amount', '');
             manuallyEditedInvoice[index] = true;
-
-            var customerId = $("tr:has(#invoice_amount"+index+")").data('customer-id');
-            var gross = parseFloat($(this).val()) || 0;
-            var net = getNetFromGross(gross);
-            var vat = parseFloat((gross - net).toFixed(2));
-
-            $("#net_amount"+index).val(net.toFixed(2));
-            $("#vat_amount_row"+index).val(vat.toFixed(2));
-            $("#vat_info"+index).html("Netto: " + net.toFixed(2) + "€ + MwSt: " + vat.toFixed(2) + "€").css("color", "#155724");
-
-            updateVATTotals();
-            changeTotal();
-            if (customerId) {
-                updateCustomerTotals(customerId);
-            }
+            recalculateRow(index);
         });
 
-        // Prevent double submission (only on the checkout form)
-        var checkoutForm = $('#checkoutSubmitBtn').closest('form');
-        if (checkoutForm.length) {
-            checkoutForm.on('submit', function(e) {
-                var submitBtn = $('#checkoutSubmitBtn');
-                if (submitBtn.prop('disabled')) {
-                    e.preventDefault();
-                    return false;
-                }
-                
-                // Disable button and show loader
-                submitBtn.prop('disabled', true);
-                $('#submitBtnText').text('Wird verarbeitet...');
-                $('#submitBtnLoader').show();
-            });
-        }
+        $(document).on('input', '.additional-cost-input', function() {
+            var name = $(this).attr('name');
+            var match = name.match(/additional_cost_values\[(\d+)\]/);
+            if (match) {
+                recalculateRow(match[1]);
+            }
+        });
     });
-    
-    // Update hidden payment method field when select changes
-    function updatePaymentMethod(rowIndex) {
-        var selectValue = $('#payment_method_select_' + rowIndex).val();
-        $('#payment_method_' + rowIndex).val(selectValue);
-    }
-    
-    // Handle HelloCash checkbox change for a specific customer
-    function handleHelloCashChange(customerId) {
-        var isChecked = $('#send_to_hellocash_' + customerId).is(':checked');
-        var infoElement = $('#hellocash_info_' + customerId);
-        
-        // Find all payment method selects for this customer's dogs
-        var paymentSelects = $('select.payment-method-select[data-customer-id="' + customerId + '"]');
-        
-        if (isChecked) {
-            // Show info message
-            infoElement.show();
-            
-            // Force all payment methods to Bar and disable the select
-            paymentSelects.each(function() {
-                var selectId = $(this).attr('id');
-                var rowIndex = selectId.replace('payment_method_select_', '');
-                
-                $(this).val('Bar');
-                $(this).prop('disabled', true);
-                $(this).css('opacity', '0.6');
-                $(this).css('background-color', '#e9ecef');
-                
-                // Update the hidden field too
-                $('#payment_method_' + rowIndex).val('Bar');
-            });
-        } else {
-            // Hide info message
-            infoElement.hide();
-            
-            // Re-enable the payment method selects
-            paymentSelects.each(function() {
-                $(this).prop('disabled', false);
-                $(this).css('opacity', '1');
-                $(this).css('background-color', '');
-            });
-        }
-    }
-
 </script>
+<script src="assets/vendor/libs/select2/select2.js"></script>
+@endif
 @endsection

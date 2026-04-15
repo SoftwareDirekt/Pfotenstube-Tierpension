@@ -175,8 +175,8 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <select name="price_plan" id="price_plan" class="select2 form-control" required>
+                        <div class="form-floating form-floating-outline mb-4" @if($planLocked) title="Preisplan ist gesperrt, solange der Hund reserviert oder eingecheckt ist." data-toggle="tooltip" @endif>
+                            <select name="price_plan" id="price_plan" class="select2 form-control" required @if($planLocked) disabled @endif>
                                 <option selected disabled>Wählen Sie Preispläne</option>
                                 @foreach($plans as $obj)
                                 <option value="{{$obj->id}}" {{$dog->reg_plan == $obj->id ? 'selected' : ''}} ><?php echo $obj->title; ?></option>
@@ -184,10 +184,13 @@
                             </select>
                             <label for="price_plan">Pensionstarif <span class="text-danger">*</span></label>
                         </div>
+                        @if($planLocked)
+                            <input type="hidden" name="price_plan" value="{{$dog->reg_plan}}">
+                        @endif
                     </div>
                     <div class="col-md-6">
-                        <div class="form-floating form-floating-outline mb-4">
-                            <select name="daily_rate" id="daily_rate" class="select2 form-control" required>
+                        <div class="form-floating form-floating-outline mb-4" @if($planLocked) title="Preisplan ist gesperrt, solange der Hund reserviert oder eingecheckt ist." data-toggle="tooltip" @endif>
+                            <select name="daily_rate" id="daily_rate" class="select2 form-control" required @if($planLocked) disabled @endif>
                                 <option selected disabled>Wählen Sie Preispläne</option>
                                 @foreach($plans as $obj)
                                 <option value="{{$obj->id}}" {{$dog->day_plan == $obj->id ? 'selected' : ''}} ><?php echo $obj->title; ?></option>
@@ -195,6 +198,9 @@
                             </select>
                             <label for="daily_rate">Tagestarif <span class="text-danger">*</span></label>
                         </div>
+                        @if($planLocked)
+                            <input type="hidden" name="daily_rate" value="{{$dog->day_plan}}">
+                        @endif
                     </div>
 
                     <div class="col-md-12">

@@ -32,14 +32,17 @@
                                 <td>{{ $res->checkin_date->format('d.m.Y H:i') }}</td>
                                 <td>{{ $res->checkout_date->format('d.m.Y H:i') }}</td>
                                 <td class="text-end homepage-pending-actions" style="white-space:nowrap;">
-                                    <form action="{{ route('admin.reservation.homepage.pending.confirm') }}" method="POST" class="d-inline homepage-pending-form homepage-pending-confirm">
-                                        @csrf
-                                        <input type="hidden" name="id" value="{{ $res->id }}">
-                                        <button type="submit" class="btn btn-sm btn-success d-inline-flex align-items-center gap-1">
-                                            <span class="pending-btn-label">Bestätigen</span>
-                                            <span class="spinner-border spinner-border-sm pending-spinner d-none" role="status" aria-hidden="true"></span>
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                            class="btn btn-sm btn-success d-inline-flex align-items-center gap-1 homepage-pending-confirm"
+                                            data-res-id="{{ $res->id }}"
+                                            data-dog-name="{{ $res->dog->name ?? '' }}"
+                                            data-reg-plan="{{ $res->dog->reg_plan ?? '' }}"
+                                            data-day-plan="{{ $res->dog->day_plan ?? '' }}"
+                                            data-checkin="{{ $res->checkin_date->format('Y-m-d') }}"
+                                            data-checkout="{{ $res->checkout_date->format('Y-m-d') }}">
+                                        <span class="pending-btn-label">Bestätigen</span>
+                                        <span class="spinner-border spinner-border-sm pending-spinner d-none" role="status" aria-hidden="true"></span>
+                                    </button>
                                     <form action="{{ route('admin.reservation.homepage.pending.reject') }}" method="POST" class="d-inline homepage-pending-form homepage-pending-reject ms-1">
                                         @csrf
                                         <input type="hidden" name="id" value="{{ $res->id }}">
@@ -57,6 +60,40 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmHomepageReservationModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reservierung bestätigen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{{ route('admin.reservation.homepage.pending.confirm') }}" method="POST" id="confirmHomepageReservationForm">
+                    @csrf
+                    <div class="modal-body">
+                        <input type="hidden" name="id" id="confirmReservationId" value="">
+                        <div class="mb-3">
+                            <label class="form-label">Hund</label>
+                            <input type="text" class="form-control" id="confirmReservationDog" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Preisplan <span class="text-danger">*</span></label>
+                            <select name="plan_id" id="confirmReservationPlan" class="form-select" required>
+                                <option value="" selected disabled>Preisplan auswählen</option>
+                                @foreach($plans as $plan)
+                                    <option value="{{ $plan->id }}">{{ $plan->title }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                        <button type="submit" class="btn btn-success">Bestätigen</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -95,6 +132,45 @@
                         if (spin) spin.classList.remove('d-none');
                         if (lbl) lbl.classList.add('d-none');
                     }
+                });
+            });
+
+            var modalEl = document.getElementById('confirmHomepageReservationModal');
+            var confirmModal = modalEl ? new bootstrap.Modal(modalEl) : null;
+            document.querySelectorAll('.homepage-pending-confirm').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var resId = btn.getAttribute('data-res-id');
+                    var dogName = btn.getAttribute('data-dog-name') || '';
+                    var regPlan = btn.getAttribute('data-reg-plan');
+                    var dayPlan = btn.getAttribute('data-day-plan');
+                    var checkin = btn.getAttribute('data-checkin');
+                    var checkout = btn.getAttribute('data-checkout');
+
+                    var selectedPlan = '';
+                    if (checkin && checkout) {
+                        var checkinDate = new Date(checkin + 'T00:00:00');
+                        var checkoutDate = new Date(checkout + 'T00:00:00');
+                        var diffDays = Math.floor((checkoutDate - checkinDate) / (1000 * 60 * 60 * 24));
+                        if (diffDays === 0) {
+                            selectedPlan = dayPlan || regPlan;
+                        } else {
+                            selectedPlan = regPlan || dayPlan;
+                        }
+                    } else {
+                        selectedPlan = regPlan || dayPlan;
+                    }
+
+                    var idInput = document.getElementById('confirmReservationId');
+                    var dogInput = document.getElementById('confirmReservationDog');
+                    var planSelect = document.getElementById('confirmReservationPlan');
+
+                    if (idInput) idInput.value = resId || '';
+                    if (dogInput) dogInput.value = dogName;
+                    if (planSelect) {
+                        planSelect.value = selectedPlan || '';
+                    }
+
+                    confirmModal?.show();
                 });
             });
         })();

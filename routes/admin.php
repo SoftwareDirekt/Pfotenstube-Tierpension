@@ -1,13 +1,14 @@
 <?php
 
+use App\Http\Controllers\AdditionalCostsController;
 use App\Http\Controllers\AdminsController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CashModuleController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\EmployeeTrackController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\InvoicesController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PaymentsController;
 use App\Http\Controllers\PflegevertragController;
 use App\Http\Controllers\PlansController;
 use App\Http\Controllers\ReportController;
@@ -150,6 +151,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::post('/update', [RoomsController::class, 'update_room'])->name('update');
             Route::post('/delete', [RoomsController::class, 'delete_room'])->name('delete');
             Route::post('/order/update', [RoomsController::class, 'update_room_order'])->name('order.update');
+            Route::get('/export', [RoomsController::class, 'exportRooms'])->name('export');
         });
 
         // Room Cleaning & Condition
@@ -166,6 +168,16 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::get('/{id}/edit', [PlansController::class, 'edit_plan'])->name('edit');
             Route::post('/update', [PlansController::class, 'update_plan'])->name('update');
             Route::post('/delete', [PlansController::class, 'delete_plan'])->name('delete');
+        });
+
+        // Additional Costs
+        Route::get('/additional-costs', [AdditionalCostsController::class, 'index'])->name('additional-costs');
+        Route::prefix('additional-cost')->name('additional-cost.')->group(function () {
+            Route::get('/add', [AdditionalCostsController::class, 'add'])->name('add');
+            Route::post('/add', [AdditionalCostsController::class, 'store'])->name('add.post');
+            Route::get('/{id}/edit', [AdditionalCostsController::class, 'edit'])->name('edit');
+            Route::post('/update', [AdditionalCostsController::class, 'update'])->name('update');
+            Route::post('/delete', [AdditionalCostsController::class, 'delete'])->name('delete');
         });
 
         // Task Management
@@ -200,8 +212,8 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
             Route::get('/export', [ReservationsController::class, 'export'])->name('export');
             Route::get('/add', [ReservationsController::class, 'add_reservation_view'])->name('add.view');
             Route::post('/add', [ReservationsController::class, 'add_reservation'])->name('add');
-            Route::get('/{id}/edit', [ReservationsController::class, 'edit_reservation'])->name('edit');
-            Route::post('/update', [ReservationsController::class, 'update_reservation'])->name('update');
+            // Route::get('/{id}/edit', [ReservationsController::class, 'edit_reservation'])->name('edit');
+            // Route::post('/update', [ReservationsController::class, 'update_reservation'])->name('update');
             Route::post('/delete', [ReservationsController::class, 'delete_reservation'])->name('delete');
             Route::post('/cancel', [ReservationsController::class, 'cancel_reservation'])->name('cancel');
             Route::post('/room/update', [ReservationsController::class, 'update_reservation_room'])->name('room.update');
@@ -224,21 +236,22 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('/dogs-in-rooms/checkout', [ReservationsController::class, 'dogs_in_rooms_checkout'])->name('dogs.rooms.checkout');
         Route::post('/dogs-in-rooms/checkout', [ReservationsController::class, 'dogs_in_rooms_checkout_post'])->name('dogs.rooms.checkout-post');
         Route::post('/dogs-in-rooms/checkout/update', [ReservationsController::class, 'dogs_in_rooms_update_checkout'])->name('dogs.rooms.checkout-update');
+        Route::post('/dogs-in-rooms/checkout/group', [ReservationsController::class, 'group_checkout'])->name('dogs.rooms.group-checkout');
 
         // Move Dogs
         Route::post('/move/dog-room', [ReservationsController::class, 'move_dog'])->name('move.dog');
         Route::post('/move/multiple-dogs', [ReservationsController::class, 'move_multiple_dogs'])->name('move.multiple.dogs');
         Route::post('/move/friendship', [ReservationsController::class, 'move_friendship'])->name('move.friendship');
 
-        // Payment Management
-        Route::get('/payment', [PaymentsController::class, 'payment'])->name('payment');
-        Route::get('/payment/{id}/settlement-details', [PaymentsController::class, 'settlementDetails'])->name('payment.settlement.details');
-        Route::post('/payment/{id}/settle', [PaymentsController::class, 'settleOpenPayment'])->name('payment.settle');
+        // Payment Management (Upfront Flow)
+        Route::get('/payment', [CashModuleController::class, 'index'])->name('payment');
+        Route::post('/payment/add', [CashModuleController::class, 'addPayment'])->name('payment.add');
+        Route::post('/payment/group/add', [CashModuleController::class, 'addGroupPayment'])->name('payment.group.add');
+        Route::get('/payment/{id}/details', [CashModuleController::class, 'paymentDetails'])->name('payment.details');
+        Route::get('/payment/group/{id}/details', [CashModuleController::class, 'groupPaymentDetails'])->name('payment.group.details');
 
         // Invoice Management
         Route::get('/invoices', [InvoicesController::class, 'index'])->name('invoices');
-        Route::get('/invoices/{id}/regenerate', [InvoicesController::class, 'regenerateForm'])->name('invoices.regenerate.form');
-        Route::post('/invoices/{id}/regenerate', [InvoicesController::class, 'regenerate'])->name('invoices.regenerate');
         Route::get('/invoices/{id}/view', [InvoicesController::class, 'view'])->name('invoices.view');
         Route::get('/invoices/{id}/download', [InvoicesController::class, 'download'])->name('invoices.download');
 

@@ -126,7 +126,7 @@ td.iconz.v.check{
                                             <td class="rasse">{{$item->compatible_breed}}</td>
                                             <td>{{$neutered}}</td>
                                             <td class="rasse">
-                                                @if(isset($item->day_plan_obj->price)) T{{$item->day_plan_obj->price}}/P{{$item->reg_plan_obj->price}} @endif
+                                                @if(isset($item->day_plan_obj->price) && isset($item->reg_plan_obj->price)) T{{$item->day_plan_obj->price}}/P{{$item->reg_plan_obj->price}} @endif
                                             </td>
                                             <td class="iconz v check"><?php echo $item->compatibility == 'V' ? '<i class="fa fa-check fs25"></i>' : '' ?></td>
                                             <td class="iconz v"><?php echo $item->compatibility == 'VJ' ? '<span class="tbspan nb">nB</span>' : '' ?></td>

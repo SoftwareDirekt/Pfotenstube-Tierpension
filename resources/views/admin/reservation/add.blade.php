@@ -31,10 +31,23 @@
                                     @php 
                                         if(!isset($dog->customer)) continue;
                                     @endphp
-                                    <option value="{{$dog->id}}">{{$dog->name}} @if($dog->compatible_breed)({{$dog->compatible_breed}})@endif - {{$dog->customer->name}} ({{$dog->customer->phone}})</option>
+                                    <option value="{{$dog->id}}" data-reg-plan="{{$dog->reg_plan ?? ''}}" data-day-plan="{{$dog->day_plan ?? ''}}">
+                                        {{$dog->name}} @if($dog->compatible_breed)({{$dog->compatible_breed}})@endif - {{$dog->customer->name}} ({{$dog->customer->phone}})
+                                    </option>
                                 @endforeach
                             </select>
                             <label for="dog_id">Hund</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating form-floating-outline mb-4">
+                            <select name="plan_id" id="plan_id" class="select2" data-live-search="true" required>
+                                <option selected disabled>Preisplan auswählen</option>
+                                @foreach($plans as $obj)
+                                    <option value="{{$obj->id}}"><?php echo $obj->title; ?></option>
+                                @endforeach
+                            </select>
+                            <label for="plan_id">Preisplan <span class="text-danger">*</span></label>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -75,6 +88,34 @@
 <script src="assets/vendor/libs/pickr/pickr.js"></script>
 <script src="assets/js/forms-pickers.js"></script>
 <script>
+    function syncPlanFromSelection() {
+        var selected = $('#dog_id').val() || [];
+        if (selected.length === 0) {
+            return;
+        }
+
+        var selectedPlans = [];
+        selected.forEach(function (dogId) {
+            var option = $('#dog_id option[value="' + dogId + '"]');
+            var regPlan = option.data('reg-plan');
+            var dayPlan = option.data('day-plan');
+            var planId = regPlan || dayPlan || '';
+            if (planId) {
+                selectedPlans.push(String(planId));
+            }
+        });
+
+        if (selectedPlans.length === 0) {
+            return;
+        }
+
+        var firstPlan = selectedPlans[0];
+        var allSame = selectedPlans.every(function (planId) { return planId === firstPlan; });
+        if (allSame) {
+            $('#plan_id').val(firstPlan).trigger('change');
+        }
+    }
+
     function addData()
     {
         let count = $("#additionals").children('div').length;
@@ -118,6 +159,10 @@
         submitButton.prop("disabled", true);
         
         submitButton.text("Speichern..."); 
+    });
+
+    $('#dog_id').on('change', function () {
+        syncPlanFromSelection();
     });
 </script>
 @endsection

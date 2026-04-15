@@ -19,7 +19,7 @@
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <input type="text" class="form-control" name="title" id="title" placeholder="Titel" required />
-                            <label for="title">Titel</label>
+                            <label for="title">Titel <span class="text-danger">*</span></label>
                         </div>
                         @error('title')
                             <p class="formError">*{{$message}}</p>
@@ -28,7 +28,7 @@
                     <div class="col-md-6">
                         <div class="form-floating form-floating-outline mb-4">
                             <input type="text" class="form-control" name="type" id="type" placeholder="Typ" required />
-                            <label for="type">Typ</label>
+                            <label for="type">Typ <span class="text-danger">*</span></label>
                         </div>
                         @error('type')
                             <p class="formError">*{{$message}}</p>
@@ -37,11 +37,8 @@
                     <div class="col-md-12">
                         <div class="form-floating form-floating-outline mb-2">
                             <input type="text" class="form-control" name="price" id="price" placeholder="Preis" required />
-                            <label for="price">Preis (Netto)</label>
+                            <label for="price">Preis (Netto) <span class="text-danger">*</span></label>
                         </div>
-                        <small class="text-muted mb-4 d-block">
-                            <i class="mdi mdi-information-outline"></i> Der Preis ist ohne Mehrwertsteuer. MwSt wird bei allen Rechnungen hinzugefügt – sowohl bei lokalen PDF-Rechnungen als auch bei der Registrierkasse.
-                        </small>
                         @error('price')
                             <p class="formError">*{{$message}}</p>
                         @enderror

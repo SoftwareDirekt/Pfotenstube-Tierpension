@@ -172,12 +172,7 @@
                                 @endif
                             </td>
                             <td class="text-end">
-                                {{-- Hide edit button for checked-out reservations (status 2) - they have payments --}}
-                                @if ($r->status != 2)
-                                    <a href="{{ route('admin.reservation.edit', $r->id) }}" class="mx-1" title="Bearbeiten">
-                                        <i class="fa fa-edit"></i>
-                                    </a>
-                                @endif
+                                {{-- Hide edit button as requested by user (cancel and recreate instead) --}}
                                 <a href="{{ route('admin.reservation.pflegevertrag.show', $r->id) }}" class="mx-1" title="Pflegevereinbarung">
                                     <i class="fa fa-file text-success"></i>
                                 </a>

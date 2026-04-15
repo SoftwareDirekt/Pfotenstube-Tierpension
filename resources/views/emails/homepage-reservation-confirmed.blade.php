@@ -42,5 +42,32 @@
             </td>
         </tr>
     </table>
-    <p style="margin:0;">Wir freuen uns auf den Besuch Ihres Lieblings.</p>
+    <p style="margin:0 0 16px;">Wir freuen uns auf den Besuch Ihres Lieblings.</p>
+
+    @php
+        // Opening hours keyed by Carbon day-of-week integer (0 = Sunday … 6 = Saturday)
+        $openingHours = [
+            1 => ['label' => 'Montag',     'von' => '10:00', 'bis' => '18:00'],
+            2 => ['label' => 'Dienstag',   'von' => '10:00', 'bis' => '18:00'],
+            3 => ['label' => 'Mittwoch',   'von' => '10:00', 'bis' => '18:00'],
+            4 => ['label' => 'Donnerstag', 'von' => '10:00', 'bis' => '12:00'],
+            5 => ['label' => 'Freitag',    'von' => '10:00', 'bis' => '18:00'],
+            6 => ['label' => 'Samstag',    'von' => '10:00', 'bis' => '12:00'],
+            0 => ['label' => 'Sonntag',    'von' => null,    'bis' => null   ],
+        ];
+
+        $checkin    = $reservation->checkin_date;
+        $dayOfWeek  = (int) $checkin->format('w'); // 0 = Sunday, 6 = Saturday
+        $dayInfo    = $openingHours[$dayOfWeek];
+        $dateLabel  = $checkin->format('d.m.Y');
+        $dayLabel   = $dayInfo['label'];
+
+        if ($dayInfo['von'] !== null) {
+            $dropOffLine = "Bitte bringen Sie Ihr Tier am {$dateLabel} ({$dayLabel}) zwischen {$dayInfo['von']} Uhr und {$dayInfo['bis']} Uhr bei uns vorbei.";
+        } else {
+            $dropOffLine = "Ihr Check-in-Datum fällt auf einen {$dayLabel} ({$dateLabel}). Bitte kontaktieren Sie uns telefonisch, um einen Abgabetermin zu vereinbaren.";
+        }
+    @endphp
+
+    <p style="margin:0;color:#6D381A;">{{ $dropOffLine }}</p>
 @endsection

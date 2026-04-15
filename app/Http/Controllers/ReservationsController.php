@@ -9,17 +9,23 @@ use App\Models\Reservation;
 use App\Models\Dog;
 use App\Models\Plan;
 use App\Models\Room;
-use App\Models\Payment;
 use App\Models\Friend;
+use App\Models\ReservationPayment;
+use App\Models\Preference;
 use App\Helpers\General;
 use App\Services\VisitCounterService;
 use App\Services\HomepageSyncService;
 use Illuminate\Support\Facades\DB;
-use App\Models\Customer;
-use App\Models\Preference;
-use App\Services\CustomerBalanceService;
+use App\Models\AdditionalCost;
+use App\Models\ReservationPaymentEntry;
+use App\Models\ReservationAdditionalCost;
+use App\Models\ReservationGroup;
+use App\Models\ReservationGroupEntry;
 use App\Services\HelloCashService;
-use App\Services\BankInvoiceService;
+use App\Services\InvoiceService;
+use App\Services\CustomerBalanceService;
+use App\Services\ReservationGroupLifecycleService;
+use App\Services\RoomCapacityService;
 use App\Helpers\VATCalculator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -27,18 +33,21 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\HomepageReservationConfirmedMail;
 use App\Mail\HomepageReservationCancelledMail;
 
-use function PHPSTORM_META\type;
 
 class ReservationsController extends Controller
 {
     protected $homepageSyncService;
     protected $hellocashService;
-    protected $bankInvoiceService;
+    protected $invoiceService;
 
-    public function __construct(HelloCashService $hellocashService, BankInvoiceService $bankInvoiceService, HomepageSyncService $homepageSyncService)
-    {
+    public function __construct(
+        HelloCashService $hellocashService,
+        InvoiceService $invoiceService,
+        HomepageSyncService $homepageSyncService,
+        protected RoomCapacityService $roomCapacityService
+    ) {
         $this->hellocashService = $hellocashService;
-        $this->bankInvoiceService = $bankInvoiceService;
+        $this->invoiceService = $invoiceService;
         $this->homepageSyncService = $homepageSyncService;
     }
 
@@ -137,26 +146,43 @@ class ReservationsController extends Controller
         }
 
         $dogs = Dog::with('customer')->where('died', null)->get();
-        return view ("admin.reservation.add", compact('dogs'));
+        $plans = Plan::orderBy('id', 'asc')->get();
+        return view ("admin.reservation.add", compact('dogs', 'plans'));
     }
 
     public function add_reservation(Request $request)
     {
         $request->validate([
             'dog_ids' => 'required',
+            'plan_id' => 'required|exists:plans,id',
             'dates' => 'required',
         ]);
 
         $dogs = $request->dog_ids;
+        $planId = (int) $request->plan_id;
+        $isMultiDog = is_array($dogs) && count($dogs) > 1;
+
+        // Resolve the customer for all selected dogs (multi-dog = same customer)
+        $customerId = null;
+        if ($isMultiDog) {
+            $firstDog = Dog::find($dogs[0]);
+            $customerId = $firstDog?->customer_id;
+        }
+
+        // Create a reservation group when multiple dogs are booked together
+        $group = null;
+        if ($isMultiDog) {
+            $group = ReservationGroup::create([
+                'customer_id' => $customerId,
+                'total_due'   => 0,
+                'status'      => 'unpaid',
+            ]);
+        }
+
+        $createdReservationIds = [];
         foreach($dogs as $id)
         {
             $dog = Dog::find($id);
-            $plan_id = $dog->reg_plan;
-            if(!$plan_id)
-            {
-                Session::flash('error', 'Bitte aktualisieren Sie den Preisplan für Hunde, um eine Reservierung vorzunehmen');
-                return to_route('admin.customers.edit_dog',['id' => $id]);
-            }
             foreach($request->dates as $date)
             {
                 $ex = explode('-', $date);
@@ -171,15 +197,39 @@ class ReservationsController extends Controller
                     return back();
                 }
 
+                $checkinDate = Carbon::parse($checkin)->startOfDay();
+                $checkoutDate = Carbon::parse($checkout)->startOfDay();
+                $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                $days = $daysDiff === 0 ? 1 : (($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+
                 $res = Reservation::create([
                     'dog_id' => $id,
                     'checkin_date' => $checkin,
                     'checkout_date' => $checkout,
-                    'plan_id' => $plan_id,
+                    'plan_id' => $planId,
                     'status' => 3,
+                    'reservation_group_id' => $group?->id,
                 ]);
+                $createdReservationIds[] = $res->id;
+
+                if ($dog) {
+                    if ($days > 1) {
+                        $dog->reg_plan = $planId;
+                    } else {
+                        $dog->day_plan = $planId;
+                    }
+                    $dog->save();
+                }
 
             }
+        }
+
+        $this->createPaymentsForReservationGroups($createdReservationIds);
+
+        // Set the group's total_due from the sum of per-reservation totals
+        if ($group) {
+            $group->recalculateTotalDue();
         }
 
         Session::flash('success', 'Reservierung erfolgreich hinzugefügt!');
@@ -198,23 +248,31 @@ class ReservationsController extends Controller
             'id' => 'required',
         ]);
 
-        $data = Reservation::with('payments')->find($request->id);
+        $data = Reservation::with(['reservationPayment.entries'])->find($request->id);
         if($data)
         {
-            // Prevent deletion if reservation has payments (checked out reservations)
-            if($data->payments && $data->payments->count() > 0)
+            // Prevent deletion if reservation has per-reservation payment entries (group payments are on the group)
+            $entryCount = $data->reservationPayment ? $data->reservationPayment->entries->count() : 0;
+            if($entryCount > 0)
             {
                 Session::flash('error', 'Reservierung kann nicht gelöscht werden, da Zahlungen vorhanden sind.');
                 return back();
             }
+
+            $groupId = $data->reservation_group_id;
             
             // Push cancellation to Homepage if remote ID exists before deleting
             if ($data->remote_pfotenstube_homepage_id) {
                 $this->homepageSyncService->updateStatus($data, 'storniert');
             }
 
-            // Hard delete if no payments (not soft delete)
-            $data->forceDelete();
+            DB::transaction(function () use ($data, $groupId) {
+                $data->forceDelete();
+                if ($groupId) {
+                    app(ReservationGroupLifecycleService::class)->afterMemberRemoved((int) $groupId);
+                }
+            });
+
             Session::flash('success', 'Reservierung erfolgreich gelöscht!');
         }
 
@@ -236,9 +294,31 @@ class ReservationsController extends Controller
                 Session::flash('error', 'Ausgecheckte Reservierungen können nicht storniert werden.');
                 return back();
             }
-            
-            $data->status = 4;
-            $data->save();
+
+            if ((int) $data->status === Reservation::STATUS_ACTIVE) {
+                Session::flash('error', 'Eingecheckte Reservierungen können nicht storniert werden. Bitte zuerst auschecken.');
+                return back();
+            }
+
+            $groupId = $data->reservation_group_id;
+
+            DB::transaction(function () use ($data, $groupId) {
+                // Permanently remove payment records - both models use SoftDeletes so
+                // forceDelete() is required; a plain delete() only sets deleted_at.
+                if ($data->reservationPayment) {
+                    $data->reservationPayment->entries()->withTrashed()->forceDelete();
+                    $data->reservationPayment->forceDelete();
+                }
+                $data->additionalCosts()->delete();
+
+                $data->status = Reservation::STATUS_CANCELLED;
+                $data->reservation_group_id = null;
+                $data->save();
+
+                if ($groupId) {
+                    app(ReservationGroupLifecycleService::class)->afterMemberRemoved((int) $groupId);
+                }
+            });
 
             // Sync with Homepage if it's a remote reservation
             if ($data->remote_pfotenstube_homepage_id) {
@@ -262,8 +342,9 @@ class ReservationsController extends Controller
             ->whereNotNull('remote_pfotenstube_homepage_id')
             ->orderBy('checkin_date')
             ->get();
+        $plans = Plan::orderBy('id', 'asc')->get();
 
-        return view('admin.reservation.homepage_pending', compact('reservations'));
+        return view('admin.reservation.homepage_pending', compact('reservations', 'plans'));
     }
 
     public function homepage_pending_confirm(Request $request)
@@ -272,7 +353,10 @@ class ReservationsController extends Controller
             return redirect()->route('admin.settings');
         }
 
-        $request->validate(['id' => 'required|exists:reservations,id']);
+        $request->validate([
+            'id' => 'required|exists:reservations,id',
+            'plan_id' => 'required|exists:plans,id',
+        ]);
 
         $reservation = Reservation::with('dog.customer')->findOrFail($request->id);
         if ((int) $reservation->status !== Reservation::STATUS_PENDING_CONFIRMATION
@@ -282,8 +366,27 @@ class ReservationsController extends Controller
             return back();
         }
 
+        $planId = (int) $request->plan_id;
+        $reservation->plan_id = $planId;
         $reservation->status = Reservation::STATUS_RESERVED;
         $reservation->save();
+
+        if ($reservation->dog) {
+            $daysDiff = $reservation->checkin_date && $reservation->checkout_date
+                ? $reservation->checkin_date->diffInDays($reservation->checkout_date)
+                : 0;
+            $calculationMode = config('app.days_calculation_mode', 'inclusive');
+            $days = $daysDiff === 0 ? 1 : (($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+
+            if ($days > 1) {
+                $reservation->dog->reg_plan = $planId;
+            } else {
+                $reservation->dog->day_plan = $planId;
+            }
+            $reservation->dog->save();
+        }
+
+        $this->createPaymentsForReservationGroups([$reservation->id]);
 
         $this->homepageSyncService->updateStatus($reservation, 'reserviert');
         $this->tryMailHomepageReservationConfirmed($reservation);
@@ -309,8 +412,17 @@ class ReservationsController extends Controller
             return back();
         }
 
-        $reservation->status = Reservation::STATUS_CANCELLED;
-        $reservation->save();
+        $groupId = $reservation->reservation_group_id;
+
+        DB::transaction(function () use ($reservation, $groupId) {
+            $reservation->status = Reservation::STATUS_CANCELLED;
+            $reservation->reservation_group_id = null;
+            $reservation->save();
+
+            if ($groupId) {
+                app(ReservationGroupLifecycleService::class)->afterMemberRemoved((int) $groupId);
+            }
+        });
 
         $this->homepageSyncService->updateStatus($reservation, 'storniert');
         $this->tryMailHomepageReservationCancelled($reservation);
@@ -426,22 +538,25 @@ class ReservationsController extends Controller
                 });
             }
 
-            $reservations = $reservations->where('room_id', '!=', null)->where('status', 1)
-            ->orderBy('checkin_date', 'desc')
-            ->get();
+            $reservations = $reservations->where('room_id', '!=', null)
+                ->where('status', Reservation::STATUS_ACTIVE)
+                ->whereNotNull('reservation_group_id')
+                ->orderBy('checkin_date', 'desc')
+                ->get();
 
             return $reservations;
         }
 
-        $reservations = Reservation::with(['plan','room', 'dog' => function($query){
+        $reservations = Reservation::with(['plan', 'room', 'dog' => function ($query) {
             $query->with('customer');
         }])
-        ->where('room_id', '!=', null)
-        ->where('status', 1)
-        ->orderBy('checkin_date', 'desc')
-        ->get();
+            ->where('room_id', '!=', null)
+            ->where('status', Reservation::STATUS_ACTIVE)
+            ->whereNotNull('reservation_group_id')
+            ->orderBy('checkin_date', 'desc')
+            ->get();
 
-        return view('admin.reservation.dogs-in-rooms' , compact('reservations'));
+        return view('admin.reservation.dogs-in-rooms', compact('reservations'));
     }
 
     public function add_reservation_dashboard(Request $request)
@@ -454,16 +569,11 @@ class ReservationsController extends Controller
         ]);
 
 
-        // Check room capacity and reservations
+        // Check room capacity (Pension + Zuchtverwaltung)
         $rom = Room::find($request->room_id);
-        $capacity = (int)$rom->capacity;
-
-        $reserved = Reservation::with('dog')->where('room_id', $rom->id)->where('status', 1)->get();
-        $reserved_slots = count($reserved);
-
-        if($reserved_slots >= $capacity)
-        {
+        if (! $rom || ! $this->roomCapacityService->canAcceptAdditionalBoarding($rom)) {
             Session::flash('error', 'In diesem Raum ist kein Platz mehr übrig');
+
             return back();
         }
 
@@ -480,6 +590,7 @@ class ReservationsController extends Controller
 
         $visitCounter = new VisitCounterService();
 
+        $createdReservationIds = [];
         foreach($request->dates as $date)
         {
             $ex = explode('-', $date);
@@ -487,6 +598,12 @@ class ReservationsController extends Controller
             $ex1 = $ex[1].' 23:59';
             $checkin = Carbon::createFromFormat('d/m/Y H:i', trim($ex0))->toDateTimeString();
             $checkout = Carbon::createFromFormat('d/m/Y H:i', trim($ex1))->toDateTimeString();
+
+            $checkinDate = Carbon::parse($checkin)->startOfDay();
+            $checkoutDate = Carbon::parse($checkout)->startOfDay();
+            $daysDiff = $checkinDate->diffInDays($checkoutDate);
+            $calculationMode = config('app.days_calculation_mode', 'inclusive');
+            $days = $daysDiff === 0 ? 1 : (($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff);
 
             $reservation = Reservation::create([
                 'dog_id' => $request->dog_id,
@@ -498,7 +615,21 @@ class ReservationsController extends Controller
                 'visit_counted' => false,
                 'days_counted' => false,
             ]);
+
+            $createdReservationIds[] = $reservation->id;
+
+            $dog = Dog::find($request->dog_id);
+            if ($dog) {
+                if ($days > 1) {
+                    $dog->reg_plan = $request->plan_id;
+                } else {
+                    $dog->day_plan = $request->plan_id;
+                }
+                $dog->save();
+            }
         }
+
+        $this->createPaymentsForReservationGroups($createdReservationIds);
 
         Session::flash('success', 'Reservierung erfolgreich hinzugefügt!');
 
@@ -528,12 +659,9 @@ class ReservationsController extends Controller
                 throw new \Exception('Raum nicht gefunden');
             }
             
-            $capacity = (int)$room->capacity;
-            $reservations = Reservation::where('room_id', $request->room_id)->where('status', 1)->count();
-
-            if($reservations >= $capacity)
-            {
+            if (! $this->roomCapacityService->canAcceptAdditionalBoarding($room, (int) $request->res_id)) {
                 DB::rollBack();
+
                 return response()->json([
                     'error' => true,
                     'message' => 'Der Raum ist bereits voll',
@@ -579,11 +707,11 @@ class ReservationsController extends Controller
                     ? $reservation->checkout_date
                     : ($reservation->checkout_date ? Carbon::parse($reservation->checkout_date) : null);
 
-                if (!$checkinDate || $checkinDate->lt(Carbon::today())) {
-                    $reservation->checkin_date = Carbon::now();
+                if (! $checkinDate || $checkinDate->lt(Carbon::today())) {
+                    $reservation->checkin_date = Carbon::today();
                 }
-                
-                if (!$checkoutDate || $checkoutDate->lt(Carbon::today())) {
+
+                if (! $checkoutDate || $checkoutDate->lt(Carbon::today())) {
                     $reservation->checkout_date = Carbon::now();
                 }
             }
@@ -625,6 +753,20 @@ class ReservationsController extends Controller
             $reservation->room_id = $request->room_id;
             $reservation->status = 1;
             $reservation->save();
+
+            $stayTotals = $this->syncReservationPaymentAfterAssignment($reservation);
+            if (($stayTotals['previous_total_due'] ?? 0) > ($stayTotals['new_total_due'] ?? 0) + 0.01) {
+                try {
+                    $this->invoiceService->refreshAdvanceInvoicesAfterStayTotalDropped(
+                        $reservation,
+                        (float) $stayTotals['previous_total_due']
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('Advance invoice refresh after room/check-in change failed: '.$e->getMessage(), [
+                        'reservation_id' => $reservation->id,
+                    ]);
+                }
+            }
 
             // Sync with Homepage if it's a remote reservation
             if ($reservation->remote_pfotenstube_homepage_id) {
@@ -672,11 +814,12 @@ class ReservationsController extends Controller
             return back();
         }
 
-        $targetCapacity = (int)$targetRoom->capacity;
-        $currentOccupancy = Reservation::where('room_id', $request->target_room_id)->where('status', 1)->count();
+        $targetCapacity = $this->roomCapacityService->capacityInt($targetRoom);
+        $currentOccupancy = $this->roomCapacityService->boardingCount($targetRoom);
+        $breeding = $this->roomCapacityService->breedingShelterSlots($targetRoom);
         $dogsToMove = count($request->reservation_ids);
 
-        if (($currentOccupancy + $dogsToMove) > $targetCapacity) {
+        if (($currentOccupancy + $breeding + $dogsToMove) > $targetCapacity) {
             Session::flash('error', 'Das Zielzimmer hat nicht genug Platz für alle ausgewählten Hunde!');
             return back();
         }
@@ -753,7 +896,7 @@ class ReservationsController extends Controller
     private function getDogVisitHistory($dogId)
     {
         // Get all reservations for this dog with their plans and payments
-        $reservations = Reservation::with(['plan', 'payments'])
+        $reservations = Reservation::with(['plan', 'reservationPayment.entries'])
             ->where('dog_id', $dogId)
             ->where('status', 2) // Only completed reservations
             ->orderBy('checkin_date', 'desc')
@@ -786,13 +929,8 @@ class ReservationsController extends Controller
                 $totalPrice = $duration * $dailyPrice;
                 $actualAmount = $totalPrice;
                 
-                if ($reservation->payments && $reservation->payments->count() > 0) {
-                    $payment = $reservation->payments->first();
-                    $actualAmount = $payment->received_amount;
-                    
-                    if ($payment->plan_cost && $duration > 0) {
-                        $dailyPrice = $payment->plan_cost / $duration;
-                    }
+                if ($reservation->reservationPayment) {
+                    $actualAmount = (float)$reservation->reservationPayment->total_paid;
                 }
                 
                 $visitHistory[] = [
@@ -837,343 +975,468 @@ class ReservationsController extends Controller
     public function checkout(Request $request)
     {
         $request->validate([
-            'id' => 'required',
-            'received_amount' => 'required|numeric|min:0',
-            'total' => 'required|numeric|min:0',
-            'discount' => 'required',
-            'gateway' => 'required|in:Bar,Bank',
-            'status' => 'required|in:0,1,2',
-            'checkout' => 'required',
-            'wallet_amount' => 'nullable|numeric|min:0',
+            'id'                      => 'required|integer|exists:reservations,id',
+            'received_amount'         => 'required|numeric|min:0',
+            'total'                   => 'required|numeric|min:0',
+            'discount'                => 'required|numeric|min:0|max:100',
+            'gateway'                 => 'required|in:Bar,Bank',
+            'checkout'                => 'required',
+            'additional_costs'        => 'nullable|array',
+            'additional_costs.*'      => 'integer|exists:additional_costs,id',
+            'additional_cost_values'  => 'nullable|array',
+            'additional_cost_values.*' => 'nullable|numeric|min:0',
         ]);
 
-        // Validate and parse checkout date
-        try {
-            $checkoutInput = $request->checkout;
-            $checkoutInput = str_replace('/', '-', $checkoutInput);
-            $checkoutParsed = Carbon::parse($checkoutInput);
-            
-            if ($checkoutParsed->isFuture()) {
-                Session::flash('error', 'Check-out Datum kann nicht in der Zukunft liegen.');
-                return back()->withInput();
+        // Block single checkout for grouped reservations
+        $resCheck = Reservation::find($request->id);
+        if ($resCheck && $resCheck->reservation_group_id) {
+            $msg = 'Diese Reservierung gehört zu einer Gruppenreservierung. Bitte verwenden Sie den Gruppen-Checkout.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
             }
-            
-            $checkout = $checkoutParsed->format('Y-m-d H:i:s');
-        } catch (\Exception $e) {
+            Session::flash('error', $msg);
+            return back();
+        }
+
+        // Parse checkout date (supports d.m.Y, d/m/Y, or natural)
+        $checkoutInput  = trim((string) $request->checkout);
+        $checkoutParsed = null;
+        foreach (['d.m.Y', 'd/m/Y'] as $fmt) {
+            try {
+                $checkoutParsed = Carbon::createFromFormat($fmt, $checkoutInput);
+                break;
+            } catch (\Exception $e) {
+            }
+        }
+        if (! $checkoutParsed) {
+            try {
+                $checkoutParsed = Carbon::parse($checkoutInput);
+            } catch (\Exception $e) {
+            }
+        }
+        if (! $checkoutParsed) {
             Session::flash('error', 'Ungültiges Check-out Datumsformat.');
             return back()->withInput();
         }
-
-        // Create Price
-        $plan = Plan::find($request->price_plan);
-        $days = max(1, (int)$request->days);
-        
-        // For flat rate plans, don't multiply by days
-        $isFlatRate = $plan && $plan->flat_rate == 1;
-        $planCost = $plan ? (float)$plan->price : 0.0;
-        if (!$isFlatRate) {
-            $planCost = $planCost * $days;
+        if ($checkoutParsed->isFuture()) {
+            Session::flash('error', 'Check-out Datum kann nicht in der Zukunft liegen.');
+            return back()->withInput();
         }
 
-        $special_cost = isset($request->special_cost) ? (float)$request->special_cost : 0.0;
-        
-        // Flat rate plans cannot have discounts
-        $discountPercentage = $isFlatRate ? 0 : (int)$request->discount;
-        $sendToHelloCash = $request->has('send_to_hellocash') && $request->send_to_hellocash == '1';
-        
-        $vatPercentage = Preference::get('vat_percentage', 20);
-        $vatMode = config('app.vat_calculation_mode', 'exclusive');
+        $sendToHelloCash = $request->boolean('send_to_hellocash');
+        $amountTolerance = 0.01;
 
-        // Calculate net total based on VAT calculation mode
-        $discount_amount = 0.0;
-        if ($vatMode === 'inclusive') {
-            // Prices include VAT, extract net from gross prices
-            $planNet = VATCalculator::getNetFromGross($planCost, $vatPercentage);
-            $specialNet = VATCalculator::getNetFromGross($special_cost, $vatPercentage);
-            $netTotal = $planNet + $specialNet;
-        } else {
-            // Prices are net (VAT exclusive)
-            $netTotal = $planCost + $special_cost;
-        }
-        
-        // Apply discount to net total
-        if ($discountPercentage > 0) {
-            $discount_amount = ($discountPercentage / 100) * $netTotal;
-            $discount_amount = round($discount_amount, 2);
-            $netTotal = $netTotal - $discount_amount;
-        }
-
-        // Calculate VAT and gross total
-        $vatAmount = VATCalculator::calculateVATAmount($netTotal, $vatPercentage);
-        $grossTotal = $netTotal + $vatAmount;
-
-        // Invoice total from request is gross total (includes VAT)
-        $invoiceTotal = (float)$request->total;
-        $calculatedGrossTotal = round((float)$grossTotal, 2);
-        if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
-            // Manual invoice override: derive net/VAT from manually entered gross amount.
-            $planCost = round(max(0, $invoiceTotal - $special_cost), 2);
-            $discountPercentage = 0;
-            $discount_amount = 0.0;
-            $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
-            $vatAmount = round($invoiceTotal - $netTotal, 2);
-        }
-        $receivedAmount = (float)$request->received_amount;
-        $useWallet = $request->has('use_wallet') && $request->use_wallet == '1';
-        
-        // Load reservation first to get customer ID (before transaction)
-        $reservation = Reservation::with('dog')->find($request->id);
-        if (!$reservation) {
-            return response()->json(['error' => 'Reservierung nicht gefunden'], 404);
-        }
-        
-        // Get customer ID for balance operations (before transaction for initial check)
-        $customerId = $reservation->dog->customer_id ?? null;
-        $balanceService = new CustomerBalanceService();
-        $cashReceived = $receivedAmount;
-        
-        // Validate invoice total is not negative
-        if ($invoiceTotal < 0) {
-            Session::flash('error', 'Rechnungsbetrag darf nicht negativ sein');
-            return back();
-        }
-        
         DB::beginTransaction();
         try {
-            // Lock reservation to prevent race conditions (reload with lock and relationship)
-            $reservation = Reservation::with('dog')->lockForUpdate()->find($request->id);
-            if (!$reservation) {
-                throw new \Exception('Reservierung nicht gefunden');
-            }
-            
-            // Re-get customer ID after lock (in case it changed)
-            $customerId = $reservation->dog->customer_id ?? null;
-            
-            // Calculate wallet amount INSIDE transaction after lock to prevent race conditions
-            $walletAmount = 0;
-            if ($useWallet && $customerId) {
-                // Lock customer row to prevent race conditions
-                $customer = Customer::where('id', $customerId)->lockForUpdate()->first();
-                if (!$customer) {
-                    throw new \Exception('Kunde nicht gefunden');
-                }
-                
-                // Get current balance after lock (prevents race condition)
-                $customerBalance = $balanceService->getBalance($customerId);
-                
-                // Calculate wallet amount based on available balance
-                $requestedWallet = $customerBalance > 0 ? min($customerBalance, $invoiceTotal) : 0;
-                
-                // Validate that frontend wallet amount doesn't exceed available balance
-                // This prevents overuse if balance changed between frontend calculation and backend processing
-                if ($request->has('wallet_amount')) {
-                    $frontendWalletAmount = (float)$request->wallet_amount;
-                    if ($frontendWalletAmount > $requestedWallet) {
-                        throw new \Exception('Guthaben reicht nicht aus. Verfügbar: ' . number_format($requestedWallet, 2) . '€');
-                    }
-                    $walletAmount = $frontendWalletAmount;
-                } else {
-                    $walletAmount = $requestedWallet;
-                }
-            }
-            
-            // Increment visit and days count on checkout (status = 2)
-            if (!$reservation->visit_counted || !$reservation->days_counted) {
-                $visitCounter = new VisitCounterService();
-                
-                // Increment visit count if not already counted
-                if (!$reservation->visit_counted) {
-                    $visitCounter->incrementVisit($reservation->dog_id);
-                }
-                
-                // Increment days count if not already counted
-                if (!$reservation->days_counted && $reservation->checkin_date) {
-                    $checkinDate = Carbon::parse($reservation->checkin_date);
-                    $checkoutDate = Carbon::parse($checkout);
-                    
-                    // Validate checkout date is not in the future
-                    if ($checkoutDate->isFuture()) {
-                        throw new \Exception('Check-out-Datum darf nicht in der Zukunft liegen');
-                    }
-                    
-                    // Validate checkout date is not before checkin date (normalize to start of day for comparison)
-                    // Same-day checkin/checkout is allowed (counts as 1 day)
-                    $checkinDay = $checkinDate->copy()->startOfDay();
-                    $checkoutDay = $checkoutDate->copy()->startOfDay();
-                    if ($checkoutDay->lt($checkinDay)) {
-                        throw new \Exception('Check-out-Datum darf nicht vor dem Check-in-Datum liegen');
-                    }
-                    
-                    $visitCounter->incrementDays($reservation->dog_id, $checkinDate, $checkoutDate);
-                }
-            }
-            
-            // Update reservation
-            $reservation->checkout_date = $checkout;
-            $reservation->plan_id = $request->price_plan;
-            $reservation->status = 2;
-            $reservation->visit_counted = true;
-            $reservation->days_counted = true;
-            $reservation->save();
+            $reservation = Reservation::with(['dog.customer', 'plan', 'reservationPayment.entries.invoice'])
+                ->lockForUpdate()
+                ->findOrFail($request->id);
 
-            // Sync with Homepage if it's a remote reservation
+            if ($reservation->status === Reservation::STATUS_CHECKED_OUT) {
+                throw new \Exception('Diese Reservierung wurde bereits ausgecheckt');
+            }
+
+            $checkinDate  = $reservation->checkin_date
+                ? Carbon::parse($reservation->checkin_date)->startOfDay()
+                : null;
+            $checkoutDate = $checkoutParsed->copy()->startOfDay();
+
+            if ($checkinDate && $checkoutDate->lt($checkinDate)) {
+                throw new \Exception('Check-out-Datum darf nicht vor dem Check-in-Datum liegen');
+            }
+
+            // ── Determine actual days ───────────────────────────────────────
+            $daysDiff = $checkinDate ? $checkinDate->diffInDays($checkoutDate) : 0;
+            $calculationMode = config('app.days_calculation_mode', 'inclusive');
+            $days = ($daysDiff === 0) ? 1 : (($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+
+            // ── Detect early / late vs. planned checkout ────────────────────
+            $plannedCheckoutDate = $reservation->checkout_date
+                ? Carbon::parse($reservation->checkout_date)->startOfDay()
+                : null;
+
+            $deviationDays = $plannedCheckoutDate ? $plannedCheckoutDate->diffInDays($checkoutDate, false) : 0;
+            $isEarlyCheckout = $deviationDays < 0;   // actual < planned
+            $isLateCheckout  = $deviationDays > 0;   // actual > planned
+
+            // ── Plan & costs ────────────────────────────────────────────────
+            $planId = (int)($request->price_plan ?? $reservation->plan_id);
+            $plan   = Plan::find($planId);
+            if (! $plan) {
+                throw new \Exception('Ausgewählter Preisplan existiert nicht');
+            }
+
+            $isFlatRate = (int) $plan->flat_rate === 1;
+            $planCost   = (float) $plan->price;
+            if (! $isFlatRate) {
+                $planCost *= $days;
+            }
+
+            // Rebuild additional costs for actual stay
+            ReservationAdditionalCost::where('reservation_id', $reservation->id)->delete();
+            $additionalTotal = 0.0;
+            $selectedCosts   = $request->additional_costs ?? [];
+            if (is_array($selectedCosts) && count($selectedCosts) > 0) {
+                foreach ($selectedCosts as $costId) {
+                    $priceInput = $request->additional_cost_values[$costId] ?? null;
+                    $costModel  = AdditionalCost::find($costId);
+                    $price      = $priceInput !== null ? (float) $priceInput : (float)($costModel?->price ?? 0.0);
+                    ReservationAdditionalCost::create([
+                        'reservation_id'    => $reservation->id,
+                        'additional_cost_id' => $costModel?->id,
+                        'title'             => $costModel?->title ?? 'Zusatzkosten',
+                        'price'             => $price,
+                        'quantity'          => 1,
+                    ]);
+                    $additionalTotal += $price;
+                }
+            }
+
+            $discountPercentage = $isFlatRate ? 0 : (int) $request->discount;
+            $vatPercentage      = Preference::get('vat_percentage', 20);
+            $vatMode            = config('app.vat_calculation_mode', 'exclusive');
+
+            // Net → gross calculation
+            $baseAmount = $planCost + $additionalTotal;
+            if ($vatMode === 'inclusive') {
+                $netTotal = VATCalculator::getNetFromGross($baseAmount, $vatPercentage);
+            } else {
+                $netTotal = $baseAmount;
+            }
+            if ($discountPercentage > 0) {
+                $netTotal *= (1 - ($discountPercentage / 100));
+            }
+            $netTotal   = round($netTotal, 2);
+            $vatAmount  = VATCalculator::calculateVATAmount($netTotal, $vatPercentage);
+            $grossTotal = round($netTotal + $vatAmount, 2);
+
+            // Inclusive list prices are already gross; net+VAT reconstruction can drift by cents from
+            // rounding VAT on extracted net. Match sticker total when no percentage discount (same as Reservation::getGrossTotalAttribute).
+            if ($vatMode === 'inclusive' && $discountPercentage === 0) {
+                $grossTotal = round($baseAmount, 2);
+                $netTotal   = VATCalculator::getNetFromGross($grossTotal, $vatPercentage);
+                $vatAmount  = round($grossTotal - $netTotal, 2);
+            }
+
+            // ── Update reservation to actual checkout state ──────────────────
+            $reservation->update([
+                'checkout_date' => $checkoutParsed->format('Y-m-d H:i:s'),
+                'status'        => Reservation::STATUS_CHECKED_OUT,
+                'plan_id'       => $planId,
+            ]);
+
             if ($reservation->remote_pfotenstube_homepage_id) {
-                // Status 2 means the reservation is completed
                 $this->homepageSyncService->updateStatus($reservation, 'abgeschlossen');
             }
 
-            // Update dog's default plan based on stay length
             if ($reservation->dog) {
                 if ($days > 1) {
-                    $reservation->dog->reg_plan = $request->price_plan;
+                    $reservation->dog->reg_plan = $planId;
                 } else {
-                    $reservation->dog->day_plan = $request->price_plan;
+                    $reservation->dog->day_plan = $planId;
                 }
                 $reservation->dog->save();
             }
-            
-            // Determine status: if invoice is 0, automatically mark as paid
-            $paymentStatus = $request->status;
-            if ($invoiceTotal < 0.01) {
-                $paymentStatus = 1; // Bezahlt (invoice amount is 0)
-            }
-            
-            // Create payment record
-            $payment = Payment::create([
-                'res_id' => $request->id,
-                'type' => $request->gateway,
-                'plan_cost' => $planCost,
-                'special_cost' => $special_cost,
-                'days' => $days,
-                'cost' => $invoiceTotal,
-                'vat_amount' => round($vatAmount, 2),
-                'net_amount' => round($netTotal, 2),
-                'discount' => $discountPercentage,
-                'discount_amount' => $discount_amount,
-                'received_amount' => $cashReceived + $walletAmount,
-                'remaining_amount' => 0, // Will be updated after settlement calculation
-                'advance_payment' => 0, // Will be updated after settlement calculation
-                'wallet_amount' => $walletAmount,
-                'status' => $paymentStatus
-            ]);
 
-            // Use debt settlement logic to properly calculate payment allocation
-            if ($customerId) {
-                // Customer is already locked above (for wallet calculation), reuse the lock
-                // If wallet wasn't used, lock customer now
-                if (!$useWallet) {
-                    $customer = Customer::where('id', $customerId)->lockForUpdate()->first();
-                    if (!$customer) {
-                        throw new \Exception('Kunde nicht gefunden');
+            // ── Payment header ───────────────────────────────────────────────
+            $paymentHeader = $reservation->reservationPayment;
+            if (! $paymentHeader) {
+                $paymentHeader = ReservationPayment::create([
+                    'res_id'    => $reservation->id,
+                    'total_due' => $grossTotal,
+                    'status'    => 'unpaid',
+                ]);
+            } else {
+                $paymentHeader->update(['total_due' => $grossTotal]);
+            }
+
+            // ── EARLY CHECKOUT: cancel old invoices + entries, create corrective ─
+            $entriesCreated = [];
+            $advancePaidBeforeCheckout = 0.0;
+            $overpaidAmount = null;
+            $replacedEarlyOverpaidEntries = false;
+
+            if ($isEarlyCheckout) {
+                $previousTotalPaid  = $paymentHeader->entries()
+                    ->where('status', 'active')->sum('amount');
+                $advancePaidBeforeCheckout = (float) $previousTotalPaid;
+                $receivedNow = (float)($request->received_amount ?? 0);
+
+                // Refund case: customer already overpaid compared to corrected early-checkout total.
+                // Replace historic active lines with one corrected settlement line.
+                if ($previousTotalPaid > $grossTotal + $amountTolerance) {
+                    $lastPaymentMethod  = 'Bar';
+                    $lastActiveEntry    = $paymentHeader->entries()
+                        ->where('status', 'active')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    if ($lastActiveEntry && ! empty($lastActiveEntry->method)) {
+                        $lastPaymentMethod = $lastActiveEntry->method;
+                    }
+
+                    foreach ($paymentHeader->entries as $entry) {
+                        if ($entry->status === 'active') {
+                            if ($entry->invoice) {
+                                $entry->invoice->update(['status' => 'cancelled']);
+                            }
+                            $entry->update(['status' => 'cancelled']);
+                        }
+                    }
+
+                    $newActiveAmount = round($grossTotal, 2);
+                    $overpaidAmount  = round($previousTotalPaid - $grossTotal, 2);
+
+                    if ($newActiveAmount > 0) {
+                        $correctiveEntry = ReservationPaymentEntry::create([
+                            'res_payment_id'   => $paymentHeader->id,
+                            'amount'           => $newActiveAmount,
+                            'overpaid_amount'  => $overpaidAmount,
+                            'method'           => $lastPaymentMethod,
+                            'type'             => 'final',
+                            'transaction_date' => Carbon::now(),
+                            'note'             => 'Korrekturbuchung: vorzeitiger Check-out am '
+                                . $checkoutParsed->format('d.m.Y')
+                                . ' (' . abs($deviationDays) . ' Tag(e) früher)',
+                            'status'           => 'active',
+                        ]);
+                        $entriesCreated[] = $correctiveEntry;
+                    }
+
+                    $replacedEarlyOverpaidEntries = true;
+                    $advancePaidBeforeCheckout = 0.0;
+                } else {
+                    // Non-refund early checkout: keep prior payments/invoices, only settle remaining if needed.
+                    $remainingAfterAdvance = round($grossTotal - $previousTotalPaid, 2);
+
+                    if ($receivedNow > 0 && $remainingAfterAdvance > $amountTolerance) {
+                        $settlementAmount = min($receivedNow, $remainingAfterAdvance);
+                        if ($settlementAmount > 0) {
+                            $entriesCreated[] = ReservationPaymentEntry::create([
+                                'res_payment_id'   => $paymentHeader->id,
+                                'amount'           => $settlementAmount,
+                                'method'           => $request->input('gateway', 'Bar'),
+                                'type'             => 'final',
+                                'transaction_date' => Carbon::now(),
+                                'status'           => 'active',
+                            ]);
+                        }
                     }
                 }
-                
-                $settlement = $balanceService->settlePaymentWithDebtConsideration(
-                    $customerId,
-                    $invoiceTotal,
-                    $cashReceived,
-                    $walletAmount,
-                    $payment->id,
-                    true
-                );
-                
-                // Update status if fully settled (effective remaining is 0)
-                $finalStatus = $paymentStatus;
-                if ($settlement['remaining_amount'] < 0.01) {
-                    $finalStatus = 1; // Bezahlt (fully settled)
-                }
-                
-                $payment->update([
-                    'remaining_amount' => $settlement['remaining_amount'] < 0.01 ? 0 : $settlement['remaining_amount'],
-                    'advance_payment' => $settlement['advance_payment'] < 0.01 ? 0 : $settlement['advance_payment'],
-                    'status' => $finalStatus
-                ]);
-                
-                // Update customer balance using settlement details
-                $balanceService->updateBalanceByChange($customerId, $settlement['balance_change']);
             } else {
-                $effectiveReceived = $cashReceived + $walletAmount;
-                $remainingAmount = $effectiveReceived >= $invoiceTotal ? 0 : round($invoiceTotal - $effectiveReceived, 2);
-                $advancePayment = $effectiveReceived > $invoiceTotal ? round($effectiveReceived - $invoiceTotal, 2) : 0;
-                
-                // Update status if fully settled
-                $finalStatus = $paymentStatus;
-                if ($remainingAmount < 0.01) {
-                    $finalStatus = 1; // Bezahlt (fully settled)
+                // ── LATE / ON-TIME CHECKOUT ──────────────────────────────────
+                $previousPaid = $paymentHeader->entries()
+                    ->where('status', 'active')->sum('amount');
+                $advancePaidBeforeCheckout = (float) $previousPaid;
+                $remaining    = round($grossTotal - $previousPaid, 2);
+
+                $gateway     = $request->input('gateway', 'Bar');
+                $amountPaid  = (float)($request->received_amount ?? 0);
+
+                if ($amountPaid > 0) {
+                    // Nothing left to settle (already covered by advance): treat extra payment as advance credit
+                    if ($remaining < $amountTolerance) {
+                        $entriesCreated[] = ReservationPaymentEntry::create([
+                            'res_payment_id'   => $paymentHeader->id,
+                            'amount'           => $amountPaid,
+                            'method'           => $gateway,
+                            'type'             => 'advance',
+                            'transaction_date' => Carbon::now(),
+                            'status'           => 'active',
+                        ]);
+                    } elseif (
+                        $amountPaid <= $remaining + $amountTolerance
+                        || abs($amountPaid - $remaining) <= $amountTolerance
+                    ) {
+                        // Single settlement line: paying the open balance at checkout (final), not a split advance/final pair
+                        $entriesCreated[] = ReservationPaymentEntry::create([
+                            'res_payment_id'   => $paymentHeader->id,
+                            'amount'           => $amountPaid,
+                            'method'           => $gateway,
+                            'type'             => 'final',
+                            'transaction_date' => Carbon::now(),
+                            'status'           => 'active',
+                        ]);
+                    } else {
+                        // Genuine overpayment: remainder to final, excess as advance
+                        if ($remaining > $amountTolerance) {
+                            $entriesCreated[] = ReservationPaymentEntry::create([
+                                'res_payment_id'   => $paymentHeader->id,
+                                'amount'           => $remaining,
+                                'method'           => $gateway,
+                                'type'             => 'final',
+                                'transaction_date' => Carbon::now(),
+                                'status'           => 'active',
+                            ]);
+                        }
+                        $entriesCreated[] = ReservationPaymentEntry::create([
+                            'res_payment_id'   => $paymentHeader->id,
+                            'amount'           => round($amountPaid - max($remaining, 0), 2),
+                            'method'           => $gateway,
+                            'type'             => 'advance',
+                            'transaction_date' => Carbon::now(),
+                            'status'           => 'active',
+                        ]);
+                    }
                 }
-                
-                $payment->update([
-                    'remaining_amount' => $remainingAmount < 0.01 ? 0 : $remainingAmount,
-                    'advance_payment' => $advancePayment < 0.01 ? 0 : $advancePayment,
-                    'status' => $finalStatus
-                ]);
-            }
-            
-            // Commit transaction
-            DB::commit();
-            
-            $reservation->refresh();
-            $payment->refresh();
-            
-            // Handle invoice generation based on payment method
-            $invoiceResponse = null;
-            if ($request->gateway === 'Bank') {
-                // Generate Bank transfer invoice
-                $invoiceResponse = $this->bankInvoiceService->generateInvoice(
-                    $reservation,
-                    $payment,
-                    [
-                        'plan_cost' => $planCost,
-                        'special_cost' => $special_cost,
-                        'discount_percentage' => $discountPercentage,
-                        'days' => $days,
-                    ]
-                );
-            } elseif ($sendToHelloCash) {
-                // Handle HelloCash API call if requested
-                $invoiceResponse = $this->handleHelloCashIntegration(
-                    $request,
-                    $plan,
-                    $planCost,
-                    $special_cost,
-                    $days,
-                    $discountPercentage,
-                    $reservation->id,
-                    $payment->id,
-                );
             }
 
-            // Link payment to invoice if available
-            if ($invoiceResponse) {
-                $localInvoiceId = $invoiceResponse['saved_invoice_id'] ?? null;
-                if ($localInvoiceId) {
-                    $payment->update(['invoice_id' => $localInvoiceId]);
+            // ── Sync payment header status ───────────────────────────────────
+            $totalPaid = $paymentHeader->entries()
+                ->where('status', 'active')->sum('amount');
+            if ($totalPaid >= $grossTotal - $amountTolerance) {
+                $paymentHeader->update(['status' => 'paid']);
+            } elseif ($totalPaid > 0) {
+                $paymentHeader->update(['status' => 'partial']);
+            } else {
+                $paymentHeader->update(['status' => 'unpaid']);
+            }
+
+            DB::commit();
+
+            // ── Post-commit: checkout invoice + final invoice + HelloCash ────
+            $reservation->load('additionalCosts', 'reservationPayment.entries');
+
+            // Build gross line items for the checkout breakdown invoice
+            $vatModeForBreakdown = config('app.vat_calculation_mode', 'exclusive');
+            $planUnitPriceRaw    = (float) $plan->price;
+            $planUnitGross = $vatModeForBreakdown === 'inclusive'
+                ? $planUnitPriceRaw
+                : round($planUnitPriceRaw * (1 + $vatPercentage / 100), 2);
+            $planGrossBeforeDiscount = $isFlatRate ? $planUnitGross : round($planUnitGross * $days, 2);
+
+            $additionalCostsBreakdown = $reservation->additionalCosts->map(function ($ac) use ($vatModeForBreakdown, $vatPercentage) {
+                $qty      = (int) ($ac->quantity ?? 1);
+                $rawPrice = (float) $ac->price;
+                $unitGross = $vatModeForBreakdown === 'inclusive'
+                    ? $rawPrice
+                    : round($rawPrice * (1 + $vatPercentage / 100), 2);
+                return [
+                    'title'    => $ac->title,
+                    'quantity' => $qty,
+                    'gross'    => round($unitGross * $qty, 2),
+                ];
+            })->toArray();
+
+            $checkoutEntryMethods = collect($entriesCreated)->pluck('method')->unique()->values()->toArray();
+            $lastEntryId          = collect($entriesCreated)->last()?->id;
+
+            $checkoutBreakdown = [
+                'plan_title'               => $plan->title,
+                'days'                     => $days,
+                'is_flat_rate'             => $isFlatRate,
+                'plan_unit_gross'          => $planUnitGross,
+                'plan_gross_before_discount' => $planGrossBeforeDiscount,
+                'additional_costs'         => $additionalCostsBreakdown,
+                'discount_percentage'      => $discountPercentage,
+                'gross_total'              => $grossTotal,
+                'advance_paid'             => $advancePaidBeforeCheckout,
+                'overpaid_amount'          => $overpaidAmount ?? 0.0,
+                'is_early_checkout'        => $isEarlyCheckout,
+                'vat_percentage'           => $vatPercentage,
+                'checkout_entry_methods'   => $checkoutEntryMethods,
+                'last_entry_id'            => $lastEntryId,
+                'checkin_date'             => $checkinDate,
+                'actual_checkout_date'     => $checkoutParsed,
+            ];
+
+            // Only generate Schlussrechnung + Interne when there is a remaining balance at checkout.
+            // If the full amount was already covered by the advance payment (balance = 0), the
+            // Anzahlung receipt is the only invoice needed - no further documents are created.
+            $checkoutInvoiceResult = null;
+            $finalInvoiceResult    = null;
+
+            $balanceDueAtCheckout = max(0.0, round($grossTotal - $advancePaidBeforeCheckout, 2));
+            $hasAdvanceBeforeCheckout = $advancePaidBeforeCheckout > $amountTolerance;
+
+            if ($balanceDueAtCheckout > $amountTolerance) {
+                // 1. Customer invoice (Schlussrechnung) - due amount at checkout.
+                $checkoutInvoiceResult = $this->invoiceService->generateCheckoutInvoice($reservation, $checkoutBreakdown);
+
+                // 2. Internal final invoice is only needed when an advance already exists.
+                // If no advance existed, internal and customer invoices would be duplicates.
+                if ($hasAdvanceBeforeCheckout) {
+                    $allActiveEntries = $reservation->reservationPayment?->entries()->where('status', 'active')->get() ?? collect();
+                    if ($allActiveEntries->isNotEmpty()) {
+                        $finalInvoiceResult = $this->invoiceService->generateInvoice($reservation, $allActiveEntries, 'final');
+                    }
                 }
             }
-            
-            Session::flash('success', 'Kaufabwicklung erfolgreich');
-            
-            // If AJAX request, return JSON with invoice data
+
+            // Early refund correction: always generate a corrected local final invoice
+            // after replacing overpaid historical entries.
+            if ($isEarlyCheckout && $replacedEarlyOverpaidEntries) {
+                $allActiveEntries = $reservation->reservationPayment?->entries()->where('status', 'active')->get() ?? collect();
+                if ($allActiveEntries->isNotEmpty()) {
+                    $finalInvoiceResult = $this->invoiceService->generateInvoice($reservation, $allActiveEntries, 'final');
+                }
+            }
+
+            $customerId = $reservation->dog?->customer_id;
+            if ($customerId) {
+                (new CustomerBalanceService())->getBalance($customerId);
+            }
+
+            $helloCashResult = null;
+            if ($sendToHelloCash && ! $isEarlyCheckout) {
+                $cashEntries = $paymentHeader->entries()
+                    ->where('status', 'active')
+                    ->where('method', 'Bar')
+                    ->get();
+                $cashTotal = $cashEntries->sum('amount');
+                if ($cashTotal > $amountTolerance) {
+                    $items = [];
+                    foreach ($cashEntries as $entry) {
+                        $label   = $entry->type === 'advance' ? 'Anzahlung' : 'Zahlung';
+                        $items[] = [
+                            'item_name'     => $label,
+                            'item_quantity' => 1.0,
+                            'item_price'    => round((float) $entry->amount, 2),
+                            'item_taxRate'  => (float) $vatPercentage,
+                        ];
+                    }
+                    $helloCashResult = $this->hellocashService->createCashPaymentInvoice([
+                        'reservation_id'        => $reservation->id,
+                        'customer_id'           => $reservation->dog?->customer_id,
+                        'hellocash_customer_id' => $reservation->dog?->customer?->hellocash_customer_id,
+                        'items'                 => $items,
+                        'payment_method'        => 'Bar',
+                    ]);
+                }
+            }
+
+            // Build a human-readable summary for the flash message
+            if ($isEarlyCheckout) {
+                $overpaidMsg = isset($overpaidAmount) && $overpaidAmount > 0
+                    ? ' Rückgabe: ' . number_format($overpaidAmount, 2) . '€.'
+                    : '';
+                Session::flash('success', 'Frühzeitiger Check-out erfolgreich. Neue Gesamtsumme: '
+                    . number_format($grossTotal, 2) . '€.' . $overpaidMsg);
+            } elseif ($isLateCheckout) {
+                Session::flash('success', 'Später Check-out erfolgreich. Aktualisierte Gesamtsumme: '
+                    . number_format($grossTotal, 2) . '€.');
+            } else {
+                Session::flash('success', 'Kaufabwicklung erfolgreich.');
+            }
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Kaufabwicklung erfolgreich',
-                    'hellocash' => $invoiceResponse,
-                    'invoice' => $invoiceResponse,
+                    'success'          => true,
+                    'message'          => Session::get('success'),
+                    'checkout_type'    => $isEarlyCheckout ? 'early' : ($isLateCheckout ? 'late' : 'ontime'),
+                    'gross_total'      => $grossTotal,
+                    'overpaid_amount'  => $isEarlyCheckout ? ($overpaidAmount ?? 0) : 0,
+                    'checkout_invoice' => $checkoutInvoiceResult,
+                    'final_invoice'    => $finalInvoiceResult,
+                    'hellocash'        => $helloCashResult,
                 ]);
             }
         } catch (\Exception $e) {
-            // Rollback transaction on error
             DB::rollBack();
-            
-            Session::flash('error', 'Fehler bei der Kaufabwicklung: ' . $e->getMessage());
             Log::error('Checkout error: ' . $e->getMessage(), [
                 'reservation_id' => $request->id,
-                'customer_id' => $customerId,
-                'trace' => $e->getTraceAsString()
+                'trace'          => $e->getTraceAsString(),
             ]);
-            
-            // If AJAX request, return JSON error
+            Session::flash('error', 'Fehler bei der Kaufabwicklung: ' . $e->getMessage());
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
                     'success' => false,
@@ -1181,7 +1444,7 @@ class ReservationsController extends Controller
                 ], 500);
             }
         }
-        
+
         return back();
     }
 
@@ -1218,6 +1481,14 @@ class ReservationsController extends Controller
                     'message' => 'Dieser Hund ist bereits in einem Zimmer eingecheckt und kann nicht zweimal eingecheckt werden.',
                 ], 422);
             }
+        }
+
+        $room = Room::findOrFail($room_id);
+        if (! $this->roomCapacityService->canAcceptAdditionalBoarding($room, (int) $res->id)) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Der Raum ist bereits voll',
+            ], 422);
         }
 
         // Check if the NEW dog being added is friends with dogs already in the room
@@ -1267,18 +1538,30 @@ class ReservationsController extends Controller
             $checkinDate = $res->checkin_date instanceof Carbon ? $res->checkin_date : ($res->checkin_date ? Carbon::parse($res->checkin_date) : null);
             $checkoutDate = $res->checkout_date instanceof Carbon ? $res->checkout_date : ($res->checkout_date ? Carbon::parse($res->checkout_date) : null);
 
-            if(!$checkinDate || $checkinDate->lt(Carbon::today()))
-            {
-                $res->checkin_date = Carbon::now();
+            if (! $checkinDate || $checkinDate->lt(Carbon::today())) {
+                $res->checkin_date = Carbon::today();
             }
-            
-            if(!$checkoutDate || $checkoutDate->lt(Carbon::today()))
-            {
+
+            if (! $checkoutDate || $checkoutDate->lt(Carbon::today())) {
                 $res->checkout_date = Carbon::now();
             }
         }
         
         $res->save();
+
+        $stayTotals = $this->syncReservationPaymentAfterAssignment($res);
+        if (($stayTotals['previous_total_due'] ?? 0) > ($stayTotals['new_total_due'] ?? 0) + 0.01) {
+            try {
+                $this->invoiceService->refreshAdvanceInvoicesAfterStayTotalDropped(
+                    $res,
+                    (float) $stayTotals['previous_total_due']
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Advance invoice refresh after room update failed: '.$e->getMessage(), [
+                    'reservation_id' => $res->id,
+                ]);
+            }
+        }
 
         // Sync with Homepage if it's a remote reservation
         if ($res->remote_pfotenstube_homepage_id && $res->status == 1) {
@@ -1299,95 +1582,92 @@ class ReservationsController extends Controller
             return to_route('admin.settings');
         }
 
-        $reservations = Reservation::with(['plan','room', 'dog' => function($query){
-            $query->with('customer','day_plan_obj');
-        }])
-        ->where('room_id', '!=', null)
-        ->orderBy('checkin_date', 'desc')->get();
+        Session::flash('success', 'Bitte wählen Sie im Mehrfachkasse-Bereich die Hunde eines Kunden aus und öffnen Sie die Kasse über „Kasse“.');
 
-        // Group reservations by customer and fetch balances
-        $groupedReservations = [];
-        $balanceService = new CustomerBalanceService();
-        
-        foreach ($reservations as $reservation) {
-            $customerId = $reservation->dog->customer_id ?? null;
-            if ($customerId) {
-                if (!isset($groupedReservations[$customerId])) {
-                    $groupedReservations[$customerId] = [
-                        'customer' => $reservation->dog->customer,
-                        'balance' => $balanceService->getBalance($customerId),
-                        'reservations' => []
-                    ];
-                }
-                $groupedReservations[$customerId]['reservations'][] = $reservation;
-            } else {
-                // Handle reservations without customer
-                if (!isset($groupedReservations[0])) {
-                    $groupedReservations[0] = [
-                        'customer' => null,
-                        'balance' => 0,
-                        'reservations' => []
-                    ];
-                }
-                $groupedReservations[0]['reservations'][] = $reservation;
-            }
-        }
-
-        $plans = Plan::orderBy('id', 'asc')->get();
-        $vatPercentage = Preference::get('vat_percentage', 20);
-
-        return view('admin.reservation.checkout', compact('groupedReservations', 'plans', 'vatPercentage'));
+        return redirect()->route('admin.dogs.in.rooms');
     }
 
     public function dogs_in_rooms_checkout_post(Request $request)
     {
         $request->validate([
-            'entry' => 'required'
+            'entry' => 'required|array|min:1',
+            'entry.*' => 'integer|exists:reservations,id',
         ]);
 
         $entries = $request->entry;
 
-        if(count($entries) === 0)
-        {
-            return back();
-        }
-
-        $reservations = Reservation::with(['plan', 'dog' => function($query){
-            $query->with('customer');
+        $reservations = Reservation::with(['plan', 'room', 'reservationPayment.entries', 'additionalCosts', 'reservationGroup.entries', 'dog' => function ($query) {
+            $query->with('customer', 'day_plan_obj');
         }])->whereIn('id', $entries)->get();
 
-        // Group reservations by customer and fetch balances
-        $groupedReservations = [];
-        $balanceService = new CustomerBalanceService();
-        
         foreach ($reservations as $reservation) {
-            $customerId = $reservation->dog->customer_id ?? null;
-            if ($customerId) {
-                if (!isset($groupedReservations[$customerId])) {
-                    $groupedReservations[$customerId] = [
-                        'customer' => $reservation->dog->customer,
-                        'balance' => $balanceService->getBalance($customerId),
-                        'reservations' => []
-                    ];
-                }
-                $groupedReservations[$customerId]['reservations'][] = $reservation;
-            } else {
-                // Handle reservations without customer (shouldn't happen, but safety)
-                if (!isset($groupedReservations[0])) {
-                    $groupedReservations[0] = [
-                        'customer' => null,
-                        'balance' => 0,
-                        'reservations' => []
-                    ];
-                }
-                $groupedReservations[0]['reservations'][] = $reservation;
+            if (! $reservation->reservation_group_id) {
+                Session::flash('error', 'Mehrfachkasse ist nur für zusammen eingecheckte Gruppen möglich.');
+
+                return redirect()->route('admin.dogs.in.rooms');
+            }
+            if ($reservation->room_id === null || (int) $reservation->status !== Reservation::STATUS_ACTIVE) {
+                Session::flash('error', 'Eine oder mehrere ausgewählte Reservierungen sind nicht mehr aktiv im Zimmer.');
+
+                return redirect()->route('admin.dogs.in.rooms');
             }
         }
 
+        $customerIds = $reservations->map(fn ($r) => $r->dog?->customer_id)->filter()->unique()->values();
+        if ($customerIds->count() !== 1) {
+            Session::flash('error', 'Bitte wählen Sie nur Hunde eines Kunden für die Mehrfachkasse aus.');
+
+            return redirect()->route('admin.dogs.in.rooms');
+        }
+
+        $groupIds = $reservations->pluck('reservation_group_id')->unique()->filter();
+        foreach ($groupIds as $gid) {
+            $expectedIds = Reservation::query()
+                ->where('reservation_group_id', $gid)
+                ->where('room_id', '!=', null)
+                ->where('status', Reservation::STATUS_ACTIVE)
+                ->pluck('id')
+                ->sort()
+                ->values();
+            $selectedIds = $reservations->where('reservation_group_id', $gid)->pluck('id')->sort()->values();
+            if ($expectedIds->count() !== $selectedIds->count() || $expectedIds->diff($selectedIds)->isNotEmpty()) {
+                Session::flash('error', 'Für die Mehrfachkasse müssen alle noch im Zimmer befindlichen Hunde der betroffenen Gruppe(n) ausgewählt sein.');
+
+                return redirect()->route('admin.dogs.in.rooms');
+            }
+        }
+
+        $reservationGroups = [];
+        foreach ($reservations as $reservation) {
+            $gid = $reservation->reservation_group_id;
+            if (! isset($reservationGroups[$gid])) {
+                $group = $reservation->reservationGroup;
+                $reservationGroups[$gid] = [
+                    'group'        => $group,
+                    'customer'     => $group?->customer ?? $reservation->dog?->customer,
+                    'reservations' => [],
+                ];
+            }
+            $reservationGroups[$gid]['reservations'][] = $reservation;
+        }
+
+        $groupedReservations = [];
+        $checkoutCustomer = $reservations->first()->dog?->customer;
+        $bulkCheckoutOnly = true;
+
         $plans = Plan::orderBy('id', 'asc')->get();
         $vatPercentage = Preference::get('vat_percentage', 20);
+        $additionalCosts = AdditionalCost::orderBy('title', 'asc')->get();
 
-        return view('admin.reservation.checkout', compact('groupedReservations', 'plans', 'vatPercentage'));
+        return view('admin.reservation.checkout', compact(
+            'groupedReservations',
+            'reservationGroups',
+            'plans',
+            'vatPercentage',
+            'additionalCosts',
+            'checkoutCustomer',
+            'bulkCheckoutOnly'
+        ));
     }
 
     public function dogs_in_rooms_update_checkout(Request $request)
@@ -1397,309 +1677,254 @@ class ReservationsController extends Controller
             return back();
         }
 
-        // Add comprehensive input validation
         $request->validate([
             'res_id' => 'required|array|min:1',
             'res_id.*' => 'required|integer|exists:reservations,id',
             'plan_id' => 'required|array',
             'plan_id.*' => 'required|integer|exists:plans,id',
-            'days' => 'required|array',
-            'days.*' => 'required|integer|min:1',
-            'base_cost' => 'required|array',
-            'base_cost.*' => 'required|numeric|min:0',
-            'special_cost' => 'required|array',
-            'special_cost.*' => 'required|numeric|min:0',
             'discount' => 'required|array',
             'discount.*' => 'required|numeric|min:0|max:100',
-            'payment_method' => 'required|array',
-            'payment_method.*' => 'required|string|in:Bar,Bank',
-            'received_amount' => 'required|array',
-            'received_amount.*' => 'required|numeric|min:0',
-            'invoice_amount' => 'required|array',
-            'invoice_amount.*' => 'required|numeric|min:0',
+            'payment_mode' => 'required|array',
+            'payment_mode.*' => 'required|string|in:single,split',
         ]);
 
-        // Define amount tolerance constant for consistent use throughout
         $amountTolerance = 0.01;
-
         $visitCounter = new VisitCounterService();
-        $balanceService = new CustomerBalanceService();
-        
-        // Initialize invoice data collection for grouping by customer
-        $invoiceDataByCustomer = [];
-        
-        // Initialize HelloCash invoice data collection for Bar payments (per-customer)
-        $helloCashDataByCustomer = [];
-        $helloCashCustomers = $request->send_to_hellocash ?? [];
-        
-        // First pass: Calculate customer totals for wallet distribution
-        $customerTotals = [];
-        $customerReservationKeys = [];
-        
-        foreach($request->res_id as $key => $res_id) {
-            $reservation = Reservation::with('dog')->find($res_id);
-            if ($reservation && $reservation->dog) {
-                $customerId = $reservation->dog->customer_id ?? null;
-                if ($customerId) {
-                    if (!isset($customerTotals[$customerId])) {
-                        $customerTotals[$customerId] = 0;
-                        $customerReservationKeys[$customerId] = [];
-                    }
-                    $invoiceTotal = floatval($request->invoice_amount[$key] ?? 0);
-                    $customerTotals[$customerId] += $invoiceTotal;
-                    $customerReservationKeys[$customerId][] = $key;
-                }
-            }
-        }
-        
-        // Calculate wallet usage per customer
-        $customerWalletUsage = [];
-        $customerWalletAccumulated = []; // Track accumulated wallet per customer for rounding fix
-        foreach ($customerTotals as $customerId => $total) {
-            $useWallet = isset($request->use_wallet[$customerId]) && $request->use_wallet[$customerId] == '1';
-            if ($useWallet && $customerId) {
-                $customer = Customer::where('id', $customerId)->first();
-                if ($customer) {
-                    // Use the locked customer's balance directly instead of making a new query
-                    $customerBalance = (float)($customer->balance ?? 0);
-                    $walletToUse = $customerBalance > 0 ? min($customerBalance, $total) : 0;
-                    $customerWalletUsage[$customerId] = $walletToUse;
-                    $customerWalletAccumulated[$customerId] = 0; // Initialize accumulator
-                }
-            }
-        }
-
-        // Initialize failure tracking
         $failures = [];
+        $helloCashCustomers = $request->send_to_hellocash ?? [];
 
         foreach($request->res_id as $key => $res_id)
         {
             DB::beginTransaction();
             try {
-                // Lock reservation to prevent race conditions (load dog relationship for customer ID)
-                $reservation = Reservation::with('dog')->lockForUpdate()->find($res_id);
-                if (!$reservation) {
-                    Log::error('Reservation not found for ID ' . $res_id);
-                    throw new \Exception('Reservierung nicht gefunden');
-                }
-                
-                // Prevent duplicate checkout of same reservation
-                if ($reservation->status === 2) {
-                    Log::error('Duplicate checkout attempt for reservation ID ' . $reservation->id);                
+                $reservation = Reservation::with(['dog.customer', 'plan', 'reservationPayment.entries'])->lockForUpdate()->findOrFail($res_id);
+                if ($reservation->status === Reservation::STATUS_CHECKED_OUT) {
                     throw new \Exception('Diese Reservierung wurde bereits ausgecheckt');
                 }
-                
-                // Validate dog exists and has customer
                 if (!$reservation->dog) {
-                    Log::error('Dog not found for reservation ID ' . $reservation->id);
                     throw new \Exception('Hund für diese Reservierung nicht gefunden');
                 }
-                
-                // Get customer ID early for wallet operations
-                $customerId = $reservation->dog->customer_id ?? null;
-                
-                // Handle custom checkout date (optional, defaults to current time)
+                if ($reservation->reservation_group_id) {
+                    throw new \Exception('Reservierung #' . $reservation->id . ' gehört zu einer Gruppe - bitte Gruppen-Checkout verwenden.');
+                }
+
+                $plannedCheckout = $reservation->checkout_date ? Carbon::parse($reservation->checkout_date) : null;
                 $checkoutDate = isset($request->checkout_date[$key]) && !empty($request->checkout_date[$key])
-                    ? Carbon::parse($request->checkout_date[$key])->format('Y-m-d H:i:s')
-                    : date("Y-m-d H:i:s");
-                
-                // Validate checkout date is not before checkin date
+                    ? Carbon::parse($request->checkout_date[$key])
+                    : Carbon::now();
+
+                if ($checkoutDate->isFuture()) {
+                    throw new \Exception('Check-out-Datum darf nicht in der Zukunft liegen');
+                }
+
                 if ($reservation->checkin_date) {
-                    $checkinDate = Carbon::parse($reservation->checkin_date);
-                    $checkoutDateCarbon = Carbon::parse($checkoutDate);
-                    
-                    if ($checkoutDateCarbon->isFuture()) {
-                        Log::error('Checkout date is in the future for reservation ID ' . $reservation->id);
-                        throw new \Exception('Check-out-Datum darf nicht in der Zukunft liegen');
-                    }
-                    
-                    $checkinDay = $checkinDate->copy()->startOfDay();
-                    $checkoutDay = $checkoutDateCarbon->copy()->startOfDay();
-                    if ($checkoutDay->lt($checkinDay)) {
-                        Log::error('Checkout date is before checkin date for reservation ID ' . $reservation->id);
+                    $checkinDate = Carbon::parse($reservation->checkin_date)->startOfDay();
+                    $checkoutDay = $checkoutDate->copy()->startOfDay();
+                    if ($checkoutDay->lt($checkinDate)) {
                         throw new \Exception('Check-out-Datum darf nicht vor dem Check-in-Datum liegen');
                     }
                 }
-                
-                // Increment visit and days count on checkout (status = 2) - INSIDE transaction
-                if (!$reservation->visit_counted || !$reservation->days_counted) {
-                    // Increment visit count if not already counted
-                    if (!$reservation->visit_counted) {
-                        $visitCounter->incrementVisit($reservation->dog_id);
-                    }
-                    
-                    // Increment days count if not already counted
-                    if (!$reservation->days_counted && $reservation->checkin_date) {
-                        $checkinDate = Carbon::parse($reservation->checkin_date);
-                        $checkoutDateCarbon = Carbon::parse($checkoutDate);
-                        
-                        $visitCounter->incrementDays($reservation->dog_id, $checkinDate, $checkoutDateCarbon);
-                    }
+
+                if (!$reservation->visit_counted) {
+                    $visitCounter->incrementVisit($reservation->dog_id);
+                    $reservation->visit_counted = true;
+                }
+                if (!$reservation->days_counted && $reservation->checkin_date) {
+                    $visitCounter->incrementDays($reservation->dog_id, $reservation->checkin_date, $checkoutDate);
+                    $reservation->days_counted = true;
                 }
 
-                // Get plan ID from request (optional, defaults to existing plan_id)
-                $planId = isset($request->plan_id[$key]) ? (int)$request->plan_id[$key] : $reservation->plan_id;
-                
-                // Validate plan exists if provided
-                if ($planId && !Plan::find($planId)) {
-                    Log::error('Plan not found for ID ' . $planId . ' on reservation ID ' . $reservation->id);
+                $planId = (int)($request->plan_id[$key] ?? $reservation->plan_id);
+                $plan = Plan::find($planId);
+                if (!$plan) {
                     throw new \Exception('Ausgewählter Preisplan existiert nicht');
                 }
 
                 $reservation->update([
-                    "checkout_date" => $checkoutDate,
-                    "status" => 2,
-                    "plan_id" => $planId,
-                    "visit_counted" => true,
-                    "days_counted" => true
+                    'checkout_date' => $checkoutDate->format('Y-m-d H:i:s'),
+                    'status' => Reservation::STATUS_CHECKED_OUT,
+                    'plan_id' => $planId,
                 ]);
 
-                // Sync with Homepage if it's a remote reservation
                 if ($reservation->remote_pfotenstube_homepage_id) {
                     $this->homepageSyncService->updateStatus($reservation, 'abgeschlossen');
                 }
 
-                $special_cost = isset($request->special_cost[$key]) ? floatval($request->special_cost[$key]) : 0;
-                $base_cost = isset($request->base_cost[$key]) ? floatval($request->base_cost[$key]) : 0;
-                $plan_cost = $base_cost; // plan_cost is the same as base_cost in bulk checkout
-                
-                // Get plan to check if it's flat rate
-                $plan = Plan::find($planId);
-                $isFlatRate = $plan && $plan->flat_rate == 1;
-                
-                // Flat rate plans cannot have discounts
-                $discount_percentage = $isFlatRate ? 0 : (int)($request->discount[$key] ?? 0);
-                $discount_amount = 0;
-                
-                // Calculate net total based on VAT calculation mode
-                $vatPercentage = Preference::get('vat_percentage', 20);
-                $vatMode = config('app.vat_calculation_mode', 'exclusive');
-                
-                if ($vatMode === 'inclusive') {
-                    // Prices include VAT, extract net from gross prices
-                    $baseNet = VATCalculator::getNetFromGross($base_cost, $vatPercentage);
-                    $specialNet = VATCalculator::getNetFromGross($special_cost, $vatPercentage);
-                    $netTotal = $baseNet + $specialNet;
-                } else {
-                    // Prices are net (VAT exclusive)
-                    $netTotal = $base_cost + $special_cost;
-                }
-                
-                // Calculate discount on net total
-                if($discount_percentage > 0)
-                {
-                    $discount_amount = $netTotal * ($discount_percentage / 100);
-                    $discount_amount = round($discount_amount, 2);
-                    $netTotal = $netTotal - $discount_amount;
-                }
-
-                // Calculate VAT and gross total
-                $vatAmount = VATCalculator::calculateVATAmount($netTotal, $vatPercentage);
-                $grossTotal = $netTotal + $vatAmount;
-
-                // Invoice total from request is gross total (includes VAT)
-                $invoiceTotal = floatval($request->invoice_amount[$key]);
-                $calculatedGrossTotal = round((float)$grossTotal, 2);
-                if (abs($invoiceTotal - $calculatedGrossTotal) > 0.009) {
-                    // Manual invoice override: derive net/VAT from manually entered gross amount.
-                    $plan_cost = round(max(0, $invoiceTotal - $special_cost), 2);
-                    $discount_percentage = 0;
-                    $discount_amount = 0.0;
-                    $netTotal = round(VATCalculator::getNetFromGross($invoiceTotal, $vatPercentage), 2);
-                    $vatAmount = round($invoiceTotal - $netTotal, 2);
-                }
-                $receivedAmount = floatval($request->received_amount[$key]);
-                
-                // Validate invoice total is not negative
-                if ($invoiceTotal < 0) {
-                    Log::error('Invoice total is negative for reservation ID ' . $reservation->id);
-                    throw new \Exception('Rechnungsbetrag darf nicht negativ sein');
-                }
-                
-                // Validate received amount is not negative
-                if ($receivedAmount < 0) {
-                    Log::error('Received amount is negative for reservation ID ' . $reservation->id);
-                    throw new \Exception('Erhaltener Betrag darf nicht negativ sein');
-                }
-                
-                // Determine initial payment status based on amounts (same logic as single checkout)
-                // Status: 0 = Nicht bezahlt, 1 = Bezahlt, 2 = Offen
-                $paymentStatus = 1; // Default to paid
-                if ($invoiceTotal < 0.01) {
-                    // Invoice amount is 0 (e.g., organization plan), automatically paid
-                    $paymentStatus = 1; // Bezahlt
-                } elseif ($receivedAmount < 0.01) {
-                    // No payment received
-                    $paymentStatus = 0; // Nicht bezahlt
-                } else {
-                    // Payment received, check if it's partial or full
-                    $remainingBeforeSettlement = $invoiceTotal - $receivedAmount;
-                    if ($remainingBeforeSettlement > 0.01) {
-                        // Partial payment - will be updated after settlement if fully settled
-                        $paymentStatus = 2; // Offen (partially paid)
-                    } else {
-                        // Full payment (or overpayment)
-                        $paymentStatus = 1; // Bezahlt
-                    }
-                }
-                
-                // Calculate wallet amount per customer (distributed proportionally)
-                $walletAmount = 0;
-                $cashReceived = $receivedAmount;
-                
-                // Check if wallet is enabled for this customer
-                $useWallet = isset($request->use_wallet[$customerId]) && $request->use_wallet[$customerId] == '1';
-                
-                if ($useWallet && $customerId && isset($customerWalletUsage[$customerId])) {
-                    // Distribute wallet proportionally across this customer's reservations
-                    $customerTotal = $customerTotals[$customerId] ?? $invoiceTotal;
-                    $totalWalletForCustomer = $customerWalletUsage[$customerId];
-                    $walletProportion = $customerTotal > 0 ? ($invoiceTotal / $customerTotal) : 0;
-                    
-                    // Check if this is the last reservation for this customer to fix rounding
-                    $customerResKeys = $customerReservationKeys[$customerId] ?? [];
-                    $isLastReservation = (end($customerResKeys) == $key);
-                    
-                    if ($isLastReservation) {
-                        // For last reservation, adjust to ensure sum equals total wallet
-                        $walletAmount = $totalWalletForCustomer - ($customerWalletAccumulated[$customerId] ?? 0);
-                    } else {
-                        $walletAmount = $totalWalletForCustomer * $walletProportion;
-                        $walletAmount = round($walletAmount, 2);
-                        $customerWalletAccumulated[$customerId] = ($customerWalletAccumulated[$customerId] ?? 0) + $walletAmount;
-                    }
-                    
-                    // Validate wallet amount is not negative and doesn't exceed what was calculated upfront
-                    if ($walletAmount < 0) {
-                        Log::error('Calculated wallet amount is negative for reservation ID ' . $reservation->id);
-                        throw new \Exception('Guthabenbetrag darf nicht negativ sein');
-                    }
-                    
-                    if ($walletAmount > $totalWalletForCustomer + 0.01) { // Allow small rounding tolerance
-                        Log::error('Wallet amount exceeds total wallet for customer ID ' . $customerId);
-                        throw new \Exception('Guthabenbetrag überschreitet verfügbares Guthaben');
-                    }
-                    
-                    // Update received amount to include wallet
-                    $receivedAmount = $cashReceived + $walletAmount;
-                }
-            
-                // Calculate days from checkin to checkout
+                // Calculate days
                 $checkinDate = Carbon::parse($reservation->checkin_date)->startOfDay();
-                $checkoutDateCarbon = Carbon::parse($checkoutDate)->startOfDay();
-                $daysDiff = $checkinDate->diffInDays($checkoutDateCarbon);
-                
-                // Same-day checkin/checkout always counts as 1 day
+                $checkoutDay = $checkoutDate->copy()->startOfDay();
+                $daysDiff = $checkinDate->diffInDays($checkoutDay);
                 if ($daysDiff === 0) {
                     $days = 1;
                 } else {
-                    // Use days from request if provided, otherwise calculate
-                    if (isset($request->days[$key]) && $request->days[$key] > 0) {
-                        $days = max(1, (int)$request->days[$key]);
-                    } else {
-                        $calculationMode = config('app.days_calculation_mode', 'inclusive');
-                        $days = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                    $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                    $days = ($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff;
+                }
+
+                $isFlatRate = (int)$plan->flat_rate === 1;
+                $planCost = (float)$plan->price;
+                if (!$isFlatRate) {
+                    $planCost *= $days;
+                }
+
+                $discountPercentage = $isFlatRate ? 0 : (int)($request->discount[$key] ?? 0);
+
+                // Store additional costs
+                ReservationAdditionalCost::where('reservation_id', $reservation->id)->delete();
+                $additionalTotal = 0.0;
+                $selectedCosts = $request->additional_costs[$key] ?? [];
+                foreach ($selectedCosts as $costId) {
+                    $priceInput = $request->additional_cost_values[$key][$costId] ?? null;
+                    $price = $priceInput !== null ? (float)$priceInput : 0.0;
+                    $costModel = AdditionalCost::find($costId);
+                    $title = $costModel?->title ?? 'Zusatzkosten';
+
+                    ReservationAdditionalCost::create([
+                        'reservation_id' => $reservation->id,
+                        'additional_cost_id' => $costModel?->id,
+                        'title' => $title,
+                        'price' => $price,
+                        'quantity' => 1,
+                    ]);
+
+                    $additionalTotal += $price;
+                }
+
+                $vatPercentage = Preference::get('vat_percentage', 20);
+                $vatMode = config('app.vat_calculation_mode', 'exclusive');
+
+                $netTotal = 0.0;
+                if ($vatMode === 'inclusive') {
+                    $netTotal = VATCalculator::getNetFromGross($planCost + $additionalTotal, $vatPercentage);
+                } else {
+                    $netTotal = $planCost + $additionalTotal;
+                }
+
+                if ($discountPercentage > 0) {
+                    $netTotal = $netTotal * (1 - ($discountPercentage / 100));
+                }
+
+                $netTotal = round($netTotal, 2);
+                $vatAmount = VATCalculator::calculateVATAmount($netTotal, $vatPercentage);
+                $grossTotal = round($netTotal + $vatAmount, 2);
+
+                $baseAmount = $planCost + $additionalTotal;
+                if ($vatMode === 'inclusive' && $discountPercentage === 0) {
+                    $grossTotal = round($baseAmount, 2);
+                    $netTotal = VATCalculator::getNetFromGross($grossTotal, $vatPercentage);
+                    $vatAmount = round($grossTotal - $netTotal, 2);
+                }
+
+                $paymentHeader = $reservation->reservationPayment;
+                if (!$paymentHeader) {
+                    $paymentHeader = ReservationPayment::create([
+                        'res_id' => $reservation->id,
+                        'total_due' => $grossTotal,
+                        'status' => 'unpaid',
+                    ]);
+                } else {
+                    $paymentHeader->update(['total_due' => $grossTotal]);
+                }
+
+                // Early checkout correction
+                $previousTotalPaid = $paymentHeader->entries()->where('status', 'active')->sum('amount');
+                $activePaid = $previousTotalPaid;
+                if ($plannedCheckout && $checkoutDate->lt($plannedCheckout)) {
+                    $lastMethod = 'Bar';
+                    $lastEntry = $paymentHeader->entries()->where('status', 'active')->orderByDesc('transaction_date')->first();
+                    if ($lastEntry && !empty($lastEntry->method)) {
+                        $lastMethod = $lastEntry->method;
                     }
+
+                    foreach ($paymentHeader->entries as $entry) {
+                        if ($entry->status === 'active') {
+                            if ($entry->invoice) {
+                                $entry->invoice->update(['status' => 'cancelled']);
+                            }
+                            $entry->update(['status' => 'cancelled']);
+                        }
+                    }
+
+                    $correctiveAmount = min($previousTotalPaid, $grossTotal);
+                    $overpaidAmount = $previousTotalPaid > $grossTotal ? ($previousTotalPaid - $grossTotal) : null;
+
+                    $correctiveEntry = ReservationPaymentEntry::create([
+                        'res_payment_id' => $paymentHeader->id,
+                        'amount' => $correctiveAmount,
+                        'overpaid_amount' => $overpaidAmount,
+                        'method' => $lastMethod,
+                        'type' => 'final',
+                        'transaction_date' => Carbon::now(),
+                        'note' => 'Korrekturbuchung wegen vorzeitiger Abreise',
+                        'status' => 'active',
+                    ]);
+
+                    $this->invoiceService->generateInvoice($reservation, $correctiveEntry);
+                    $activePaid = $correctiveAmount;
+                }
+
+                $remaining = round($grossTotal - $activePaid, 2);
+
+                $createdEntries = [];
+                if ($remaining > $amountTolerance) {
+                    $mode = $request->payment_mode[$key] ?? 'single';
+                    if ($mode === 'split') {
+                        $cashAmount = (float)($request->payment_amount_cash[$key] ?? 0);
+                        $bankAmount = (float)($request->payment_amount_bank[$key] ?? 0);
+                        $entered = $cashAmount + $bankAmount;
+
+                        if ($entered <= 0 || $entered - $remaining > $amountTolerance) {
+                            throw new \Exception('Der Zahlungsbetrag darf den Restbetrag nicht ueberschreiten.');
+                        }
+
+                        if ($cashAmount > 0) {
+                            $createdEntries[] = ReservationPaymentEntry::create([
+                                'res_payment_id' => $paymentHeader->id,
+                                'amount' => $cashAmount,
+                                'method' => 'Bar',
+                                'type' => 'final',
+                                'transaction_date' => Carbon::now(),
+                            ]);
+                        }
+
+                        if ($bankAmount > 0) {
+                            $createdEntries[] = ReservationPaymentEntry::create([
+                                'res_payment_id' => $paymentHeader->id,
+                                'amount' => $bankAmount,
+                                'method' => 'Bank',
+                                'type' => 'final',
+                                'transaction_date' => Carbon::now(),
+                            ]);
+                        }
+                    } else {
+                        $amount = (float)($request->payment_amount[$key] ?? 0);
+                        $method = $request->payment_method[$key] ?? 'Bar';
+                        if ($amount <= 0 || $amount - $remaining > $amountTolerance) {
+                            throw new \Exception('Der Zahlungsbetrag darf den Restbetrag nicht ueberschreiten.');
+                        }
+
+                        $createdEntries[] = ReservationPaymentEntry::create([
+                            'res_payment_id' => $paymentHeader->id,
+                            'amount' => $amount,
+                            'method' => $method,
+                            'type' => 'final',
+                            'transaction_date' => Carbon::now(),
+                        ]);
+                    }
+
+                    if (!empty($createdEntries)) {
+                        $this->invoiceService->generateInvoice($reservation, $createdEntries);
+                    }
+                }
+
+                // Update payment header status
+                $totalPaid = $paymentHeader->entries()->where('status', 'active')->sum('amount');
+                if ($totalPaid >= $grossTotal - $amountTolerance) {
+                    $paymentHeader->update(['status' => 'paid']);
+                } elseif ($totalPaid > 0) {
+                    $paymentHeader->update(['status' => 'partial']);
+                } else {
+                    $paymentHeader->update(['status' => 'unpaid']);
                 }
 
                 // Update dog's default plan based on stay length
@@ -1712,309 +1937,228 @@ class ReservationsController extends Controller
                     $reservation->dog->save();
                 }
 
-                // Create payment record
-                $payment = Payment::create([
-                    "res_id" => $res_id,
-                    "type" => $request->payment_method[$key],
-                    "plan_cost" => $plan_cost,
-                    "special_cost" => $special_cost,
-                    "days" => $days,
-                    "cost" => $invoiceTotal,
-                    "vat_amount" => round($vatAmount, 2),
-                    "net_amount" => round($netTotal, 2),
-                    "received_amount" => $receivedAmount,
-                    "discount" => $discount_percentage,
-                    "discount_amount" => $discount_amount,
-                    "remaining_amount" => 0, // Will be updated after settlement calculation
-                    "advance_payment" => 0, // Will be updated after settlement calculation
-                    "wallet_amount" => $walletAmount,
-                    "status" => $paymentStatus
-                ]);
-
-                // Use debt settlement logic to properly calculate payment allocation
-                if ($customerId) {
-                    // Lock customer row INSIDE transaction to prevent race conditions
-                    // Re-lock customer here (not from earlier wallet calculation) to ensure atomicity
-                    $customer = Customer::where('id', $customerId)->lockForUpdate()->first();
-                    if (!$customer) {
-                        Log::error('Customer not found for ID ' . $customerId . ' on reservation ID ' . $reservation->id);
-                        throw new \Exception('Kunde nicht gefunden');
-                    }
-                    
-                    $settlement = $balanceService->settlePaymentWithDebtConsideration(
-                        $customerId,
-                        $invoiceTotal,
-                        $cashReceived,
-                        $walletAmount,
-                        $payment->id,
-                        true
-                    );
-                    
-                    // Update status if fully settled (effective remaining is 0)
-                    $finalStatus = $paymentStatus;
-                    if ($settlement['remaining_amount'] < 0.01) {
-                        $finalStatus = 1; // Bezahlt (fully settled)
-                    }
-                    
-                    $payment->update([
-                        'remaining_amount' => $settlement['remaining_amount'] < 0.01 ? 0 : $settlement['remaining_amount'],
-                        'advance_payment' => $settlement['advance_payment'] < 0.01 ? 0 : $settlement['advance_payment'],
-                        'status' => $finalStatus
-                    ]);
-                    
-                    // Update customer balance using settlement details
-                    $balanceService->updateBalanceByChange($customerId, $settlement['balance_change']);
-                } else {
-                    $remainingAmount = $receivedAmount >= $invoiceTotal ? 0 : round($invoiceTotal - $receivedAmount, 2);
-                    $advancePayment = $receivedAmount > $invoiceTotal ? round($receivedAmount - $invoiceTotal, 2) : 0;
-                    
-                    // Update status if fully settled
-                    $finalStatus = $paymentStatus;
-                    if ($remainingAmount < 0.01) {
-                        $finalStatus = 1; // Bezahlt (fully settled)
-                    }
-                    
-                    $payment->update([
-                        'remaining_amount' => $remainingAmount < 0.01 ? 0 : $remainingAmount,
-                        'advance_payment' => $advancePayment < 0.01 ? 0 : $advancePayment,
-                        'status' => $finalStatus
-                    ]);
-                }
-                
-                // Commit transaction for this reservation and payment
                 DB::commit();
-                
-                // Collect invoice data for Bank payments (instead of generating immediately)
-                if ($request->payment_method[$key] === 'Bank' && $customerId) {
-                    // Group invoice data by customer
-                    if (!isset($invoiceDataByCustomer[$customerId])) {
-                        $invoiceDataByCustomer[$customerId] = [
-                            'customer_id' => $customerId,
-                            'customer' => $reservation->dog->customer,
-                            'reservations' => [],
-                            'reservation_ids' => [],
-                        ];
+
+                // HelloCash at checkout (cash entries only)
+                $customerId = $reservation->dog->customer_id ?? null;
+                $sendToHelloCash = $customerId && isset($helloCashCustomers[$customerId]) && $helloCashCustomers[$customerId] == '1';
+                if ($sendToHelloCash) {
+                    $cashEntries = $paymentHeader->entries()->where('status', 'active')->where('method', 'Bar')->get();
+                    $cashTotal = $cashEntries->sum('amount');
+                    if ($cashTotal > $amountTolerance) {
+                        $items = [];
+                        foreach ($cashEntries as $entry) {
+                            $label = $entry->type === 'advance' ? 'Anzahlung' : 'Zahlung';
+                            $items[] = [
+                                'item_name' => $label,
+                                'item_quantity' => 1.0,
+                                'item_price' => round((float)$entry->amount, 2),
+                                'item_taxRate' => (float)$vatPercentage,
+                            ];
+                        }
+
+                        $this->hellocashService->createCashPaymentInvoice([
+                            'reservation_id' => $reservation->id,
+                            'customer_id' => $reservation->dog?->customer_id,
+                            'hellocash_customer_id' => $reservation->dog->customer?->hellocash_customer_id,
+                            'items' => $items,
+                            'payment_method' => 'Bar',
+                        ]);
                     }
-                    
-                    // Store invoice data for later grouped generation
-                    $invoiceDataByCustomer[$customerId]['reservations'][] = [
-                        'reservation' => $reservation,
-                        'payment' => $payment,
-                        'plan_cost' => $plan_cost,
-                        'special_cost' => $special_cost,
-                        'discount_percentage' => $discount_percentage,
-                        'days' => $days,
-                    ];
-                    
-                    // Collect reservation IDs for grouped invoice
-                    $invoiceDataByCustomer[$customerId]['reservation_ids'][] = $res_id;
-                }
-                
-                // Collect HelloCash data for Bar payments when send_to_hellocash is checked for this customer
-                $customerHelloCashEnabled = isset($helloCashCustomers[$customerId]) && $helloCashCustomers[$customerId] == '1';
-                if ($customerHelloCashEnabled && $request->payment_method[$key] === 'Bar' && $customerId) {
-                    // Group HelloCash invoice data by customer
-                    if (!isset($helloCashDataByCustomer[$customerId])) {
-                        $customer = $reservation->dog->customer;
-                        $helloCashDataByCustomer[$customerId] = [
-                            'customer_id' => $customerId,
-                            'customer' => $customer,
-                            'hellocash_customer_id' => $customer->hellocash_customer_id ?? null,
-                            'reservations' => [],
-                            'reservation_ids' => [],
-                            'payment_ids' => [],
-                        ];
-                    }
-                    
-                    // Store data for HelloCash grouped invoice - use form-calculated values
-                    // Calculate net costs - discount applies to BOTH base_cost and special_cost
-                    $baseCostNet = $vatMode === 'inclusive' 
-                        ? VATCalculator::getNetFromGross($base_cost, $vatPercentage) 
-                        : $base_cost;
-                    $specialCostNet = $vatMode === 'inclusive' 
-                        ? VATCalculator::getNetFromGross($special_cost, $vatPercentage) 
-                        : $special_cost;
-                    
-                    // Apply discount to BOTH costs (same as frontend calculation)
-                    $discountMultiplier = $discount_percentage > 0 ? (1 - $discount_percentage / 100) : 1;
-                    $planCostNetAfterDiscount = $baseCostNet * $discountMultiplier;
-                    $specialCostNetAfterDiscount = $specialCostNet * $discountMultiplier;
-                    
-                    $helloCashDataByCustomer[$customerId]['reservations'][] = [
-                        'dog_name' => $reservation->dog->name ?? 'Hund',
-                        'plan_title' => $plan->title ?? 'Hundepension',
-                        'plan_cost_net' => round($planCostNetAfterDiscount, 2),
-                        'special_cost_net' => round($specialCostNetAfterDiscount, 2),
-                        'days' => $days,
-                        'discount_percentage' => $discount_percentage,
-                    ];
-                    
-                    // Collect IDs for linking
-                    $helloCashDataByCustomer[$customerId]['reservation_ids'][] = $res_id;
-                    $helloCashDataByCustomer[$customerId]['payment_ids'][] = $payment->id;
                 }
             } catch (\Exception $e) {
-                // Rollback transaction on error
                 DB::rollBack();
-                
-                // Get reservation info for error reporting
+
                 $reservation = Reservation::with('dog')->find($res_id);
                 $dogName = $reservation && $reservation->dog ? $reservation->dog->name : 'Unbekannt';
-                
-                \Log::error('Bulk checkout error: ' . $e->getMessage(), [
+
+                Log::error('Checkout error: ' . $e->getMessage(), [
                     'reservation_id' => $res_id,
-                    'customer_id' => $customerId ?? null,
                     'dog_name' => $dogName,
                     'trace' => $e->getTraceAsString()
                 ]);
-                
-                // Track failure for user feedback
+
                 $failures[] = [
                     'reservation_id' => $res_id,
                     'dog_name' => $dogName,
                     'error' => $e->getMessage()
                 ];
-                
-                // Continue with next reservation instead of failing entire bulk operation
+
                 continue;
             }
         }
 
-        // Generate grouped invoices after all reservations are processed
-        $generatedInvoices = [];
-        if (!empty($invoiceDataByCustomer)) {
-            $bankInvoiceService = new BankInvoiceService();
-            
-            Log::info('Bulk checkout: Generating invoices for ' . count($invoiceDataByCustomer) . ' customer(s)');
-            
-            foreach ($invoiceDataByCustomer as $customerId => $invoiceData) {
-                try {
-                    // Generate single invoice for all reservations of this customer
-                    $invoiceResponse = $bankInvoiceService->generateGroupedInvoice(
-                        $invoiceData['customer'],
-                        $invoiceData['reservations'],
-                        $invoiceData['reservation_ids'] ?? []
-                    );
-                    
-                    if ($invoiceResponse['success'] ?? false) {
-                        $invoiceId = $invoiceResponse['invoice_id'] ?? null;
-                        
-                        // Link all payments to the invoice
-                        if ($invoiceId) {
-                            $paymentIds = collect($invoiceData['reservations'])
-                                ->map(fn($item) => $item['payment']->id ?? null)
-                                ->filter()
-                                ->toArray();
-                            if (!empty($paymentIds)) {
-                                Payment::whereIn('id', $paymentIds)->update(['invoice_id' => $invoiceId]);
-                            }
-                        }
-                        
-                        $generatedInvoices[] = [
-                            'customer_id' => $customerId,
-                            'customer_name' => $invoiceData['customer']->name,
-                            'invoice_id' => $invoiceId,
-                            'invoice_url' => $invoiceId ? route('admin.invoices.view', $invoiceId) : null,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Grouped invoice generation failed during bulk checkout', [
-                        'customer_id' => $customerId,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]);
-                }
-            }
-        }
-        
-        // Generate HelloCash grouped invoices for Bar payments (when send_to_hellocash is checked)
-        $helloCashInvoices = [];
-        if (!empty($helloCashDataByCustomer)) {
-            $helloCashService = new HelloCashService();
-            
-            Log::info('Bulk checkout: Generating HelloCash invoices for ' . count($helloCashDataByCustomer) . ' customer(s)');
-            
-            foreach ($helloCashDataByCustomer as $customerId => $helloCashData) {
-                try {
-                    // Prepare data for HelloCash grouped invoice
-                    $invoiceResponse = $helloCashService->createGroupedInvoice([
-                        'customer_id' => $customerId,
-                        'hellocash_customer_id' => $helloCashData['hellocash_customer_id'],
-                        'reservations' => $helloCashData['reservations'],
-                        'reservation_ids' => $helloCashData['reservation_ids'],
-                        'payment_ids' => $helloCashData['payment_ids'],
-                        'payment_method' => 'Bar',
-                    ]);
-                    
-                    if ($invoiceResponse['success'] ?? false) {
-                        $savedInvoiceId = $invoiceResponse['saved_invoice_id'] ?? null;
-                        
-                        // Link all payments to the HelloCash invoice
-                        if ($savedInvoiceId && !empty($helloCashData['payment_ids'])) {
-                            Payment::whereIn('id', $helloCashData['payment_ids'])->update(['invoice_id' => $savedInvoiceId]);
-                        }
-                        
-                        $helloCashInvoices[] = [
-                            'customer_id' => $customerId,
-                            'customer_name' => $helloCashData['customer']->name,
-                            'invoice_id' => $savedInvoiceId,
-                            'invoice_url' => $savedInvoiceId ? route('admin.invoices.view', $savedInvoiceId) : null,
-                            'hellocash_invoice_id' => $invoiceResponse['invoice_id'] ?? null,
-                        ];
-                        
-                        Log::info('HelloCash grouped invoice created for customer ' . $customerId, [
-                            'hellocash_invoice_id' => $invoiceResponse['invoice_id'] ?? null,
-                            'saved_invoice_id' => $savedInvoiceId,
-                            'reservation_count' => count($helloCashData['reservations']),
-                        ]);
-                    } else {
-                        Log::warning('HelloCash grouped invoice failed for customer ' . $customerId, [
-                            'error' => $invoiceResponse['error'] ?? 'Unknown error',
-                        ]);
-                        
-                        // Flash a warning but don't fail the checkout
-                        Session::flash('hellocash_warning', 'Registrierkasse-Gruppenrechnung für ' . $helloCashData['customer']->name . ' konnte nicht erstellt werden: ' . ($invoiceResponse['error'] ?? 'Unbekannter Fehler'));
-                    }
-                } catch (\Exception $e) {
-                    Log::error('HelloCash grouped invoice exception during bulk checkout', [
-                        'customer_id' => $customerId,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]);
-                    
-                    Session::flash('hellocash_warning', 'Registrierkasse-Fehler für ' . $helloCashData['customer']->name . ': ' . $e->getMessage());
-                }
-            }
-        }
-        
-        // Merge both Bank and HelloCash invoices for display
-        $allInvoices = array_merge($generatedInvoices, $helloCashInvoices);
-
-        // Store invoice URLs for opening in new tabs
-        if (!empty($allInvoices)) {
-            Log::info('Bulk checkout: Storing ' . count($allInvoices) . ' invoice(s) in session', $allInvoices);
-            Session::flash('bulk_checkout_invoices', $allInvoices);
-        } else {
-            Log::info('Bulk checkout: No invoices to store (Bar payment without HelloCash or no Bank payments)');
-        }
-
-        // Provide appropriate user feedback based on success/failure status
         $totalReservations = count($request->res_id);
         $successCount = $totalReservations - count($failures);
-        
+
         if (!empty($failures)) {
             $failureCount = count($failures);
-            Session::flash('warning', "{$failureCount} von {$totalReservations} Check-outs fehlgeschlagen. Details prüfen.");
+            Session::flash('warning', "{$failureCount} von {$totalReservations} Check-outs fehlgeschlagen. Details pruefen.");
             Session::flash('checkout_failures', $failures);
-            
             if ($successCount > 0) {
                 Session::flash('partial_success', "{$successCount} Check-outs erfolgreich abgeschlossen.");
             }
         } else {
-            Session::flash("success", "Alle {$totalReservations} Check-outs erfolgreich abgeschlossen!");
+            Session::flash('success', "Alle {$totalReservations} Check-outs erfolgreich abgeschlossen!");
         }
-        
-        return to_route("admin.dogs.in.rooms");
+
+        return to_route('admin.dogs.in.rooms');
+    }
+
+    /**
+     * Checkout all reservations in a group at once.
+     * One payment entry on the group, one invoice for all dogs.
+     */
+    public function group_checkout(Request $request)
+    {
+        $request->validate([
+            'group_id'       => 'required|exists:reservation_groups,id',
+            'received_amount' => 'required|numeric|min:0',
+            'gateway'        => 'required|in:Bar,Bank',
+        ]);
+
+        $amountTolerance = 0.01;
+        $visitCounter = new VisitCounterService();
+
+        DB::beginTransaction();
+        try {
+            $group = ReservationGroup::with(['reservations.dog.customer', 'reservations.plan', 'entries'])
+                ->lockForUpdate()
+                ->findOrFail($request->group_id);
+
+            // Recalculate group total from actual stay days (checkout = today)
+            $checkoutDate = Carbon::now()->startOfDay();
+            $vatPercentage = Preference::get('vat_percentage', 20);
+            $vatMode = config('app.vat_calculation_mode', 'exclusive');
+            $groupGross = 0.0;
+
+            foreach ($group->reservations as $res) {
+                if ($res->status === Reservation::STATUS_CHECKED_OUT) {
+                    continue;
+                }
+
+                $checkinDate = $res->checkin_date ? Carbon::parse($res->checkin_date)->startOfDay() : $checkoutDate;
+                $daysDiff = $checkinDate->diffInDays($checkoutDate);
+                $calculationMode = config('app.days_calculation_mode', 'inclusive');
+                $days = ($daysDiff === 0) ? 1 : (($calculationMode === 'inclusive') ? $daysDiff + 1 : $daysDiff);
+
+                $plan = $res->plan;
+                if (! $plan) {
+                    throw new \Exception('Kein Preisplan für Reservierung #' . $res->id);
+                }
+
+                $isFlatRate = (int) $plan->flat_rate === 1;
+                $planCost = (float) $plan->price;
+                if (! $isFlatRate) {
+                    $planCost *= $days;
+                }
+
+                if ($vatMode === 'inclusive') {
+                    $resGross = round($planCost, 2);
+                } else {
+                    $resGross = round($planCost * (1 + ($vatPercentage / 100)), 2);
+                }
+
+                $groupGross += $resGross;
+
+                // Update per-reservation payment header
+                $paymentHeader = $res->reservationPayment;
+                if ($paymentHeader) {
+                    $paymentHeader->update(['total_due' => $resGross]);
+                }
+            }
+
+            $groupGross = round($groupGross, 2);
+            $group->update(['total_due' => $groupGross]);
+
+            $advancePaid = (float) $group->activeEntries()->sum('amount');
+            $remaining   = round($groupGross - $advancePaid, 2);
+            $receivedNow = (float) $request->received_amount;
+
+            $hadAdvanceBeforeCheckout = (float) $group->activeEntries()
+                ->where('type', 'advance')
+                ->sum('amount') > $amountTolerance;
+
+            // Create final payment entry on the group if there's remaining balance
+            $createdEntry = null;
+            if ($remaining > $amountTolerance && $receivedNow > $amountTolerance) {
+                $createdEntry = ReservationGroupEntry::create([
+                    'reservation_group_id' => $group->id,
+                    'amount'               => min($receivedNow, $remaining),
+                    'method'               => $request->gateway,
+                    'type'                 => 'final',
+                    'transaction_date'     => Carbon::now(),
+                    'note'                 => 'Restzahlung bei Gruppen-Checkout',
+                    'status'               => 'active',
+                ]);
+            }
+
+            $checkedOutReservationIds = [];
+
+            // Mark all reservations as checked out
+            foreach ($group->reservations as $res) {
+                if ($res->status === Reservation::STATUS_CHECKED_OUT) {
+                    continue;
+                }
+
+                if (! $res->visit_counted) {
+                    $visitCounter->incrementVisit($res->dog_id);
+                    $res->visit_counted = true;
+                }
+                if (! $res->days_counted && $res->checkin_date) {
+                    $visitCounter->incrementDays($res->dog_id, $res->checkin_date, $checkoutDate);
+                    $res->days_counted = true;
+                }
+
+                $res->update([
+                    'checkout_date' => $checkoutDate->format('Y-m-d H:i:s'),
+                    'status'        => Reservation::STATUS_CHECKED_OUT,
+                ]);
+                $checkedOutReservationIds[] = $res->id;
+
+                if ($res->remote_pfotenstube_homepage_id) {
+                    $this->homepageSyncService->updateStatus($res, 'abgeschlossen');
+                }
+
+                // Update per-reservation payment status
+                $paymentHeader = $res->reservationPayment;
+                if ($paymentHeader) {
+                    $paymentHeader->update(['status' => 'paid']);
+                }
+            }
+
+            $group->refreshStatus();
+
+            // Schlussrechnung (checkout) for the balance payment; internal (final) rollup when an advance existed
+            if ($createdEntry) {
+                $group->refresh();
+                $this->invoiceService->generateGroupInvoice($group, $createdEntry, 'checkout');
+                if ($hadAdvanceBeforeCheckout) {
+                    $this->invoiceService->generateGroupInternalInvoice($group->fresh(['customer', 'reservations.dog', 'reservations.plan']));
+                }
+            }
+
+            // Update customer balance
+            $customerId = $group->customer_id;
+            if ($customerId) {
+                (new CustomerBalanceService())->getBalance($customerId);
+            }
+
+            DB::commit();
+
+            $dogCount = count($checkedOutReservationIds);
+            Session::flash('success', "Gruppen-Checkout erfolgreich: {$dogCount} Hunde ausgecheckt. Gesamtbetrag: " . number_format($groupGross, 2) . '€.');
+
+            return to_route('admin.dogs.in.rooms');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Group checkout error: ' . $e->getMessage(), [
+                'group_id' => $request->group_id,
+                'trace'    => $e->getTraceAsString(),
+            ]);
+            Session::flash('error', 'Fehler beim Gruppen-Checkout: ' . $e->getMessage());
+            return back();
+        }
     }
 
     public function move_friendship(Request $request)
@@ -2066,39 +2210,253 @@ class ReservationsController extends Controller
         return back();
     }
 
+    /**
+     * Create payment headers for reservation groups (same dates + plan).
+     */
+    private function createPaymentsForReservationGroups(array $reservationIds): void
+    {
+        if (empty($reservationIds)) {
+            return;
+        }
+
+        $reservations = Reservation::with(['plan', 'reservationPayment'])
+            ->whereIn('id', $reservationIds)
+            ->orderBy('id')
+            ->get();
+
+        $reservations = $reservations->filter(function (Reservation $reservation) {
+            return $reservation->reservationPayment === null;
+        });
+
+        if ($reservations->isEmpty()) {
+            return;
+        }
+
+        // Each reservation gets its own payment record with its own total_due.
+        foreach ($reservations as $reservation) {
+            ReservationPayment::create([
+                'res_id'    => $reservation->id,
+                'total_due' => $reservation->gross_total,
+                'status'    => 'unpaid',
+            ]);
+        }
+    }
+
     public function check_balance(Request $request)
     {
         $id = $request->id;
-        $res = Reservation::with(['dog' => function($query){
-            $query->with('day_plan_obj', 'reg_plan_obj');
-        }])->find($id);
-        
+        $res = Reservation::with([
+            'dog' => function ($query) {
+                $query->with('day_plan_obj', 'reg_plan_obj');
+            },
+            'reservationPayment.entries',
+            'reservationGroup',
+        ])->find($id);
+
         // Get VAT settings from preferences
         $vatPercentage = Preference::get('vat_percentage', 20);
         $vatMode = config('app.vat_calculation_mode', 'exclusive');
-        
-        if($res && $res->dog && $res->dog->customer_id)
-        {
+
+        if ($res && $res->dog && $res->dog->customer_id) {
             $customer_id = $res->dog->customer_id;
-            
+
             // Use customer balance column (fast and accurate)
             $balanceService = new CustomerBalanceService();
             $balance = $balanceService->getBalance($customer_id);
+
+            $paymentHeader = $res->reservationPayment;
+            $totalPaid = $paymentHeader ? $paymentHeader->entries()->where('status', 'active')->sum('amount') : 0;
+            $totalDue = $paymentHeader ? (float) $paymentHeader->total_due : (float) $res->gross_total;
+
+            [$totalPaid, $remaining] = $this->mergeGroupPaymentIntoPaymentSummary($res, (float) $totalPaid, $totalDue);
 
             return [
                 'total' => round($balance, 2),
                 'doc' => $res,
                 'vat_percentage' => $vatPercentage,
                 'vat_calculation_mode' => $vatMode,
+                'payment_summary' => [
+                    'total_paid' => $totalPaid,
+                    'total_due' => round($totalDue, 2),
+                    'remaining' => $remaining,
+                ],
             ];
         }
+
+        $paymentHeader = $res?->reservationPayment;
+        $totalPaid = $paymentHeader ? $paymentHeader->entries()->where('status', 'active')->sum('amount') : 0;
+        $totalDue = $paymentHeader ? (float) $paymentHeader->total_due : (float) ($res?->gross_total ?? 0);
+
+        [$totalPaid, $remaining] = $res
+            ? $this->mergeGroupPaymentIntoPaymentSummary($res, (float) $totalPaid, $totalDue)
+            : [round((float) $totalPaid, 2), round(max(0, $totalDue - (float) $totalPaid), 2)];
 
         return [
             'total' => 0,
             'doc' => $res,
             'vat_percentage' => $vatPercentage,
             'vat_calculation_mode' => $vatMode,
+            'payment_summary' => [
+                'total_paid' => $totalPaid,
+                'total_due' => round($totalDue, 2),
+                'remaining' => $remaining,
+            ],
         ];
+    }
+
+    /**
+     * Gruppenzahlungen liegen auf reservation_group_entries; die Checkout-Übersicht nutzt aber
+     * nur reservation_payment_entries. Anteilige Zuordnung nach Verhältnis total_due zum Gruppen-Gesamtbetrag.
+     *
+     * @return array{0: float, 1: float} [combined_total_paid, remaining]
+     */
+    private function mergeGroupPaymentIntoPaymentSummary(Reservation $reservation, float $totalPaid, float $totalDue): array
+    {
+        if (! $reservation->reservation_group_id) {
+            return [
+                round($totalPaid, 2),
+                round(max(0, $totalDue - $totalPaid), 2),
+            ];
+        }
+
+        $reservation->loadMissing(['reservationGroup']);
+        $group = $reservation->reservationGroup;
+        if (! $group) {
+            return [
+                round($totalPaid, 2),
+                round(max(0, $totalDue - $totalPaid), 2),
+            ];
+        }
+
+        $groupPaid = (float) $group->activeEntries()->sum('amount');
+        $groupDue = (float) $group->total_due;
+
+        if ($groupDue <= 0.0001) {
+            return [
+                round($totalPaid, 2),
+                round(max(0, $totalDue - $totalPaid), 2),
+            ];
+        }
+
+        $allocatedFromGroup = round($groupPaid * ($totalDue / $groupDue), 2);
+        $allocatedFromGroup = min($totalDue, $allocatedFromGroup);
+
+        $combinedPaid = round($totalPaid + $allocatedFromGroup, 2);
+
+        return [
+            $combinedPaid,
+            round(max(0, $totalDue - $combinedPaid), 2),
+        ];
+    }
+
+    /**
+     * Align reservation_payments.total_due with gross_total (plan × days, extras, VAT) after room assignment or check-in correction.
+     *
+     * @return array{previous_total_due: float, new_total_due: float, total_paid: float, credit_overpayment: float}
+     */
+    private function syncReservationPaymentAfterAssignment(Reservation $reservation): array
+    {
+        $reservation->refresh();
+        $reservation->loadMissing(['plan', 'additionalCosts']);
+
+        $newTotalDue = round((float) $reservation->gross_total, 2);
+        $paymentHeader = $reservation->reservationPayment;
+
+        $previousTotalDue = $paymentHeader ? (float) $paymentHeader->total_due : 0.0;
+
+        if (! $paymentHeader) {
+            $paymentHeader = ReservationPayment::create([
+                'res_id'    => $reservation->id,
+                'total_due' => $newTotalDue,
+                'status'    => 'unpaid',
+            ]);
+            $reservation->setRelation('reservationPayment', $paymentHeader);
+        } else {
+            if ($previousTotalDue > $newTotalDue + 0.01) {
+                $this->replaceActiveAdvancesAfterStayShortening($paymentHeader, $newTotalDue);
+            }
+
+            $totalPaid = (float) $paymentHeader->entries()->where('status', 'active')->sum('amount');
+            $tol       = 0.01;
+            $status    = 'unpaid';
+            if ($totalPaid >= $newTotalDue - $tol) {
+                $status = 'paid';
+            } elseif ($totalPaid > $tol) {
+                $status = 'partial';
+            }
+            $paymentHeader->update([
+                'total_due' => $newTotalDue,
+                'status'    => $status,
+            ]);
+        }
+
+        $totalPaid = (float) $paymentHeader->entries()->where('status', 'active')->sum('amount');
+
+        return [
+            'previous_total_due'  => $previousTotalDue,
+            'new_total_due'       => $newTotalDue,
+            'total_paid'          => round($totalPaid, 2),
+            'credit_overpayment' => round(max(0.0, $totalPaid - $newTotalDue), 2),
+        ];
+    }
+
+    /**
+     * When total_due drops, active advance lines may exceed the new service total. Cancel those lines (keep rows;
+     * status cancelled) and their local PDFs, then add one advance entry for the corrected total so Kasse/checkout
+     * use the same numbers as the stay.
+     */
+    private function replaceActiveAdvancesAfterStayShortening(ReservationPayment $paymentHeader, float $newTotalDue): void
+    {
+        $newTotalDue = round($newTotalDue, 2);
+
+        $advances = $paymentHeader->entries()
+            ->where('status', 'active')
+            ->where('type', 'advance')
+            ->orderBy('id')
+            ->get();
+
+        if ($advances->isEmpty()) {
+            return;
+        }
+
+        $sumActiveAdvance = round((float) $advances->sum('amount'), 2);
+        if ($sumActiveAdvance <= $newTotalDue + 0.01) {
+            return;
+        }
+
+        $firstMethod = $advances->first()->method ?: 'Bar';
+
+        foreach ($advances as $entry) {
+            $entry->loadMissing('invoice');
+            $invoice = $entry->invoice;
+            if ($invoice && strtolower((string) $invoice->status) !== 'cancelled') {
+                $invoice->update([
+                    'status'               => 'cancelled',
+                    'res_payment_entry_id' => null,
+                ]);
+            }
+
+            $note = trim(($entry->note ?? '').' [Storniert: Aufenthalt nach Check-in angepasst]');
+            $entry->update([
+                'status' => 'cancelled',
+                'note'   => $note,
+            ]);
+        }
+
+        ReservationPaymentEntry::create([
+            'res_payment_id'   => $paymentHeader->id,
+            'amount'           => $newTotalDue,
+            'method'           => $firstMethod,
+            'type'             => 'advance',
+            'transaction_date' => Carbon::now(),
+            'note'             => 'Anzahlung nach korrigiertem Aufenthalt ('.$this->formatEuroDe($newTotalDue).' €)',
+            'status'           => 'active',
+        ]);
+    }
+
+    private function formatEuroDe(float $amount): string
+    {
+        return number_format($amount, 2, ',', '.');
     }
 
     public function export(Request $request)
@@ -2252,68 +2610,4 @@ class ReservationsController extends Controller
         exit;
     }
 
-    /**
-     * Handle HelloCash API integration for checkout
-     */
-    private function handleHelloCashIntegration(
-        Request $request,
-        Plan $plan,
-        float $planCost,
-        float $specialCost,
-        int $days,
-        int $discountPercentage,
-        int $reservationId,
-        int $paymentId
-    ): ?array {
-        if (!$request->has('send_to_hellocash') || $request->send_to_hellocash != '1') {
-            return null;
-        }
-
-        try {
-            $plan->refresh();
-            
-            $reservation = Reservation::with('dog.customer')->find($reservationId);
-            $hellocashCustomerId = $reservation?->dog?->customer?->hellocash_customer_id ?? null;
-            
-            $hellocashResponse = $this->hellocashService->createInvoice([
-                'plan' => $plan,
-                'plan_cost' => $planCost,
-                'days' => $days,
-                'special_cost' => $specialCost,
-                'discount_percent' => $discountPercentage,
-                'payment_method' => $request->gateway ?? 'Bar',
-                'reservation_id' => $reservationId,
-                'payment_id' => $paymentId,
-                'hellocash_customer_id' => $hellocashCustomerId,
-            ]);
-            
-            if (!$hellocashResponse['success']) {
-                $errorMessage = $hellocashResponse['error'] ?? 'Unknown error';
-                Log::error('HelloCash API call failed', [
-                    'reservation_id' => $request->id,
-                    'error' => $errorMessage,
-                ]);
-
-                Session::flash(
-                    'warning',
-                    'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein Fehler bei der Registrierkasse-Verarbeitung auf. Bitte versuchen Sie es erneut.'
-                );
-            }
-            
-            return $hellocashResponse;
-        } catch (\Exception $e) {
-            Log::error('HelloCash Service Exception', [
-                'reservation_id' => $request->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            Session::flash(
-                'warning',
-                'Die Zahlung wurde erfolgreich verarbeitet, jedoch trat ein technischer Fehler bei der Registrierkasse-Kommunikation auf. Bitte versuchen Sie es erneut.'
-            );
-            
-            return null;
-        }
-    }
 }

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Jobs\SyncCustomersToHelloCash;
+use App\Http\Controllers\Api\BreedingShelterRoomController;
 use App\Http\Controllers\Api\SyncController;
 
 /*
@@ -27,4 +28,10 @@ Route::prefix('v1/external-sync')->middleware('verify.homepage')->group(function
     Route::post('/reservation', [SyncController::class, 'syncReservation']);
     Route::post('/reservation/cancel', [SyncController::class, 'cancelReservation']);
     Route::post('/dog', [SyncController::class, 'syncDog']);
+});
+
+// Breeding Shelter (read-only room list + occupancy sync)
+Route::prefix('v1/breeding-shelter')->middleware('verify.breeding_shelter')->group(function () {
+    Route::get('/rooms', [BreedingShelterRoomController::class, 'index']);
+    Route::post('/rooms/occupancy', [BreedingShelterRoomController::class, 'syncOccupancy']);
 });

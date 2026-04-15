@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
 use App\Models\Reservation;
 use Carbon\Carbon;
 use App\Helpers\General;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
@@ -81,28 +81,34 @@ class ReportController extends Controller
 
     public function annualSales($year)
     {
-        $total = Payment::whereYear('created_at', $year)
-            ->where('status', 1)
-            ->sum('received_amount');
+        $total = DB::table('reservation_payment_entries')
+            ->whereYear('transaction_date', $year)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->sum('amount');
 
         return $total;
     }
 
     public function monthlySales($month, $year)
     {
-        $total = Payment::whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->where('status', 1)
-            ->sum('received_amount');
+        $total = DB::table('reservation_payment_entries')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->sum('amount');
 
         return $total;
     }
 
     public function weeklySales($year)
     {
-        $sales = Payment::selectRaw('WEEK(created_at, 3) as week_of_year, SUM(received_amount) as total_sales')
-            ->whereYear('created_at', $year)
-            ->where('status', 1)
+        $sales = DB::table('reservation_payment_entries')
+            ->selectRaw('WEEK(transaction_date, 3) as week_of_year, SUM(amount) as total_sales')
+            ->whereYear('transaction_date', $year)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
             ->groupBy('week_of_year')
             ->get()
             ->pluck('total_sales', 'week_of_year');
@@ -112,11 +118,13 @@ class ReportController extends Controller
 
     public function dailySales($day, $month, $year)
     {
-        $total = Payment::whereYear('created_at', $year)
-            ->whereMonth('created_at', $month)
-            ->whereDay('created_at', $day)
-            ->where('status', 1)
-            ->sum('received_amount');
+        $total = DB::table('reservation_payment_entries')
+            ->whereYear('transaction_date', $year)
+            ->whereMonth('transaction_date', $month)
+            ->whereDay('transaction_date', $day)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->sum('amount');
 
         return $total;
     }
@@ -159,10 +167,12 @@ class ReportController extends Controller
         $startOfMonth = $currentDate->copy()->startOfMonth();
         $endOfMonth = $currentDate->copy()->endOfMonth();
 
-        $paymentsByDate = Payment::selectRaw('DATE(created_at) as payment_date, SUM(received_amount) as total_amount')
-            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-            ->where('received_amount', '>', 0)
-            ->where('status', '!=', 0)
+        $paymentsByDate = DB::table('reservation_payment_entries')
+            ->selectRaw('DATE(transaction_date) as payment_date, SUM(amount) as total_amount')
+            ->whereBetween('transaction_date', [$startOfMonth, $endOfMonth])
+            ->where('amount', '>', 0)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
             ->groupBy('payment_date')
             ->orderBy('payment_date')
             ->get()
@@ -202,10 +212,12 @@ class ReportController extends Controller
         $startOfYear = $today->copy()->startOfYear()->startOfDay();
         $endOfToday = $today->copy()->endOfDay();
 
-        $ytdByMonthRaw = Payment::selectRaw('MONTH(created_at) as month_num, SUM(received_amount) as total_amount')
-            ->whereBetween('created_at', [$startOfYear, $endOfToday])
-            ->where('received_amount', '>', 0)
-            ->where('status', '!=', 0)
+        $ytdByMonthRaw = DB::table('reservation_payment_entries')
+            ->selectRaw('MONTH(transaction_date) as month_num, SUM(amount) as total_amount')
+            ->whereBetween('transaction_date', [$startOfYear, $endOfToday])
+            ->where('amount', '>', 0)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
             ->groupBy('month_num')
             ->orderBy('month_num')
             ->get()

@@ -12,6 +12,7 @@ use App\Models\Reservation;
 use App\Models\Visit;
 use App\Services\HelloCashService;
 use App\Services\HomepageAnimalMediaImporter;
+use App\Services\ReservationGroupLifecycleService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
+/**
+ * SyncController is responsible for syncing data between Tierpension and the Pfotenstube Homepage.
+ * It is used to sync customers, dogs, reservations and other data between the Pfotenstube Homepage and Tierpension.
+ */
 class SyncController extends Controller
 {
     use ApiJsonResponses;
@@ -295,7 +300,27 @@ class SyncController extends Controller
                     return $this->errorResponse('Reservierung kann nicht storniert werden, da sie bereits aktiv oder abgeschlossen ist.', null, 403);
                 }
 
-                $reservation->update(['status' => Reservation::STATUS_CANCELLED]);
+                $groupId = $reservation->reservation_group_id;
+
+                $reservation->update([
+                    'status'               => Reservation::STATUS_CANCELLED,
+                    'reservation_group_id' => null,
+                ]);
+
+                // Permanently remove payment records so they are fully gone from the DB.
+                // Both models use SoftDeletes, so forceDelete() is required — delete() would
+                // only set deleted_at and leave the rows behind.
+                $reservation->load('reservationPayment.entries');
+                if ($reservation->reservationPayment) {
+                    $reservation->reservationPayment->entries()->withTrashed()->forceDelete();
+                    $reservation->reservationPayment->forceDelete();
+                }
+
+                $reservation->additionalCosts()->delete();
+
+                if ($groupId) {
+                    app(ReservationGroupLifecycleService::class)->afterMemberRemoved((int) $groupId);
+                }
 
                 $dog = $reservation->dog;
                 Notification::create([

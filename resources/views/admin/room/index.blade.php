@@ -20,6 +20,11 @@
                         <div class="mx-2">
                             <input type="text" class="form-control" autofocus onkeyup="ajaxSearch('{{route('admin.rooms')}}', 'GET', '{{csrf_token()}}','myTable', this.value)" placeholder="Suche nach Nummer, Typ">
                         </div>
+                        <div class="mx-2">
+                            <a href="{{ route('admin.rooms.export') }}" class="btn btn-success">
+                                <i class="fa fa-file-excel"></i> &nbsp; Export Excel
+                            </a>
+                        </div>
                         <div>
                             <a href="{{route('admin.rooms.add')}}" class="btn btn-primary">
                                 <i class="fa fa-plus"></i> &nbsp; Neuer Zimmer

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\General;
 use App\Models\Admin;
+use App\Models\AdditionalCost;
 use App\Models\Customer;
 use App\Models\Dog;
 use App\Models\Event;
@@ -15,6 +16,7 @@ use App\Models\Room;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Visit;
+use App\Services\CustomerBalanceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -119,13 +121,23 @@ class AdminsController extends Controller
         $fetched_dogs = [];
 
         foreach ($rooms as $room) {
-            $reservations_data = Reservation::with('plan', 'dog.customer')
-                ->selectRaw('MAX(id) as id, dog_id, MAX(room_id) as room_id, MAX(checkin_date) as checkin_date, MAX(checkout_date) as checkout_date, MAX(plan_id) as plan_id, MAX(status) as status, MAX(created_at) as created_at')
+            // One row per dog: the reservation with MAX(id) for this room (full model so reservation_group_id is present)
+            $latestIdPerDog = Reservation::query()
+                ->selectRaw('MAX(id) as id')
                 ->whereHas('dog')
                 ->where('room_id', $room->id)
-                ->where('status', 1)
-                ->groupBy('dog_id')
-                ->orderBy('id', 'desc')
+                ->where('status', Reservation::STATUS_ACTIVE)
+                ->groupBy('dog_id');
+
+            $reservations_data = Reservation::query()
+                ->with(['plan', 'dog.customer'])
+                ->joinSub($latestIdPerDog, 'latest', function ($join) {
+                    $join->on('reservations.id', '=', 'latest.id');
+                })
+                ->where('reservations.room_id', $room->id)
+                ->where('reservations.status', Reservation::STATUS_ACTIVE)
+                ->select('reservations.*')
+                ->orderByDesc('reservations.id')
                 ->get();
 
             $room->reservations = $reservations_data;
@@ -184,13 +196,14 @@ class AdminsController extends Controller
         }
 
         $plans = Plan::orderBy('id', 'asc')->get();
+        $additionalCosts = AdditionalCost::orderBy('title', 'asc')->get();
         $dogs = Dog::with('customer')->get();
         $tasks = Task::orderBy('created_at', 'desc')->get();
         $users = User::orderBy('created_at', 'desc')->get();
         $total_reservations = count($reservations);
         $daysCalculationMode = config('app.days_calculation_mode', 'inclusive');
 
-        return view('admin.dashboard', compact('currentMonth', 'reservations', 'dogs', 'tasks', 'rooms', 'plans', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users', 'daysCalculationMode'));
+        return view('admin.dashboard', compact('currentMonth', 'reservations', 'dogs', 'tasks', 'rooms', 'plans', 'additionalCosts', 'total_reservations', 'total_room_occupacy', 'total_out', 'total_orgs', 'users', 'daysCalculationMode'));
 
     }
 
@@ -200,9 +213,8 @@ class AdminsController extends Controller
             return $cache[$customerId];
         }
 
-        // Use customer balance column directly (accounts for settlements and wallet)
-        $customer = Customer::find($customerId);
-        $balance = $customer ? (float) ($customer->balance ?? 0) : 0;
+        $balanceService = new CustomerBalanceService();
+        $balance = $balanceService->getBalance($customerId);
 
         $cache[$customerId] = $balance;
 

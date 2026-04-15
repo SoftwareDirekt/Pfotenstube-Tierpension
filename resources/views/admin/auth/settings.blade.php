@@ -283,9 +283,6 @@
                                                 <small class="text-muted">Standard MwSt-Satz für Rechnungen (z.B. 20 für 20%)</small>
                                             </div>
                                         </div>
-                                        <div class="alert alert-info mb-0">
-                                            <strong>Hinweis:</strong> Alle Preise im System sind ohne Mehrwertsteuer (Netto). Der MwSt-Satz wird für alle Rechnungen verwendet – sowohl für lokale PDF-Rechnungen als auch für Rechnungen an die Registrierkasse.
-                                        </div>
                                     </div>
                                 </div>
                             </div>
