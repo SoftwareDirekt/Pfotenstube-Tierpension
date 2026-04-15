@@ -227,7 +227,7 @@ Rabatt ab 30 Tage Aufenthalt: 5 % auf den Gesamtpreis</p>
 <table class="price-lines" style="margin-top:6px;">
     <tr>
         <td class="pl-desc"><strong>Gesamt incl. MwSt.:</strong></td>
-        <td class="pl-slot"><span class="pl-dots">&nbsp;</span> €</td>
+        <td class="pl-slot">@if($reservation->reservationPayment?->status === 'paid')<span class="pl-dots">{{ number_format($reservation->reservationPayment->total_due, 2, ',', '.') }} €</span>@else<span class="pl-dots">&nbsp;</span>@endif</td>
     </tr>
 </table>
 

@@ -12,6 +12,14 @@
   .table-responsive {
       overflow-x: auto;
   }
+
+  /* Gruppen-Zahlungszeilen in Kundenzahlungen (unterscheidet von Einzel-Reservierung) */
+  tr.payment-row-group > td {
+      background-color: #e8f2fb !important;
+  }
+  tr.payment-row-group:hover > td {
+      background-color: #dceaf8 !important;
+  }
 </style>
 @endsection
 @section('body')
@@ -269,12 +277,9 @@
                   <th>Einchecken</th>
                   <th>Auschecken</th>
                   <th>Zahlungsart</th>
-                  <th class="text-nowrap">Planpreis (&euro;)</th>
-                  <th class="text-nowrap">Zusatzkosten (&euro;)</th>
-                  <th>Rabatt</th>
-                  <th>MwSt. (&euro;)</th>
-                  <th>Rechnungsbetrag (&euro;)</th>
-                  <th class="text-nowrap">Betrag erhalten (&euro;)</th>
+                  <th>Typ</th>
+                  <th class="text-nowrap">Betrag (&euro;)</th>
+                  <th class="text-nowrap">Gesamt (&euro;)</th>
                   <th class="text-nowrap">Restbetrag (&euro;)</th>
                   <th>Status</th>
                 </tr>
@@ -283,64 +288,70 @@
                 @if(count($payments) > 0)
                 @foreach($payments as $pay)
                   @php
-                    $planCost = isset($pay['plan_cost']) ? (float)$pay['plan_cost'] : 0.0;
-                    $specialCost = isset($pay['special_cost']) ? (float)$pay['special_cost'] : 0.0;
-                    $invoiceTotal = isset($pay['cost']) ? (float)$pay['cost'] : 0.0;
-                    $vatAmount = isset($pay['vat_amount']) ? (float)$pay['vat_amount'] : 0.0;
-                    $receivedAmount = isset($pay['received_amount']) ? (float)$pay['received_amount'] : 0.0;
-                    $discountPercent = isset($pay['discount']) ? (float)$pay['discount'] : 0.0;
-                    $discountAmount = isset($pay['discount_amount']) ? (float)$pay['discount_amount'] : 0.0;
-                    
-                    // Use effective remaining (accounts for settlements)
-                    $originalRemaining = isset($pay['original_remaining']) ? (float)$pay['original_remaining'] : (isset($pay['remaining_amount']) ? (float)$pay['remaining_amount'] : ($invoiceTotal - $receivedAmount));
-                    $effectiveRemaining = isset($pay['effective_remaining']) ? (float)$pay['effective_remaining'] : $originalRemaining;
-                    $remainingClass = $effectiveRemaining > 0 ? 'text-danger' : 'text-success';
+                    $isGroup = ($pay['source'] ?? '') === 'group';
+                    $totalDue = isset($pay['total_due']) ? (float)$pay['total_due'] : 0.0;
+                    $amount = isset($pay['amount']) ? (float)$pay['amount'] : 0.0;
+                    $remaining = isset($pay['remaining']) ? (float)$pay['remaining'] : 0.0;
+                    $remainingClass = $remaining > 0 ? 'text-danger' : 'text-success';
+                    $groupBalanceTitle = 'Bei Gruppenzahlungen gilt der Betrag in dieser Zeile; Gesamt und Restbetrag der Gruppe ergeben sich aus allen Gruppenzeilen und sind hier nicht pro Zeile dargestellt.';
                   @endphp
-                  <tr>
-                    <td>{{$pay['id']}}</td>
-                    <td>{{$pay['dog']}}({{$pay['dog_id']}})</td>
-                    <td>{{ date('d.m.Y', strtotime($pay['checkin'])) }}</td>
-                    <td>{{date('d.m.Y', strtotime($pay['checkout']))}}</td>
-                    <td>{{$pay['type']}}</td>
-                    <td>{{ number_format($planCost, 2) }}&euro;</td>
-                    <td>{{ number_format($specialCost, 2) }}&euro;</td>
-                    <td>{{ number_format($discountPercent, 0) }}% / {{ number_format($discountAmount, 2) }}&euro;</td>
-                    <td>{{ number_format($vatAmount, 2) }}&euro;</td>
-                    <td>{{ number_format($invoiceTotal, 2) }}&euro;</td>
-                    <td>{{ number_format($receivedAmount, 2) }}&euro;</td>
+                  <tr class="{{ $isGroup ? 'payment-row-group' : '' }}">
                     <td>
-                        <span class="{{ $remainingClass }}">{{ number_format($effectiveRemaining, 2) }}&euro;</span>
-                        @if($effectiveRemaining < $originalRemaining)
-                            <small class="text-muted d-block" style="cursor: pointer;" onclick="showSettlementDetails({{ $pay['id'] }})" title="Klicken Sie, um die Details der Begleichung anzuzeigen">
-                                ({{ number_format($originalRemaining - $effectiveRemaining, 2) }}€ beglichen)
-                            </small>
-                        @endif
+                      @if(!empty($pay['invoice_id']))
+                        <a href="{{ route('admin.invoices.view', $pay['invoice_id']) }}" target="_blank">
+                          {{ $pay['invoice_number'] }}
+                        </a>
+                      @else
+                        {{ $pay['invoice_number'] }}
+                      @endif
+                    </td>
+                    <td>
+                      {{ $pay['dog'] }}
+                      @if(!empty($pay['dog_id']))
+                        ({{ $pay['dog_id'] }})
+                      @endif
+                    </td>
+                    <td>{{ $pay['checkin'] ? date('d.m.Y', strtotime($pay['checkin'])) : '-' }}</td>
+                    <td>{{ $pay['checkout'] ? date('d.m.Y', strtotime($pay['checkout'])) : '-' }}</td>
+                    <td>{{$pay['method']}}</td>
+                    <td>
+                      @if($isGroup)
+                        <span class="badge rounded-pill bg-label-primary me-1">Gruppe</span>
+                      @endif
+                      {{ ($pay['entry_type'] ?? '') === 'advance' ? 'Anzahlung' : 'Zahlung' }}
+                    </td>
+                    <td>{{ number_format($amount, 2) }}&euro;</td>
+                    <td class="text-muted">
+                      @if($isGroup)
+                        <span class="user-select-none" title="{{ $groupBalanceTitle }}">&mdash;</span>
+                      @else
+                        {{ number_format($totalDue, 2) }}&euro;
+                      @endif
+                    </td>
+                    <td>
+                      @if($isGroup)
+                        <span class="text-muted user-select-none" title="{{ $groupBalanceTitle }}">&mdash;</span>
+                      @else
+                        <span class="{{ $remainingClass }}">{{ number_format($remaining, 2) }}&euro;</span>
+                      @endif
                     </td>
                     <td>
                       @php
-                          // Determine status: if invoice is 0, it's paid; if effective remaining is 0, it's paid
-                          $displayStatus = $pay['status'] ?? 0;
-                          if ($invoiceTotal < 0.01) {
-                              // Invoice amount is 0 (e.g., organization plan), automatically paid
-                              $displayStatus = 1;
-                          } elseif ($effectiveRemaining < 0.01) {
-                              // Effective remaining is 0 (fully settled), automatically paid
-                              $displayStatus = 1;
-                          }
+                        $status = $pay['status'] ?? 'unpaid';
                       @endphp
-                      @if($displayStatus == 0)
-                      <span class="badge bg-danger">Nicht Bezahlt</span>
-                      @elseif($displayStatus == 1)
-                      <span class="badge bg-success">Bezahlt</span>
-                      @elseif($displayStatus == 2)
-                      <span class="badge bg-info">Offen</span>
+                      @if($status === 'paid')
+                        <span class="badge bg-success">Bezahlt</span>
+                      @elseif($status === 'partial')
+                        <span class="badge bg-info">Teilweise</span>
+                      @else
+                        <span class="badge bg-danger">Nicht Bezahlt</span>
                       @endif
                     </td>
                   </tr>
                 @endforeach
                 @else
                 <tr>
-                    <td colspan="12" class="text-center">Keine Aufzeichnungen gefunden</td>
+                  <td colspan="10" class="text-center">Keine Aufzeichnungen gefunden</td>
                 </tr>
                 @endif
               </tbody>
@@ -684,35 +695,6 @@
 
   {{-- Modals Ends here --}}
 
-{{-- Settlement Details Modal --}}
-<div class="modal fade" id="settlementDetailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-fullscreen">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h4 class="modal-title fw-bold">
-                    <i class="bx bx-receipt me-2"></i>Begleichungsdetails
-                </h4>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
-            </div>
-            <div class="modal-body p-4" style="background-color: #f5f5f9;">
-                <div id="settlementDetailsContent">
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                            <span class="visually-hidden">Laden...</span>
-                        </div>
-                        <p class="mt-3 text-muted">Lade Begleichungsdetails...</p>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer bg-light border-top">
-                <button type="button" class="btn btn-secondary mt-3" data-bs-dismiss="modal">
-                    <i class="bx bx-x me-1"></i>Schließen
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 </div>
 @endsection
 @section('extra_js')
@@ -736,141 +718,5 @@
         $("#diedDog").modal('show');
     }
 
-    function showSettlementDetails(paymentId) {
-        // Show modal
-        var modal = new bootstrap.Modal(document.getElementById('settlementDetailsModal'));
-        modal.show();
-        
-        // Reset content
-        $('#settlementDetailsContent').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Laden...</span></div><p class="mt-3 text-muted">Lade Begleichungsdetails...</p></div>');
-        
-        // Fetch settlement details
-        $.ajax({
-            url: "{{ route('admin.payment.settlement.details', ['id' => ':id']) }}".replace(':id', paymentId),
-            method: 'GET',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Accept': 'application/json'
-            },
-            success: function(data) {
-                var html = '<div class="row g-4">';
-                
-                // Payment Information Card
-                html += '<div class="col-12">';
-                html += '<div class="card shadow-sm border-0">';
-                html += '<div class="card-header bg-white border-bottom py-3">';
-                html += '<h5 class="mb-0 fw-bold text-primary"><i class="bx bx-info-circle me-2"></i>Zahlungsinformationen</h5>';
-                html += '</div>';
-                html += '<div class="card-body p-4">';
-                html += '<div class="row g-3">';
-                html += '<div class="col-md-6"><div class="d-flex align-items-center p-3 bg-light rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Zahlungs-ID</small><strong class="fs-5">#' + data.payment.id + '</strong></div></div></div>';
-                html += '<div class="col-md-6"><div class="d-flex align-items-center p-3 bg-light rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Hund</small><strong class="fs-6">' + data.payment.dog_name + '</strong></div></div></div>';
-                html += '<div class="col-md-6"><div class="d-flex align-items-center p-3 bg-light rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Kunde</small><strong class="fs-6">' + data.payment.customer_name + '</strong></div></div></div>';
-                html += '<div class="col-md-6"><div class="d-flex align-items-center p-3 bg-light rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Erstellt am</small><strong class="fs-6">' + data.payment.created_at + '</strong></div></div></div>';
-                html += '<div class="col-md-4"><div class="d-flex align-items-center p-3 bg-light rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Rechnungsbetrag</small><strong class="fs-5 text-dark">' + data.payment.invoice_total + '€</strong></div></div></div>';
-                html += '<div class="col-md-4"><div class="d-flex align-items-center p-3 bg-light border border-danger rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Ursprünglicher Restbetrag</small><strong class="fs-5 text-danger">' + data.payment.original_remaining + '€</strong></div></div></div>';
-                html += '<div class="col-md-4"><div class="d-flex align-items-center p-3 bg-light ' + (parseFloat(data.payment.effective_remaining) > 0 ? 'border border-danger' : 'border border-success') + ' rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Aktueller Restbetrag</small><strong class="fs-5 ' + (parseFloat(data.payment.effective_remaining) > 0 ? 'text-danger' : 'text-success') + '">' + data.payment.effective_remaining + '€</strong></div></div></div>';
-                html += '<div class="col-12"><div class="d-flex align-items-center p-3 bg-light border border-success rounded"><div class="flex-grow-1"><small class="text-muted d-block mb-1">Gesamt beglichen</small><strong class="fs-4 text-success">' + data.payment.total_settled + '€</strong></div></div></div>';
-                html += '</div>';
-                html += '</div>';
-                html += '</div>';
-                html += '</div>';
-                
-                if (data.settlement_trail && data.settlement_trail.length > 0) {
-                    // Summary Card
-                    var paymentIds = data.settlement_trail.map(s => '#' + s.settling_payment_id).join(', ');
-                    html += '<div class="col-12">';
-                    html += '<div class="alert alert-info border-0 shadow-sm mb-0">';
-                    html += '<div class="d-flex align-items-start">';
-                    html += '<i class="bx bx-info-circle fs-4 me-3 mt-1"></i>';
-                    html += '<div class="flex-grow-1">';
-                    html += '<h6 class="alert-heading mb-2 fw-bold">Zusammenfassung</h6>';
-                    html += '<p class="mb-0">Diese ursprüngliche Schuld von <strong class="text-danger">' + data.payment.original_remaining + '€</strong> wurde von <strong>' + data.settlement_trail.length + ' Zahlung(en)</strong> beglichen: <span class="badge bg-primary">' + paymentIds + '</span></p>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    
-                    // Settlement Trail Card
-                    html += '<div class="col-12">';
-                    html += '<div class="card shadow-sm border-0">';
-                    html += '<div class="card-header bg-white border-bottom py-3">';
-                    html += '<h5 class="mb-0 fw-bold text-primary"><i class="bx bx-list-ul me-2"></i>Alle Zahlungen, die diese Schuld beglichen haben</h5>';
-                    html += '</div>';
-                    html += '<div class="card-body p-0">';
-                    html += '<div class="table-responsive">';
-                    html += '<table class="table table-hover align-middle mb-0">';
-                    html += '<thead class="table-light">';
-                    html += '<tr>';
-                    html += '<th class="text-center" style="width: 60px;">#</th>';
-                    html += '<th style="min-width: 150px;">Datum</th>';
-                    html += '<th style="min-width: 120px;">Zahlungs-ID</th>';
-                    html += '<th style="min-width: 150px;">Hund</th>';
-                    html += '<th style="min-width: 150px;">Kunde</th>';
-                    html += '<th class="text-end" style="min-width: 130px;">Rechnungsbetrag</th>';
-                    html += '<th class="text-end" style="min-width: 130px;">Betrag erhalten</th>';
-                    html += '<th class="text-end" style="min-width: 150px;">Beglichen</th>';
-                    html += '<th class="text-end" style="min-width: 130px;">Restbetrag vorher</th>';
-                    html += '<th class="text-end" style="min-width: 130px;">Restbetrag nachher</th>';
-                    html += '</tr>';
-                    html += '</thead>';
-                    html += '<tbody>';
-                    
-                    data.settlement_trail.forEach(function(settlement, index) {
-                        var rowClass = index % 2 === 0 ? '' : 'table-light';
-                        html += '<tr class="' + rowClass + '">';
-                        html += '<td class="text-center"><span class="badge bg-secondary">' + (index + 1) + '</span></td>';
-                        html += '<td><i class="bx bx-calendar me-1 text-muted"></i>' + settlement.settling_payment_date + '</td>';
-                        html += '<td><span class="badge bg-primary">#' + settlement.settling_payment_id + '</span></td>';
-                        html += '<td>' + settlement.dog_name + '</td>';
-                        html += '<td>' + settlement.customer_name + '</td>';
-                        html += '<td class="text-end"><strong>' + settlement.settling_payment_invoice + '€</strong></td>';
-                        html += '<td class="text-end">' + settlement.settling_payment_received + '€</td>';
-                        html += '<td class="text-end"><span class="badge bg-success fs-6">' + settlement.amount_settled + '€</span></td>';
-                        html += '<td class="text-end"><span class="text-danger fw-bold">' + settlement.balance_before + '€</span></td>';
-                        html += '<td class="text-end"><span class="badge ' + (parseFloat(settlement.balance_after) > 0 ? 'bg-danger' : 'bg-success') + ' fs-6">' + settlement.balance_after + '€</span></td>';
-                        html += '</tr>';
-                    });
-                    
-                    html += '</tbody>';
-                    html += '<tfoot class="table-light fw-bold">';
-                    html += '<tr>';
-                    html += '<td colspan="7" class="text-end align-middle">Gesamt beglichen:</td>';
-                    html += '<td class="text-end"><span class="badge bg-success fs-5">' + data.payment.total_settled + '€</span></td>';
-                    html += '<td colspan="2"></td>';
-                    html += '</tr>';
-                    html += '</tfoot>';
-                    html += '</table>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                } else {
-                    html += '<div class="col-12">';
-                    html += '<div class="alert alert-warning border-0 shadow-sm">';
-                    html += '<div class="d-flex align-items-start">';
-                    html += '<i class="bx bx-info-circle fs-4 me-3 mt-1"></i>';
-                    html += '<div>';
-                    html += '<h6 class="alert-heading mb-2 fw-bold">Keine Begleichungen gefunden</h6>';
-                    html += '<p class="mb-0">Diese Zahlung wurde noch nicht von anderen Zahlungen beglichen.</p>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '</div>';
-                }
-                
-                html += '</div>'; // Close row
-                
-                $('#settlementDetailsContent').html(html);
-            },
-            error: function(xhr) {
-                var errorMsg = 'Fehler beim Laden der Begleichungsdetails.';
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    errorMsg = xhr.responseJSON.error;
-                }
-                $('#settlementDetailsContent').html('<div class="alert alert-danger">' + errorMsg + '</div>');
-            }
-        });
-    }
 </script>
 @endsection

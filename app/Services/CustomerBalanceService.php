@@ -3,8 +3,6 @@
 namespace App\Services;
 
 use App\Models\Customer;
-use App\Models\Payment;
-use App\Models\PaymentSettlement;
 use Illuminate\Support\Facades\DB;
 
 class CustomerBalanceService
@@ -37,32 +35,18 @@ class CustomerBalanceService
      */
     public function reconcileBalance(int $customerId): float
     {
-        $payments = Payment::whereHas('reservation.dog', function($query) use ($customerId) {
-                $query->where('customer_id', $customerId);
-            })
-            ->with('settlementsReceived')
-            ->get();
-
-        $calculatedBalance = 0;
-
-        foreach ($payments as $payment) {
-            $advance = $payment->advance_payment ?? 0;
-            $originalRemaining = $payment->remaining_amount ?? 0;
-            $settledAmount = (float) $payment->settlementsReceived->sum('amount_settled');
-            $effectiveRemaining = max(0, $originalRemaining - $settledAmount);
-            $wallet = $payment->wallet_amount ?? 0;
-            
-            $calculatedBalance += ($advance - $effectiveRemaining - $wallet);
-        }
+        $totals = $this->calculateTotals($customerId);
+        $calculatedBalance = $totals['total_paid'] - $totals['total_due'];
+        $balance = $this->normalizeStoredCustomerBalance($calculatedBalance);
 
         // Update customer balance
         $customer = Customer::find($customerId);
         if ($customer) {
-            $customer->balance = round($calculatedBalance, 2);
+            $customer->balance = $balance;
             $customer->save();
         }
 
-        return round($calculatedBalance, 2);
+        return $balance;
     }
 
     /**
@@ -74,7 +58,34 @@ class CustomerBalanceService
     public function getBalance(int $customerId): float
     {
         $customer = Customer::find($customerId);
-        return $customer ? (float)($customer->balance ?? 0) : 0;
+        if (!$customer) {
+            return 0;
+        }
+
+        $totals = $this->calculateTotals($customerId);
+        $raw     = round($totals['total_paid'] - $totals['total_due'], 2);
+        $balance = $this->normalizeStoredCustomerBalance($raw);
+
+        if ((float) ($customer->balance ?? 0) !== $balance) {
+            $customer->balance = $balance;
+            $customer->save();
+        }
+
+        return $balance;
+    }
+
+    /**
+     * Do not persist positive customer-wide balance: overpayment vs current total_due (e.g. after real check-in
+     * shortens the stay) is refunded at the desk; the Kasse / reservation payment UI shows the amount due back.
+     * Debt (negative) is unchanged.
+     */
+    private function normalizeStoredCustomerBalance(float $rawBalance): float
+    {
+        if ($rawBalance > 0.01) {
+            return 0.0;
+        }
+
+        return round($rawBalance, 2);
     }
 
     /**
@@ -89,66 +100,9 @@ class CustomerBalanceService
      */
     public function settleOldPaymentRecords(int $customerId, int $settlingPaymentId, float $amountToSettle): array
     {
-        // Get all payments with remaining amounts for this customer, ordered chronologically
-        // Calculate effective remaining (original - settlements already received)
-        $oldPayments = Payment::whereHas('reservation.dog', function($query) use ($customerId) {
-                $query->where('customer_id', $customerId);
-            })
-            ->where('id', '!=', $settlingPaymentId) // Don't settle the payment with itself
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        $settledPayments = [];
-        $remainingSettlement = $amountToSettle;
-
-        foreach ($oldPayments as $payment) {
-            if ($remainingSettlement <= 0.01) {
-                break; // No more money to settle
-            }
-
-            $originalRemaining = (float) ($payment->remaining_amount ?? 0);
-            if (!$payment->relationLoaded('settlementsReceived')) {
-                $payment->load('settlementsReceived');
-            }
-            $effectiveRemaining = max(0, $originalRemaining - (float) $payment->settlementsReceived->sum('amount_settled'));
-
-            if ($effectiveRemaining > 0.01) {
-                $settledAmount = round(min($effectiveRemaining, $remainingSettlement), 2);
-                
-                if (!PaymentSettlement::where('settling_payment_id', $settlingPaymentId)
-                    ->where('settled_payment_id', $payment->id)
-                    ->exists()) {
-                    PaymentSettlement::create([
-                        'settling_payment_id' => $settlingPaymentId,
-                        'settled_payment_id' => $payment->id,
-                        'amount_settled' => $settledAmount,
-                    ]);
-                } else {
-                    continue;
-                }
-
-                $newEffectiveRemaining = round($effectiveRemaining - $settledAmount, 2);
-                
-                // Update status if fully settled - use lockForUpdate to prevent race conditions
-                if ($newEffectiveRemaining < 0.01 && in_array($payment->status, [0, 2])) {
-                    $payment->lockForUpdate()->update(['status' => 1]);
-                }
-
-                $settledPayments[] = [
-                    'payment_id' => $payment->id,
-                    'settled_amount' => round($settledAmount, 2),
-                    'original_remaining' => $originalRemaining,
-                    'effective_remaining_before' => $effectiveRemaining,
-                    'effective_remaining_after' => $newEffectiveRemaining,
-                ];
-
-                $remainingSettlement -= $settledAmount;
-            }
-        }
-
         return [
-            'settled_payments' => $settledPayments,
-            'remaining_settlement' => round($remainingSettlement, 2),
+            'settled_payments' => [],
+            'remaining_settlement' => round($amountToSettle, 2),
         ];
     }
 
@@ -182,7 +136,7 @@ class CustomerBalanceService
             $debtSettled = min(abs($currentBalance), $totalPayment);
             
             if ($createSettlements && $settlingPaymentId && $debtSettled > 0.01) {
-                $oldPaymentsSettled = $this->settleOldPaymentRecords($customerId, $settlingPaymentId, $debtSettled)['settled_payments'];
+                $oldPaymentsSettled = [];
             }
             
             $remainingPayment = $totalPayment - $debtSettled;
@@ -210,42 +164,52 @@ class CustomerBalanceService
         ];
     }
 
-    /**
-     * Update balance when payment is deleted
-     * Handles settlements: reverses settlements made and received
-     * 
-     * @param Payment $payment
-     * @return void
-     */
-    public function handlePaymentDeletion(Payment $payment): void
+    private function calculateTotals(int $customerId): array
     {
-        $reservation = $payment->reservation;
-        if (!$reservation || !$reservation->dog) {
-            return;
-        }
+        // Due from ungrouped reservations (per-reservation payment headers)
+        $ungroupedDue = (float) DB::table('reservation_payments as rp')
+            ->join('reservations as r', 'r.id', '=', 'rp.res_id')
+            ->join('dogs as d', 'd.id', '=', 'r.dog_id')
+            ->where('d.customer_id', $customerId)
+            ->whereNull('r.reservation_group_id')
+            ->whereNull('rp.deleted_at')
+            ->sum('rp.total_due');
 
-        $customerId = $reservation->dog->customer_id;
-        $advance = $payment->advance_payment ?? 0;
-        $remaining = $payment->remaining_amount ?? 0;
-        $wallet = $payment->wallet_amount ?? 0;
+        // Due from grouped reservations (group-level total_due, not per-reservation to avoid double-counting)
+        $groupedDue = (float) DB::table('reservation_groups as rg')
+            ->where('rg.customer_id', $customerId)
+            ->whereNull('rg.deleted_at')
+            ->sum('rg.total_due');
 
-        $payment->load(['settlementsMade', 'settlementsReceived']);
+        $totalDue = $ungroupedDue + $groupedDue;
 
-        foreach ($payment->settlementsMade as $settlement) {
-            DB::table('customers')
-                ->where('id', $customerId)
-                ->decrement('balance', (float) $settlement->amount_settled);
-        }
+        // Paid from ungrouped per-reservation entries
+        $ungroupedPaid = (float) DB::table('reservation_payment_entries as rpe')
+            ->join('reservation_payments as rp', 'rp.id', '=', 'rpe.res_payment_id')
+            ->join('reservations as r', 'r.id', '=', 'rp.res_id')
+            ->join('dogs as d', 'd.id', '=', 'r.dog_id')
+            ->where('d.customer_id', $customerId)
+            ->whereNull('r.reservation_group_id')
+            ->whereNull('rp.deleted_at')
+            ->whereNull('rpe.deleted_at')
+            ->where('rpe.status', 'active')
+            ->sum('rpe.amount');
 
-        foreach ($payment->settlementsReceived as $settlement) {
-            DB::table('customers')
-                ->where('id', $customerId)
-                ->decrement('balance', (float) $settlement->amount_settled);
-        }
+        // Paid from group-level entries
+        $groupedPaid = (float) DB::table('reservation_group_entries as rge')
+            ->join('reservation_groups as rg', 'rg.id', '=', 'rge.reservation_group_id')
+            ->where('rg.customer_id', $customerId)
+            ->whereNull('rg.deleted_at')
+            ->whereNull('rge.deleted_at')
+            ->where('rge.status', 'active')
+            ->sum('rge.amount');
 
-        DB::table('customers')
-            ->where('id', $customerId)
-            ->decrement('balance', $advance - $remaining - $wallet);
+        $totalPaid = $ungroupedPaid + $groupedPaid;
+
+        return [
+            'total_due' => round($totalDue, 2),
+            'total_paid' => round($totalPaid, 2),
+        ];
     }
 }
 

@@ -70,7 +70,8 @@ return [
     |
     */
 
-    'timezone' => 'Europe/Vienna',
+    'timezone' => 'Asia/Karachi',
+    // 'timezone' => 'Europe/Vienna',
 
     /*
     |--------------------------------------------------------------------------

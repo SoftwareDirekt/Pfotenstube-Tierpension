@@ -67,11 +67,12 @@ return [
     | Breeding Shelter URL
     |--------------------------------------------------------------------------
     |
-    | Configuration for the Breeding Shelter URL, used for switching between systems.
+    | Configuration for the Breeding Shelter URL, used for switching between systems or receive data from the Breeding Shelter.
     |
     */
     'breeding_shelter' => [
         'url' => env('BREEDING_SHELTER_URL'),
+        'api_token' => env('BREEDING_SHELTER_API_TOKEN'),
     ],
 
 ];

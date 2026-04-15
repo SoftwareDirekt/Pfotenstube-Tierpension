@@ -133,7 +133,8 @@
             font-size: 8pt;
         }
         .items-table th:nth-child(3),
-        .items-table th:nth-child(4) {
+        .items-table th:nth-child(4),
+        .items-table th:nth-child(5) {
             text-align: right;
         }
         .items-table td {
@@ -141,21 +142,28 @@
             border-bottom: 1px solid #ddd;
             vertical-align: top;
         }
+        .items-table tbody tr:last-child td {
+            border-bottom: none;
+        }
         .items-table td:first-child {
             text-align: center;
-            width: 15%;
+            width: 8%;
         }
         .items-table td:nth-child(2) {
             text-align: left;
-            width: 45%;
+            width: 42%;
         }
         .items-table td:nth-child(3) {
             text-align: right;
-            width: 20%;
+            width: 16%;
         }
         .items-table td:nth-child(4) {
             text-align: right;
-            width: 20%;
+            width: 16%;
+        }
+        .items-table td:nth-child(5) {
+            text-align: right;
+            width: 18%;
         }
         
         /* ==================== TOTAL SECTION ==================== */
@@ -277,16 +285,18 @@
                     <th>Anzahl</th>
                     <th>Beschreibung</th>
                     <th style="text-align: right;">Einzelpreis €</th>
+                    <th style="text-align: right;">MwSt <small style="font-weight:normal;">({{ number_format($vat_breakdown[0]['vat_percentage'] ?? 0, 0) }}%)</small></th>
                     <th style="text-align: right;">Gesamt €</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($items as $item)
                 <tr>
-                    <td>{{ number_format($item['quantity'], 0) }}</td>
+                    <td>{{ $loop->iteration }}</td>
                     <td>{{ $item['description'] }}</td>
                     <td style="text-align: right;">{{ number_format($item['unit_price'], 2, ',', '.') }}</td>
-                    <td style="text-align: right;">{{ number_format($item['total_price'], 2, ',', '.') }}</td>
+                    <td style="text-align: right;">{{ number_format($item['vat_amount'] ?? 0, 2, ',', '.') }}</td>
+                    <td style="text-align: right;">{{ number_format($item['gross'], 2, ',', '.') }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -307,20 +317,16 @@
                 <td class="value">-€{{ number_format($totals['discount_amount'] ?? 0, 2, ',', '.') }}</td>
             </tr>
             @endif
-            @if(isset($totals['vat']) && $totals['vat'] > 0)
-            <tr>
-                <td class="label">Netto</td>
-                <td class="value">€{{ number_format($totals['net'], 2, ',', '.') }}</td>
-            </tr>
-            <tr>
-                <td class="label">MwSt ({{ number_format($vat_breakdown[0]['vat_percentage'] ?? 0, 0) }}% von €{{ number_format($totals['net'], 2, ',', '.') }})</td>
-                <td class="value">€{{ number_format($totals['vat'], 2, ',', '.') }}</td>
-            </tr>
-            @endif
             <tr class="total-row">
                 <td class="label">Summe</td>
                 <td class="value">€{{ number_format($totals['gross'], 2, ',', '.') }}</td>
             </tr>
+            @if(!empty($totals['refund']) && $totals['refund'] > 0)
+            <tr style="color:#c0392b;">
+                <td class="label"><strong>Rückgabe an Kunden</strong></td>
+                <td class="value"><strong>€{{ number_format($totals['refund'], 2, ',', '.') }}</strong></td>
+            </tr>
+            @endif
         </table>
 
         <!-- Footer -->

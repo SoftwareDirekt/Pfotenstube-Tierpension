@@ -67,5 +67,6 @@ class Kernel extends HttpKernel
         'UserAuth' => \App\Http\Middleware\AuthCheck::class,
         'AdminAuth' => \App\Http\Middleware\AdminAuthenticated::class,
         'verify.homepage' => \App\Http\Middleware\VerifyHomepageToken::class,
+        'verify.breeding_shelter' => \App\Http\Middleware\VerifyBreedingShelterToken::class,
     ];
 }

@@ -11,11 +11,13 @@ use App\Models\Visit;
 use App\Models\Pickup;
 use App\Models\Friend;
 use App\Models\Reservation;
-use App\Models\Payment;
+use App\Models\ReservationPaymentEntry;
+use App\Models\ReservationGroupEntry;
 use App\Models\Vaccination;
 use App\Models\DogDocument;
 use App\Helpers\General;
 use App\Services\HelloCashService;
+use App\Services\ReservationGroupLifecycleService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -641,93 +643,19 @@ class CustomersController extends Controller
             return to_route('admin.customers');
         }
 
-        // Get customer payments
-        // Get Customer dogs
-        $payments = [];
-        $dogs = Dog::where('customer_id', $id)->orderBy('id' , 'desc')->get();
-        if(count($dogs) > 0)
-        {
+        $payments = $this->collectCustomerPreviewPayments((int) $id);
+
+        $dogs = Dog::where('customer_id', $id)->orderBy('id', 'desc')->get();
+        if (count($dogs) > 0) {
             // Limit to prevent memory issues - only process first 50 dogs
             $dogsLimited = $dogs->take(50);
-            
-            foreach($dogsLimited as $item)
-            {
-                // Limit reservations per dog to prevent memory issues
-                $reservations = Reservation::where('dog_id', $item->id)
-                    ->orderBy('checkin_date', 'desc')
-                    ->limit(100)
-                    ->get();
-                if(count($reservations) > 0)
-                {
-                    foreach($reservations as $reservation)
-                    {
-                        // Limit payments per reservation to prevent memory issues
-                        $payments_raw = Payment::where('res_id', $reservation->id)
-                            ->with('settlementsReceived')
-                            ->orderBy('created_at', 'desc')
-                            ->limit(50)
-                            ->get();
-                        if(count($payments_raw) > 0)
-                        {
-                            foreach($payments_raw as $payment)
-                            {
-                                $paymentData = $payment->toArray();
-                                $paymentData['dog'] = $item->name;
-                                $paymentData['dog_id'] = $item->id;
-                                $paymentData['checkin'] = $reservation->checkin_date;
-                                $paymentData['checkout'] = $reservation->checkout_date;
 
-                                // Calculate remaining_amount and advance_payment if not set
-                                $cost = isset($paymentData['cost']) ? (float)$paymentData['cost'] : 0.0;
-                                $received = isset($paymentData['received_amount']) ? (float)$paymentData['received_amount'] : 0.0;
-                                
-                                if (!isset($paymentData['remaining_amount']) || $paymentData['remaining_amount'] === null) {
-                                    if ($received > $cost) {
-                                        $paymentData['remaining_amount'] = 0;
-                                        $paymentData['advance_payment'] = $received - $cost;
-                                    } else {
-                                        $paymentData['remaining_amount'] = $cost - $received;
-                                        $paymentData['advance_payment'] = 0;
-                                    }
-                                } else {
-                                    $paymentData['remaining_amount'] = (float)$paymentData['remaining_amount'];
-                                    if (!isset($paymentData['advance_payment']) || $paymentData['advance_payment'] === null) {
-                                        if ($received > $cost) {
-                                            $paymentData['advance_payment'] = $received - $cost;
-                                        } else {
-                                            $paymentData['advance_payment'] = 0;
-                                        }
-                                    }
-                                }
-
-                                // Calculate effective remaining (accounting for settlements)
-                                $originalRemaining = (float)($paymentData['remaining_amount'] ?? 0);
-                                $settledAmount = (float) $payment->settlementsReceived->sum('amount_settled');
-                                $paymentData['effective_remaining'] = max(0, round($originalRemaining - $settledAmount, 2));
-                                $paymentData['original_remaining'] = $originalRemaining;
-                                $paymentData['settled_amount'] = $settledAmount;
-
-                                $paymentData['plan_cost'] = isset($paymentData['plan_cost']) ? (float)$paymentData['plan_cost'] : 0.0;
-                                $paymentData['special_cost'] = isset($paymentData['special_cost']) ? (float)$paymentData['special_cost'] : 0.0;
-                                $paymentData['cost'] = isset($paymentData['cost']) ? (float)$paymentData['cost'] : 0.0;
-                                $paymentData['vat_amount'] = isset($paymentData['vat_amount']) ? (float)$paymentData['vat_amount'] : 0.0;
-                                $paymentData['received_amount'] = isset($paymentData['received_amount']) ? (float)$paymentData['received_amount'] : 0.0;
-                                $paymentData['discount'] = isset($paymentData['discount']) ? (float)$paymentData['discount'] : 0.0;
-                                $paymentData['discount_amount'] = isset($paymentData['discount_amount']) ? (float)$paymentData['discount_amount'] : 0.0;
-
-                                $payments[] = $paymentData;
-                            }
-                        }
-                    }
-                }
-
+            foreach ($dogsLimited as $item) {
                 // Friends
                 $friends = Friend::where('dog_id', $item->id)->orWhere('friend_id', $item->id)->get();
                 $friend_ids = [];
-                if(count($friends) > 0)
-                {
-                    foreach($friends as $friend)
-                    {
+                if (count($friends) > 0) {
+                    foreach ($friends as $friend) {
                         $friend_id = ($friend->dog_id == $item->id) ? $friend->friend_id : $friend->dog_id;
                         $friendz = Dog::find($friend_id);
                         $friend->dog = $friendz;
@@ -737,13 +665,6 @@ class CustomersController extends Controller
                 $item->friends = $friends;
             }
         }
-
-        // Sort payments by created_at descending (newest first)
-        usort($payments, function($a, $b) {
-            $dateA = isset($a['created_at']) ? strtotime($a['created_at']) : 0;
-            $dateB = isset($b['created_at']) ? strtotime($b['created_at']) : 0;
-            return $dateB - $dateA; // Descending order (newest first)
-        });
 
         // Use customer balance column directly (accounts for settlements and wallet)
         $balanceService = new \App\Services\CustomerBalanceService();
@@ -1008,6 +929,14 @@ class CustomersController extends Controller
 
         $dog = Dog::with(['visit' , 'pickups', 'reg_plan_obj', 'customer', 'vaccinations', 'documents'])->find($id);
 
+        $planLocked = Reservation::where('dog_id', $dog->id)
+            ->whereIn('status', [
+                Reservation::STATUS_ACTIVE,
+                Reservation::STATUS_RESERVED,
+                Reservation::STATUS_PENDING_CONFIRMATION,
+            ])
+            ->exists();
+
         $dog->eating_habits = json_decode($dog->eating_habits);
 
         // get Dog Friends
@@ -1033,7 +962,7 @@ class CustomersController extends Controller
             return $dog;
         }
 
-        return view('admin.customer.edit_dog', compact('customers' , 'plans' , 'dogs', 'dog'));
+        return view('admin.customer.edit_dog', compact('customers' , 'plans' , 'dogs', 'dog', 'planLocked'));
     }
 
     public function update_dog(Request $request)
@@ -1056,6 +985,20 @@ class CustomersController extends Controller
 
         //Updating Dog Info
         $dog = Dog::find($request->id);
+        $planLocked = Reservation::where('dog_id', $dog->id)
+            ->whereIn('status', [
+                Reservation::STATUS_ACTIVE,
+                Reservation::STATUS_RESERVED,
+                Reservation::STATUS_PENDING_CONFIRMATION,
+            ])
+            ->exists();
+
+        if ($planLocked
+            && ((int)$request->price_plan !== (int)$dog->reg_plan
+                || (int)$request->daily_rate !== (int)$dog->day_plan)) {
+            Session::flash('error', 'Der Preisplan kann nicht geändert werden, solange der Hund reserviert oder eingecheckt ist.');
+            return back()->withInput();
+        }
         $dog->name = $request->name;
         $dog->age = $request->age;
         $dog->neutered = (int)$request->neutered;
@@ -1153,25 +1096,39 @@ class CustomersController extends Controller
             }
 
             // Get all reservations for this dog
-            $reservations = Reservation::where('dog_id', $request->id)->with('payments')->get();
+            $reservations = Reservation::where('dog_id', $request->id)
+                ->with(['reservationPayment.entries.invoice'])
+                ->get();
             
             foreach($reservations as $reservation)
             {
+                $groupId = $reservation->reservation_group_id;
+
                 // If reservation has payments: soft delete
                 // If reservation has no payments: hard delete
-                if($reservation->payments && $reservation->payments->count() > 0)
-                {
+                $paymentHeader = $reservation->reservationPayment;
+                $entries = $paymentHeader ? $paymentHeader->entries : collect();
+
+                if ($entries->count() > 0) {
                     $reservation->delete(); // Soft delete
-                    
-                    // Soft delete all payments for this reservation
-                    foreach($reservation->payments as $payment)
-                    {
-                        $payment->delete(); // Soft delete
+
+                    foreach ($entries as $entry) {
+                        if ($entry->invoice) {
+                            $entry->invoice->update(['status' => 'cancelled']);
+                        }
+                        $entry->delete();
                     }
-                }
-                else
-                {
+
+                    $paymentHeader->delete();
+                } else {
+                    if ($paymentHeader) {
+                        $paymentHeader->forceDelete();
+                    }
                     $reservation->forceDelete(); // Hard delete (no payments)
+                }
+
+                if ($groupId) {
+                    app(ReservationGroupLifecycleService::class)->afterMemberRemoved((int) $groupId);
                 }
             }
 
@@ -1441,12 +1398,14 @@ class CustomersController extends Controller
             {
                 foreach($dogs as $dog)
                 {
-                    $cost = 0.00;
-                    $process = DB::select("SELECT sum(`p`.`received_amount`) as `payment` FROM `reservations` as `dr` ,`payments` as `p` WHERE `p`.`res_id`=`dr`.`id` and `dr`.`dog_id`=$dog->dog_id");
-                    if(count($process) > 0)
-                    {
-                        $cost = ($process[0]->payment) ? abs($process[0]->payment) : 0.00;
-                    }
+                    $cost = (float) DB::table('reservations as dr')
+                        ->join('reservation_payments as rp', 'rp.res_id', '=', 'dr.id')
+                        ->join('reservation_payment_entries as rpe', 'rpe.res_payment_id', '=', 'rp.id')
+                        ->where('dr.dog_id', $dog->dog_id)
+                        ->whereNull('rp.deleted_at')
+                        ->whereNull('rpe.deleted_at')
+                        ->where('rpe.status', 'active')
+                        ->sum('rpe.amount');
                     $dog->cost = $cost;
                 }
             }
@@ -1473,12 +1432,14 @@ class CustomersController extends Controller
         {
             foreach($dogs as $dog)
             {
-                $cost = 0.00;
-                $process = DB::select("SELECT sum(`p`.`received_amount`) as `payment` FROM `reservations` as `dr` ,`payments` as `p` WHERE `p`.`res_id`=`dr`.`id` and `dr`.`dog_id`=$dog->dog_id");
-                if(count($process) > 0)
-                {
-                    $cost = ($process[0]->payment) ? abs($process[0]->payment) : 0.00;
-                }
+                $cost = (float) DB::table('reservations as dr')
+                    ->join('reservation_payments as rp', 'rp.res_id', '=', 'dr.id')
+                    ->join('reservation_payment_entries as rpe', 'rpe.res_payment_id', '=', 'rp.id')
+                    ->where('dr.dog_id', $dog->dog_id)
+                    ->whereNull('rp.deleted_at')
+                    ->whereNull('rpe.deleted_at')
+                    ->where('rpe.status', 'active')
+                    ->sum('rpe.amount');
                 $dog->cost = $cost;
             }
         }
@@ -1674,5 +1635,117 @@ class CustomersController extends Controller
     private function isHelloCashSyncEnabled(): bool
     {
         return filter_var(config('services.hellocash.sync_enabled', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Per-reservation payment lines (reservation_payment_entries) plus group-level
+     * lines (reservation_group_entries) for this customer, for the Kundenzahlungen table.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectCustomerPreviewPayments(int $customerId): array
+    {
+        $payments = [];
+
+        $reservationEntries = ReservationPaymentEntry::query()
+            ->whereHas('reservationPayment', function ($q) use ($customerId) {
+                $q->whereNull('deleted_at')
+                    ->whereHas('reservation', function ($rq) use ($customerId) {
+                        $rq->withTrashed()
+                            ->whereHas('dog', fn ($dq) => $dq->where('customer_id', $customerId));
+                    });
+            })
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->with([
+                'invoice',
+                'reservationPayment' => fn ($q) => $q->whereNull('deleted_at')->with([
+                    'entries',
+                    'reservation' => fn ($rq) => $rq->withTrashed()->with(['dog', 'plan', 'additionalCosts']),
+                ]),
+            ])
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($reservationEntries as $entry) {
+            $paymentHeader = $entry->reservationPayment;
+            $reservation = $paymentHeader?->reservation;
+            if (! $reservation || ! $reservation->dog) {
+                continue;
+            }
+
+            $payments[] = [
+                'id' => $entry->id,
+                'source' => 'reservation',
+                'invoice_id' => $entry->invoice?->id,
+                'invoice_number' => $entry->invoice?->formatted_invoice_number ?? 'N/A',
+                'dog' => $reservation->dog->name,
+                'dog_id' => $reservation->dog_id,
+                'checkin' => $reservation->checkin_date,
+                'checkout' => $reservation->checkout_date,
+                'method' => $entry->method ?? 'Bar',
+                'entry_type' => $entry->type ?? 'final',
+                'amount' => (float) $entry->amount,
+                'total_due' => (float) $reservation->amount_due,
+                'remaining' => max(0, (float) $reservation->remaining_balance),
+                'status' => $paymentHeader->status ?? 'unpaid',
+                'created_at' => $entry->transaction_date ?? $entry->created_at,
+            ];
+        }
+
+        $groupEntries = ReservationGroupEntry::query()
+            ->whereHas('group', fn ($gq) => $gq->where('customer_id', $customerId)->whereNull('deleted_at'))
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->with([
+                'invoice',
+                'group' => fn ($gq) => $gq->with([
+                    'reservations' => fn ($rq) => $rq->withTrashed()->with('dog'),
+                ]),
+            ])
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($groupEntries as $entry) {
+            $group = $entry->group;
+            if (! $group) {
+                continue;
+            }
+
+            $dogNames = $group->reservations->pluck('dog.name')->filter()->unique()->values()->implode(', ');
+            if ($dogNames === '') {
+                $dogNames = 'Gruppe #' . $group->id;
+            }
+
+            $checkin = $group->reservations->min('checkin_date');
+            $checkout = $group->reservations->max('checkout_date');
+
+            $payments[] = [
+                'id' => 'g' . $entry->id,
+                'source' => 'group',
+                'invoice_id' => $entry->invoice?->id,
+                'invoice_number' => $entry->invoice?->formatted_invoice_number ?? 'N/A',
+                'dog' => $dogNames,
+                'dog_id' => null,
+                'checkin' => $checkin,
+                'checkout' => $checkout,
+                'method' => $entry->method ?? 'Bar',
+                'entry_type' => $entry->type ?? 'final',
+                'amount' => (float) $entry->amount,
+                'status' => $group->status ?? 'unpaid',
+                'created_at' => $entry->transaction_date ?? $entry->created_at,
+            ];
+        }
+
+        usort($payments, function ($a, $b) {
+            $dateA = isset($a['created_at']) ? strtotime((string) $a['created_at']) : 0;
+            $dateB = isset($b['created_at']) ? strtotime((string) $b['created_at']) : 0;
+
+            return $dateB <=> $dateA;
+        });
+
+        return $payments;
     }
 }

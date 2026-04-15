@@ -98,6 +98,137 @@
             height: 40px;
             object-fit: cover;
         }
+
+        /* Gruppenreservierung: Kreis-Badge statt Kasse-Button (gleiche ID wie reservation_groups.id) */
+        .dashboard-group-badge {
+            min-width: 20px;
+            height: 20px;
+            padding: 2px 5px;
+            margin-left: 5px;
+            background: linear-gradient(145deg, #5a67d8 0%, #4348a8 100%);
+            color: #fff;
+            font-size: 0.70rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: -0.02em;
+            cursor: default;
+            user-select: none;
+            border: 2px solid rgba(255, 255, 255, 0.35);
+        }
+        .dashboard-group-badge--wide {
+            border-radius: 999px;
+            min-width: 40px;
+            font-size: 0.6rem;
+        }
+
+        /* Checkout modal (Kasse): fullscreen two-column layout */
+        #checkoutModal .checkout-modal-inputs-col {
+            border-bottom: 1px solid var(--bs-border-color);
+        }
+        @media (min-width: 992px) {
+            #checkoutModal .checkout-modal-inputs-col {
+                border-bottom: none !important;
+                border-right: 1px solid var(--bs-border-color);
+            }
+        }
+        #checkoutModal .modal-body {
+            min-height: calc(100vh - 3.5rem);
+        }
+   </style>
+   <!-- Checkout Modal Styles -->
+   <style>
+        #checkoutModal .checkout-summary-panel {
+            --checkout-accent: #5a5fe0;
+            --checkout-accent-soft: rgba(90, 95, 224, 0.1);
+        }
+        #checkoutModal .checkout-summary-eyebrow {
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #8b8fa3;
+            font-weight: 600;
+        }
+        #checkoutModal .checkout-summary-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #2e3148;
+        }
+        #checkoutModal .checkout-summary-card {
+            border-radius: 0.75rem;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9fc 100%);
+            border: 1px solid rgba(46, 49, 72, 0.06) !important;
+            box-shadow: 0 4px 20px rgba(46, 49, 72, 0.06) !important;
+        }
+        #checkoutModal .checkout-summary-card .checkout-stay-pill {
+            background: var(--checkout-accent-soft);
+            color: var(--checkout-accent);
+            border-radius: 0.5rem;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        #checkoutModal .checkout-summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.55rem 0;
+            border-bottom: 1px dashed rgba(46, 49, 72, 0.08);
+        }
+        #checkoutModal .checkout-summary-row:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        #checkoutModal .checkout-summary-row-label {
+            font-size: 0.8rem;
+            color: #6c7388;
+        }
+        #checkoutModal .checkout-summary-row-value {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #2e3148;
+        }
+        #checkoutModal .checkout-banner-card {
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 1px solid transparent;
+        }
+        #checkoutModal .checkout-banner-card.checkout-banner-early {
+            background: linear-gradient(135deg, #fffbf0 0%, #fff8e6 100%);
+            border-color: rgba(234, 179, 8, 0.35);
+            box-shadow: 0 6px 24px rgba(234, 179, 8, 0.12);
+        }
+        #checkoutModal .checkout-banner-card.checkout-banner-late {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%);
+            border-color: rgba(13, 110, 253, 0.2);
+            box-shadow: 0 6px 24px rgba(13, 110, 253, 0.08);
+        }
+        #checkoutModal .checkout-banner-card .checkout-banner-head {
+            font-weight: 700;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        #checkoutModal .checkout-compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.65rem;
+        }
+        @media (max-width: 991.98px) {
+            #checkoutModal .checkout-compare-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        #checkoutModal .checkout-compare-cell {
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: 0.5rem;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid rgba(46, 49, 72, 0.06);
+        }
+        #checkoutModal .checkout-compare-cell .small {
+            font-size: 0.72rem;
+        }
     </style>
 @endsection
 @section('body')
@@ -494,7 +625,7 @@
                                             <div class="flex align-items-center" style="margin-top: -15px">
                                                 <div>
                                                     <span class="badge bg-primary rounded"><span
-                                                            class="count">{{count($obj->reservations)}}</span>/{{$obj->capacity}}</span>
+                                                            class="count">{{count($obj->reservations) + $obj->breeding_shelter_occupancy}}</span>/{{$obj->capacity}}</span>
                                                 </div>
                                                 <div>
                                                     <button class="no-style" style="color: #5a5fe0"
@@ -644,13 +775,23 @@
                                                                             </button>
                                                                         </li>
                                                                         {{-- @if(isset($item->plan) && $item->plan != null) --}}
-                                                                        <li>
-                                                                            <button class="no-style"
-                                                                                    data-toggle="tooltip" title="Kasse"
-                                                                                    onclick="checkoutModal('{{$item->id}}', '{{$item->checkin_date}}', '{{isset($item->plan_id) ? $item->plan_id : false}}','{{ isset($item->plan) ? $item->plan->price : 0 }}')">
-                                                                                <i class="mdi mdi-logout-variant"></i>
-                                                                            </button>
-                                                                        </li>
+                                                                        @if($item->reservation_group_id)
+                                                                            <li>
+                                                                                <span class="dashboard-group-badge {{ $item->reservation_group_id > 99 ? 'dashboard-group-badge--wide' : '' }}"
+                                                                                      data-toggle="tooltip"
+                                                                                      title="Gruppe G-{{ $item->reservation_group_id }} Checkout nur über 'Mehrfachkasse'.">
+                                                                                    G{{ $item->reservation_group_id }}
+                                                                                </span>
+                                                                            </li>
+                                                                        @else
+                                                                            <li>
+                                                                                <button class="no-style"
+                                                                                        data-toggle="tooltip" title="Kasse"
+                                                                                        onclick="checkoutModal('{{$item->id}}', '{{$item->checkin_date}}', '{{isset($item->plan_id) ? $item->plan_id : false}}','{{ isset($item->plan) ? $item->plan->price : 0 }}', '')">
+                                                                                    <i class="mdi mdi-logout-variant"></i>
+                                                                                </button>
+                                                                            </li>
+                                                                        @endif
                                                                         {{-- @endif --}}
                                                                     </ul>
                                                                     <ul>
@@ -733,6 +874,50 @@
                                                     </div>
                                                 @endforeach
                                             @endif
+
+                                            @php
+                                                $breedingAnimals = $obj->breeding_shelter_animals ? json_decode($obj->breeding_shelter_animals, true) : [];
+                                            @endphp
+
+                                            @if(!empty($breedingAnimals) && is_array($breedingAnimals))
+                                                @foreach($breedingAnimals as $breedingAnimal)
+                                                    <div class="col-md-4 col-lg-4 col-xl-4 col-xxl-3 child-breeding" style="pointer-events: none; opacity: 0.85;">
+                                                        <div class="item card mb-2 d-flex flex-column" style="border: 2px solid #5a5fe0; box-shadow: 0 0 10px rgba(90,95,224,0.3); min-height: 270px;">
+                                                            <div class="card-body space-nill bg-extralight bg-secondary flex-grow-0">
+                                                                <div class="flex justify-between align-items-center">
+                                                                    <p class="text-white">TSV Zucht</p>
+                                                                    <div class="d-flex align-items-center">
+                                                                        <i class="mdi mdi-shield-lock-outline text-white fs-4"></i>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="card-header flex-grow-0">
+                                                                <div class="flex justify-between align-items-center">
+                                                                    <div class="flex align-items-center">
+                                                                        @if(!empty($breedingAnimal['picture']))
+                                                                            <img src="{{ rtrim(env('BREEDING_SHELTER_URL', 'https://https://zucht.tierpension.fun'), '/') }}/{{ ltrim($breedingAnimal['picture'], '/') }}" 
+                                                                                 onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($breedingAnimal['name'] ?? 'Dog') }}&background=random'"
+                                                                                 class="img-fluid" alt="Dog"/>
+                                                                        @else
+                                                                            <img src="https://ui-avatars.com/api/?name={{ urlencode($breedingAnimal['name'] ?? 'Dog') }}&background=random" class="img-fluid" alt="Dog"/>
+                                                                        @endif
+                                                                        <div>
+                                                                            <h3 class="name">{{$breedingAnimal['name'] ?? 'Unbekannt'}}</h3>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <hr class="p-0 m-0">
+                                                            <div class="card-body space-nill p-2 mt-auto d-flex align-items-end justify-content-center bg-light">
+                                                                <div class="w-100 text-center">
+                                                                    <span class="badge bg-dark w-100 py-2" style="font-size: 0.95rem;">Familie: {{$breedingAnimal['family'] ?? 'Keine'}}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
@@ -767,7 +952,8 @@
                                             onchange="loadCustomerDogs(this.value)">
                                         <option selected disabled>Hund auswählen</option>
                                         @foreach($dogs as $dog)
-                                            <option value="{{$dog->id}}" data-customer-id="{{$dog->customer_id}}">{{$dog->name}} @if($dog->compatible_breed)
+                                            <option value="{{$dog->id}}" data-customer-id="{{$dog->customer_id}}" data-reg-plan="{{$dog->reg_plan ?? ''}}" data-day-plan="{{$dog->day_plan ?? ''}}">
+                                                {{$dog->name}} @if($dog->compatible_breed)
                                                     ({{$dog->compatible_breed}})
                                                 @endif - {{isset($dog->customer) ? $dog->customer->name : ''}}
                                                 ({{ isset($dog->customer) ? $dog->customer->phone : '' }})
@@ -777,6 +963,17 @@
                                     <label for="initial_dog_id">Hund auswählen</label>
                                 </div>
                                 <input type="hidden" name="is_dashboard" value="1">
+                            </div>
+                            <div class="col-md-12">
+                                <div class="form-floating form-floating-outline mb-4">
+                                    <select name="plan_id" id="reservation_plan_id" class="select2" data-live-search="true" required>
+                                        <option selected disabled>Preisplan auswählen</option>
+                                        @foreach($plans as $obj)
+                                            <option value="{{$obj->id}}"><?php echo $obj->title; ?></option>
+                                        @endforeach
+                                    </select>
+                                    <label for="reservation_plan_id">Preisplan <span class="text-danger">*</span></label>
+                                </div>
                             </div>
                             
                             <!-- Customer Dogs Selection Section -->
@@ -1110,7 +1307,12 @@
                                     <select name="target_room_id" id="target_room_id" class="select2" required>
                                         <option selected disabled>Zielzimmer auswählen</option>
                                         @foreach($rooms as $room)
-                                            <option value="{{$room->id}}">{{$room->number}} ({{$room->type}}) - Kapazität: {{$room->capacity}}</option>
+                                            @php
+                                                $freeSpace = app(\App\Services\RoomCapacityService::class)->remainingCapacity($room);
+                                            @endphp
+                                            <option value="{{$room->id}}" {{ $freeSpace <= 0 ? 'disabled' : '' }}>
+                                                {{$room->number}} ({{$room->type}}) ({{ $freeSpace }} frei)
+                                            </option>
                                         @endforeach
                                     </select>
                                     <label for="target_room_id">Zielzimmer</label>
@@ -1156,14 +1358,18 @@
                         <div class="col-md-12">
                             <ol id="selectablePlanModel2">
                                 @foreach($rooms as $room)
-                                    <li class="ui-widget-content fs-4"
+                                    @php
+                                        $freeSpace = app(\App\Services\RoomCapacityService::class)->remainingCapacity($room);
+                                    @endphp
+                                    <li class="ui-widget-content fs-4 {{ $freeSpace <= 0 ? 'ui-state-disabled disabled opacity-50' : '' }}"
                                         data-id="{{ $room->id }}"
                                         data-condition="{{ $room->room_condition }}"
                                         style="
                                   background-color: {{ $room->room_condition == 1 ? 'green' : ($room->room_condition == 2 ? 'red' : 'white') }};
                                   color: {{ $room->room_condition == 0 ? 'black' : 'white' }};
+                                  {{ $freeSpace <= 0 ? 'pointer-events: none;' : '' }}
                               ">
-                                        {{ $room->number }}
+                                        {{ $room->number }} ({{ $freeSpace }} frei)
                                     </li>
                                 @endforeach
                             </ol>
@@ -1202,7 +1408,14 @@
                                 </div> --}}
                                 <ol id="selectableMoveDog">
                                     @foreach($rooms as $room)
-                                        <li class="ui-widget-content-2" data-id="{{$room->id}}">{{$room->number}}</li>
+                                        @php
+                                            $freeSpace = app(\App\Services\RoomCapacityService::class)->remainingCapacity($room);
+                                        @endphp
+                                        <li class="ui-widget-content-2 {{ $freeSpace <= 0 ? 'ui-state-disabled disabled opacity-50' : '' }}" 
+                                            data-id="{{$room->id}}"
+                                            style="{{ $freeSpace <= 0 ? 'pointer-events: none;' : '' }}">
+                                            {{$room->number}} ({{ $freeSpace }} frei)
+                                        </li>
                                     @endforeach
                                 </ol>
                                 <input type="hidden" name="room_id" id="selectedRoomMoveDog">
@@ -1511,35 +1724,25 @@
         </div>
     </div>
 
-    {{-- Checkout Modal --}}
+    {{-- Checkout Modal (fullscreen: inputs left, summary right) --}}
     <div class="modal fade" id="checkoutModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-simple modal-lg modal-enable-otp modal-dialog-centered">
-            <div class="modal-content p-3 p-md-5">
-                <div class="modal-body p-md-0">
+        <div class="modal-dialog modal-fullscreen modal-enable-otp">
+            <div class="modal-content rounded-0 border-0 shadow">
+                <div class="modal-header border-bottom py-3 px-4">
+                    <h3 class="modal-title mb-0">Kasse</h3>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    <div class="text-center">
-                        <h3 class="text-center">Kasse</h3>
-                    </div>
-                    <hr>
-                    <form action="{{route('admin.reservation.checkout')}}" method="POST">
+                </div>
+                <div class="modal-body p-0">
+                    <form id="checkoutForm" action="{{route('admin.reservation.checkout')}}" method="POST" class="h-100 d-flex flex-column" onsubmit="return handleCheckoutSubmit(event)">
                         @csrf
-                        <div class="row">
-                            <div class="col-md-12">
-                                <table class="table table-striped">
-                                    <tbody>
-                                    <tr>
-                                        <th>Einchecken</th>
-                                        <td id="checkin" class="text-primary"></td>
-                                        <th>Auschecken</th>
-                                        <td id="checkout" class="text-primary"></td>
-                                    </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="row g-0 flex-grow-1">
+                            {{-- Left: all inputs --}}
+                            <div class="col-12 col-lg-7 checkout-modal-inputs-col bg-body p-4 p-lg-5 overflow-auto">
+                            <div class="row">
                             <div class="col-md-6">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <select name="price_plan" id="price_plan" class="select2" data-live-search="true"
-                                            required>
+                                            required disabled>
                                         @foreach($plans as $obj)
                                             <option value="{{$obj->id}}"><?php echo $obj->title; ?></option>
                                         @endforeach
@@ -1590,29 +1793,41 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mt-3">
-                                <div class="form-floating form-floating-outline mb-4">
-                                    <input type="number" name="plan_cost" step="0.01" id="plan_cost"
-                                            class="form-control text-primary" value="0.00" readonly/>
-                                    <label for="plan_cost">Planpreis (&euro;)</label>
-                                </div>
-                                <div class="text-end mt-n3 mb-2">
-                                    <button type="button" id="resetPlanPriceBtn" class="btn btn-link btn-sm p-0" style="display:none; text-decoration:none;">
-                                        Zurücksetzen
-                                    </button>
+                            <div class="col-md-12 mt-3">
+                                <div class="row g-2 align-items-start">
+                                    <div class="col-md-9">
+                                        <div class="form-floating form-floating-outline mb-0">
+                                            <input type="number" name="plan_cost" step="0.01" id="plan_cost"
+                                                    class="form-control text-primary" value="0.00" readonly/>
+                                            <label for="plan_cost">Planpreis (&euro;)</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-flex justify-content-end ps-md-2">
+                                            <button type="button" id="resetPlanPriceBtn" class="btn btn-outline-secondary w-100" style="display:none;">
+                                                Zurücksetzen
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mt-3">
-                                <div class="form-floating form-floating-outline mb-4">
-                                    <input type="number" name="special_cost" step="0.01" id="special_cost"
-                                            class="form-control text-primary absInput" value="0.00"/>
-                                    <label for="special_cost">Zusätzliche Kosten (&euro;)</label>
+                            <div class="col-md-12 mt-3">
+                                <div class="form-floating form-floating-outline mb-3">
+                                    <select name="additional_costs[]" id="additional_costs" class="select2" data-live-search="true" multiple>
+                                        @foreach($additionalCosts as $cost)
+                                            <option value="{{$cost->id}}" data-price="{{$cost->price}}" data-title="{{$cost->title}}">
+                                                {{$cost->title}} ({{number_format($cost->price, 2)}}&euro;)
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <label for="additional_costs">Zusatzkosten auswählen</label>
                                 </div>
+                                <div id="additionalCostInputs"></div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <input type="number" name="total" step="0.01" id="total_amount"
-                                            class="form-control text-primary absInput" value="0.00"/>
+                                            class="form-control text-primary" value="0.00" readonly/>
                                     <label for="total_amount">Rechnungsbetrag (&euro;)</label>
                                 </div>
                             </div>
@@ -1639,8 +1854,8 @@
                             <div class="col-md-12">
                                 <div class="form-floating form-floating-outline mb-4">
                                     <input type="number" name="received_amount" step="0.01" id="received_amount"
-                                            class="form-control text-primary absInput" value="0.00"/>
-                                    <label for="received_amount">Betrag Erhalten (&euro;)</label>
+                                            class="form-control text-primary" value="0.00" readonly/>
+                                    <label id="payment_single_label" for="received_amount">Betrag Erhalten (Bar) (&euro;)</label>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -1648,32 +1863,6 @@
                                     <input type="number" name="remaining_amount" step="0.01" id="remaining_amount"
                                             class="form-control text-primary" value="0.00" readonly/>
                                     <label for="remaining_amount">Restbetrag (&euro;)</label>
-                                </div>
-                            </div>
-                            <div class="col-md-12 mb-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <p style="font-size: 17px; margin: 0;">
-                                            <strong>Kundenguthaben: </strong> <span id="saldo">0.00€</span>
-                                        </p>
-                                    </div>
-                                    <div id="walletCheckboxContainer" style="display: none;">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="use_wallet" id="use_wallet" value="1">
-                                            <label class="form-check-label" for="use_wallet">
-                                                Guthaben verwenden (<span id="wallet_available">0.00€</span>)
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-12 mb-4" id="walletBreakdown" style="display: none;">
-                                <div class="alert alert-info">
-                                    <strong>Aufschlüsselung:</strong>
-                                    <ul class="mb-0 mt-2">
-                                        <li>Guthaben verwendet: <span id="wallet_used_display">0.00€</span></li>
-                                        <li>Barzahlung: <span id="cash_payment_display">0.00€</span></li>
-                                    </ul>
                                 </div>
                             </div>
                             <div class="col-md-12 mb-4" id="hellocashSection">
@@ -1688,18 +1877,131 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="col-12 pt-2 border-top mt-auto">
+                                <input type="hidden" name="id" id="checkoutId"/>
+                                <input type="hidden" name="days" id="days"/>
+                                <input type="hidden" name="checkout" id="checkout_date"/>
+                                <button type="submit" class="btn btn-primary me-2" id="checkoutSubmitBtn">Kassa</button>
+                                <button type="reset" class="btn btn-outline-secondary" data-bs-dismiss="modal" aria-label="Close">Stornieren</button>
+                            </div>
+                            </div>
+                            </div>
+
+                            {{-- Right: dates, payment summary, early/late notices --}}
+                            <div class="col-12 col-lg-5 checkout-modal-summary-col border-start bg-light bg-opacity-30 p-4 p-lg-4 overflow-auto">
+                                <div class="checkout-modal-sidebar position-lg-sticky checkout-summary-panel" style="top: 1rem;">
+                                    <div class="mb-3 pb-2 border-bottom border-opacity-25">
+                                        <div class="checkout-summary-eyebrow">Reservierung</div>
+                                        <div class="checkout-summary-title">Übersicht</div>
+                                        <p class="text-muted small mb-0 mt-1">Aufenthalt, Abweichung und Zahlungsstand auf einen Blick.</p>
+                                    </div>
+
+                                    <div class="card checkout-summary-card mb-3">
+                                        <div class="card-body p-3">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <span class="checkout-summary-row-label mb-0"><i class="mdi mdi-calendar-range me-1 text-primary"></i>Zeitraum</span>
+                                            </div>
+                                            <div class="row g-2 align-items-start">
+                                                <div class="col-6">
+                                                    <div class="checkout-summary-row-label">Einchecken</div>
+                                                    <div class="checkout-summary-row-value text-primary fs-6" id="checkin"></div>
+                                                </div>
+                                                <div class="col-6 text-end">
+                                                    <div class="checkout-summary-row-label">Auschecken</div>
+                                                    <div class="checkout-summary-row-value text-primary fs-6" id="checkout"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card checkout-summary-card mb-3" id="checkoutInfo">
+                                        <div class="card-body p-3">
+                                            <div class="checkout-summary-row">
+                                                <span class="checkout-summary-row-label">Geplanter Check-out</span>
+                                                <span class="checkout-summary-row-value" id="planned_checkout">-</span>
+                                            </div>
+                                            <div class="checkout-summary-row">
+                                                <span class="checkout-summary-row-label">Abweichung</span>
+                                                <span class="checkout-summary-row-value" id="checkout_deviation">-</span>
+                                            </div>
+                                            <div class="checkout-summary-row">
+                                                <span class="checkout-summary-row-label">Bereits bezahlt</span>
+                                                <span class="checkout-summary-row-value text-success" id="already_paid">0.00€</span>
+                                            </div>
+                                            <div class="checkout-summary-row align-items-start">
+                                                <span class="checkout-summary-row-label pt-1" id="checkout_balance_label">Offen</span>
+                                                <span class="fw-bold fs-5 text-danger" id="amount_due">0.00€</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0" id="earlyCheckoutBanner" style="display:none;">
+                                        <div class="checkout-banner-card checkout-banner-early p-3 mb-0">
+                                            <div class="checkout-banner-head text-warning">
+                                                <i class="mdi mdi-calendar-remove mdi-24px"></i>
+                                                <span>Frühzeitiger Check-out</span>
+                                            </div>
+                                            <p class="text-muted small mb-3 mb-lg-2">Die tatsächliche Abreise liegt vor dem geplanten Datum. Summen vergleichen:</p>
+
+                                            <div class="checkout-summary-row mb-2 pb-2 border-bottom border-warning border-opacity-25">
+                                                <span class="checkout-summary-row-label">Bereits bezahlt</span>
+                                                <span class="fw-semibold" id="early_advance_paid">0.00€</span>
+                                            </div>
+
+                                            <div class="checkout-compare-grid mb-2">
+                                                <div class="checkout-compare-cell">
+                                                    <div class="text-muted small mb-1">Vorherige Summe <span class="text-muted">(laut Buchung)</span></div>
+                                                    <div class="fw-bold text-secondary fs-6" id="early_previous_total">—</div>
+                                                </div>
+                                                <div class="checkout-compare-cell border-primary border-opacity-25" style="border-width: 1px !important;">
+                                                    <div class="text-muted small mb-1">Neue Summe <span class="text-muted">(aktueller Aufenthalt)</span></div>
+                                                    <div class="fw-bold text-primary fs-6" id="early_new_total">0.00€</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-2 pt-2 border-top border-warning border-opacity-25" id="earlyRefundRow" style="display:none;">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="fw-bold text-success"><i class="mdi mdi-cash-refund me-1"></i>Rückgabe</div>
+                                                    <div class="fw-bold text-success fs-5" id="early_refund_amount">0.00€</div>
+                                                </div>
+                                                <div class="text-muted small mt-2">Alte Rechnungen werden storniert und neue Rechnungen erstellt.</div>
+                                            </div>
+                                            <div class="mt-2 pt-2 border-top border-warning border-opacity-25" id="earlyExtraRow" style="display:none;">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="fw-bold text-info">Noch zu zahlen</div>
+                                                    <div class="fw-bold text-info fs-5" id="early_extra_amount">0.00€</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0" id="lateCheckoutBanner" style="display:none;">
+                                        <div class="checkout-banner-card checkout-banner-late p-3 mb-0">
+                                            <div class="checkout-banner-head text-primary">
+                                                <i class="mdi mdi-calendar-clock mdi-24px"></i>
+                                                <span>Später Check-out</span>
+                                            </div>
+                                            <p class="text-muted small mb-3">Die Abreise liegt nach dem ursprünglich gebuchten Ende.</p>
+                                            <div class="checkout-compare-grid mb-2">
+                                                <div class="checkout-compare-cell">
+                                                    <div class="text-muted small mb-1">Ursprüngliche Summe</div>
+                                                    <div class="fw-bold" id="late_original_total">0.00€</div>
+                                                </div>
+                                                <div class="checkout-compare-cell">
+                                                    <div class="text-muted small mb-1">Neue Gesamtsumme</div>
+                                                    <div class="fw-bold text-primary" id="late_new_total">0.00€</div>
+                                                </div>
+                                            </div>
+                                            <div class="rounded-3 bg-white bg-opacity-80 border border-warning border-opacity-50 py-2 px-3 mt-2">
+                                                <i class="mdi mdi-receipt-text-outline me-1 text-warning"></i>
+                                                <strong>Zusätzlich zu zahlen: <span id="late_extra_amount" class="fs-6">0.00€</span></strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <input type="hidden" name="id" id="checkoutId"/>
-                        <input type="hidden" name="days" id="days"/>
-                        <input type="hidden" name="checkout" id="checkout_date"/>
-                        <button type="button" class="btn btn-primary" id="checkoutSubmitBtn" onclick="submitCheckoutForm()">Kassa</button>
-                        <button
-                            type="reset"
-                            class="btn btn-outline-secondary"
-                            data-bs-dismiss="modal"
-                            aria-label="Close">
-                            Stornieren
-                        </button>
                     </form>
                 </div>
             </div>
@@ -2301,6 +2603,13 @@
             // Get the customer ID from the selected option
             var selectedOption = $('#initial_dog_id option:selected');
             var customerId = selectedOption.data('customer-id');
+            var regPlan = selectedOption.data('reg-plan');
+            var dayPlan = selectedOption.data('day-plan');
+
+            var defaultPlan = regPlan || dayPlan || '';
+            if (defaultPlan) {
+                $('#reservation_plan_id').val(String(defaultPlan)).trigger('change');
+            }
             
             if (!customerId) {
                 $('#customerDogsSection').hide();
@@ -2650,8 +2959,28 @@
 
         }
 
-        function checkoutModal(id, checkin, plan_id, plan_price) {
-            // get reservation data
+        /**
+         * Calendar date from API datetime strings (YYYY-MM-DD…).
+         * Prevents off-by-one display when ISO instants cross midnight in the browser TZ.
+         */
+        function parseApiDateOnly(dateStr) {
+            if (!dateStr) {
+                return null;
+            }
+            var s = String(dateStr);
+            var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) {
+                return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+            }
+            var d = new Date(s);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function checkoutModal(id, checkin, plan_id, plan_price, groupId) {
+            if (groupId && groupId !== '') {
+                alert('Diese Reservierung gehört zu einer Gruppenreservierung und kann nicht einzeln ausgecheckt werden.\n\nBitte verwenden Sie den Gruppen-Checkout (Hunde in Zimmern → Kasse).');
+                return;
+            }
 
             $.ajax({
                 url: "{{route('admin.reservation.balance')}}",
@@ -2659,15 +2988,13 @@
                 data: {_token: "{{csrf_token()}}", id: id},
                 success: function (res) {
                     if (res) {
-                        var saldoRaw = parseFloat(res.total);
-                        if (isNaN(saldoRaw)) {
-                            saldoRaw = 0;
+                        var doc = res.doc;
+                        if (!doc) {
+                            alert('Reservierung konnte nicht geladen werden.');
+                            return;
                         }
 
-                        var doc = res.doc;
-
-                        var checkin_date = new Date(checkin);
-                        var checkout_date = new Date(res.checkout_date);
+                        var checkin_date = parseApiDateOnly(checkin) || new Date(checkin);
 
                         var today = new Date();
                         // Calculate days based on configuration (inclusive or exclusive)
@@ -2700,12 +3027,50 @@
                         formatted_checkin_date = formatted_checkin_date.split('/').join(".");
                         formatted_checkout_date = formatted_checkout_date.split('/').join(".");
 
-                        // Store existing customer balance for cumulative calculation
-                        // saldoRaw from backend: positive = customer has credit, negative = customer owes
-                        var existingBalance = saldoRaw || 0;
-                        $('#checkoutModal').data('existingBalance', existingBalance);
-                        
-                        // Store VAT settings from backend (prices are always VAT inclusive)
+                        var plannedCheckoutText = '-';
+                        var deviationText = '-';
+                        if (doc.checkout_date) {
+                            var plannedCheckoutDate = parseApiDateOnly(doc.checkout_date);
+                            if (!plannedCheckoutDate) {
+                                var pc = new Date(doc.checkout_date);
+                                plannedCheckoutDate = new Date(pc.getFullYear(), pc.getMonth(), pc.getDate());
+                            }
+                            var todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            var dayDiff = Math.round((todayDate.getTime() - plannedCheckoutDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                            plannedCheckoutText = plannedCheckoutDate.toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                            }).split('/').join('.');
+
+                            if (dayDiff > 0) {
+                                deviationText = '+' + dayDiff + ' Tage (später)';
+                            } else if (dayDiff < 0) {
+                                deviationText = dayDiff + ' Tage (früher)';
+                            } else {
+                                deviationText = 'Pünktlich';
+                            }
+                        }
+
+                        var paymentSummary = res.payment_summary || {};
+                        var alreadyPaid = parseFloat(paymentSummary.total_paid) || 0;
+                        var originalTotalDue = parseFloat(paymentSummary.total_due);
+                        var remainingDue = parseFloat(paymentSummary.remaining);
+                        if (isNaN(remainingDue)) {
+                            remainingDue = 0;
+                        }
+                        $('#checkoutModal').data('alreadyPaid', alreadyPaid);
+                        if (isNaN(originalTotalDue)) {
+                            originalTotalDue = 0;
+                        }
+                        $('#checkoutModal').data('originalTotalDue', originalTotalDue);
+                        $('#planned_checkout').text(plannedCheckoutText);
+                        $('#checkout_deviation').text(deviationText);
+                        $('#already_paid').text(alreadyPaid.toFixed(2) + '€');
+                        $('#amount_due').text(remainingDue.toFixed(2) + '€');
+
+                        // Store VAT settings from backend
                         // Handle 0% VAT correctly - use nullish coalescing to only default when null/undefined
                         var vatPercentage = (res.vat_percentage !== null && res.vat_percentage !== undefined) 
                             ? parseFloat(res.vat_percentage) 
@@ -2716,36 +3081,19 @@
                         }
                         
                         $('#checkoutModal').data('vatPercentage', vatPercentage);
+                        $('#checkoutModal').data('vatMode', res.vat_calculation_mode || 'exclusive');
                         
-                        // Initialize saldo display with existing balance
-                        updateSaldoDisplay(existingBalance);
-                        
-                        // Show/hide wallet checkbox based on balance
-                        if (existingBalance > 0) {
-                            // Customer has credit, show wallet checkbox
-                            $('#walletCheckboxContainer').show();
-                            $('#wallet_available').text('+' + existingBalance.toFixed(2) + '€');
-                            $('#use_wallet').prop('checked', false);
-                        } else {
-                            // Customer owes or has zero balance, hide wallet checkbox
-                            $('#walletCheckboxContainer').hide();
-                            $('#use_wallet').prop('checked', false);
-                        }
-                        
-                        // Hide wallet breakdown initially
+                        // Wallet flow removed: keep related UI hidden.
+                        $('#walletCheckboxContainer').hide();
+                        $('#use_wallet').prop('checked', false);
                         $('#walletBreakdown').hide();
                         
-                        // Check gateway selection and hide only HelloCash section if Banküberweisung is selected
-                        var selectedGateway = $('#checkoutModal #gateway').val();
-                        if (selectedGateway === 'Bank') {
-                            $('#hellocashSection').hide();
-                            $('#send_to_hellocash').prop('checked', false);
-                        }
+                        // HelloCash visibility handled by payment mode logic
 
                         $('#checkoutModal #checkoutId').val(id);
                         $('#checkoutModal #days').val(days);
                         $('#checkoutModal #checkin').html(formatted_checkin_date);
-                        $('#checkoutModal #checkout').html(formatted_checkout_date + ` (${days} Tage)`);
+                        $('#checkoutModal #checkout').html(formatted_checkout_date + ' (' + days + ' Tage)');
                         $('#checkoutModal #checkout_date').val(formatted_checkout_date);
 
                         var planBasePrice = parseFloat(plan_price);
@@ -2753,43 +3101,48 @@
                             planBasePrice = 0;
                         }
 
-                        var selectedPlanId = plan_id;
-                        if (days > 1 && doc.dog && doc.dog.reg_plan_obj) {
-                            selectedPlanId = doc.dog.reg_plan_obj.id;
-                        } else if (doc.dog && doc.dog.day_plan_obj) {
-                            selectedPlanId = doc.dog.day_plan_obj.id;
+                        // Always prefer the reservation's actual plan (Pauschale vs Tagespreis). Dog default
+                        // day/reg plans are only fallbacks when the reservation has no plan.
+                        var reservationPlanId = plan_id;
+                        if (reservationPlanId === false || reservationPlanId === 'false' || reservationPlanId === '' || reservationPlanId == null || reservationPlanId === undefined) {
+                            reservationPlanId = null;
+                        }
+                        if (!reservationPlanId && doc && doc.plan_id) {
+                            reservationPlanId = doc.plan_id;
+                        }
+
+                        var selectedPlanId = reservationPlanId;
+                        if (!selectedPlanId) {
+                            if (days > 1 && doc.dog && doc.dog.reg_plan_obj) {
+                                selectedPlanId = doc.dog.reg_plan_obj.id;
+                            } else if (doc.dog && doc.dog.day_plan_obj) {
+                                selectedPlanId = doc.dog.day_plan_obj.id;
+                            }
                         }
 
                         manualTotalOverride = false;
                         if (selectedPlanId) {
-                            $('#checkoutModal #price_plan').val(selectedPlanId).trigger('change');
+                            var planSelect = $('#checkoutModal #price_plan');
+                            planSelect.prop('disabled', false);
+                            planSelect.val(selectedPlanId).trigger('change');
+                            planSelect.prop('disabled', true);
                         }
 
-                        $('#checkoutModal #special_cost').val('0.00');
+                        $('#checkoutModal #additional_costs').val(null).trigger('change');
+                        $('#additionalCostInputs').html('');
+                        $('#checkoutModal #gateway').val('Bar');
                         $('#checkoutModal #total_amount').val('0.00');
                         $('#checkoutModal #received_amount').val('0.00');
                         $('#checkoutModal #remaining_amount').val('0.00');
 
-                        // Fallback if the triggered change could not resolve the plan price
+                        // Fallback: show unit list price in Planpreis (Rechnungsbetrag comes from recalc)
                         if (!$('#checkoutModal #plan_cost').val()) {
-                            var fallbackCost = 0;
-                            var selectedPlanId = $('#checkoutModal #price_plan').val();
-                            var plan = pricePlans.find(function (item) {
-                                return item.id == selectedPlanId;
+                            var fbPlanId = $('#checkoutModal #price_plan').val();
+                            var fbPlan = pricePlans.find(function (item) {
+                                return item.id == fbPlanId;
                             });
-                            var isFlatRate = plan && plan.flat_rate == 1;
-                            
-                            if (isFlatRate) {
-                                // Flat rate: use plan price directly
-                                fallbackCost = planBasePrice;
-                            } else if (days > 1) {
-                                fallbackCost = days * planBasePrice;
-                            } else if (doc.dog && doc.dog.day_plan_obj) {
-                                fallbackCost = doc.dog.day_plan_obj.price;
-                            } else {
-                                fallbackCost = planBasePrice;
-                            }
-                            $('#checkoutModal #plan_cost').val(parseFloat(fallbackCost).toFixed(2));
+                            var fbPrice = fbPlan ? parseFloat(fbPlan.price) : planBasePrice;
+                            $('#checkoutModal #plan_cost').val(parseFloat(fbPrice || 0).toFixed(2));
                         }
                         
                         // Check if initial plan is flat rate and hide discount section
@@ -2804,10 +3157,10 @@
                             }
                         }
 
+                        updatePaymentMethodUI();
                         recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
                         
-                        // After recalculating, update saldo with cumulative balance
-                        // This ensures the existing balance is shown even when amounts are reset
+                        // Ensure all derived checkout values are synced after initialization
                         setTimeout(function() {
                             updateRemaining();
                         }, 100);
@@ -2819,15 +3172,33 @@
 
         }
 
+        function handleCheckoutSubmit(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            return submitCheckoutForm();
+        }
+
         function submitCheckoutForm() {
             var form = document.querySelector('#checkoutModal form');
-            if (!form) return;
+            if (!form) {
+                return true;
+            }
 
             var submitBtn = document.getElementById('checkoutSubmitBtn');
-            if (!submitBtn) return;
+            if (!submitBtn) {
+                return true;
+            }
 
             // Prevent multiple submissions
             if (submitBtn.disabled) {
+                return false;
+            }
+
+            try {
+                updatePaymentMethodUI();
+            } catch (e) {
+                form.submit();
                 return false;
             }
 
@@ -2846,7 +3217,11 @@
                 return false;
             } else {
                 // Proceed with normal checkout
-                processCheckout(form, submitBtn);
+                try {
+                    processCheckout(form, submitBtn);
+                } catch (e) {
+                    form.submit();
+                }
             }
 
             return false;
@@ -2879,17 +3254,8 @@
             // Collect form data
             var formData = new FormData(form);
             
-            // Ensure use_wallet is included (0 if unchecked, 1 if checked)
-            if (!$('#use_wallet').is(':checked')) {
-                formData.set('use_wallet', '0');
-                formData.set('wallet_amount', '0');
-            } else {
-                // Calculate and send wallet amount for validation
-                var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
-                var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
-                var walletAmount = Math.min(existingBalance, total);
-                formData.set('wallet_amount', walletAmount.toFixed(2));
-            }
+            // Wallet flow removed from checkout.
+            formData.set('wallet_amount', '0');
 
             // Submit via AJAX
             $.ajax({
@@ -2899,28 +3265,35 @@
                 processData: false,
                 contentType: false,
                 success: function(response) {
-                    // Handle Bank invoice PDF if present
-                    if (response.invoice && response.invoice.success && response.invoice.invoice_pdf_base64) {
+                    function openPdfBase64(base64Data) {
                         try {
-                            var binaryString = atob(response.invoice.invoice_pdf_base64);
+                            var binaryString = atob(base64Data);
                             var bytes = new Uint8Array(binaryString.length);
                             for (var i = 0; i < binaryString.length; i++) {
                                 bytes[i] = binaryString.charCodeAt(i);
                             }
-                            
                             var blob = new Blob([bytes], { type: 'application/pdf' });
                             var pdfUrl = URL.createObjectURL(blob);
                             window.open(pdfUrl, '_blank');
-                            
-                            setTimeout(function() {
-                                URL.revokeObjectURL(pdfUrl);
-                            }, 1000);
+                            setTimeout(function() { URL.revokeObjectURL(pdfUrl); }, 1000);
                         } catch (e) {
                             console.error('Error opening PDF:', e);
                             alert('Fehler beim Öffnen der Rechnung: ' + e.message);
                         }
                     }
-                    
+
+                    // Open checkout breakdown invoice (service/cost receipt)
+                    if (response.checkout_invoice && response.checkout_invoice.success && response.checkout_invoice.invoice_pdf_base64) {
+                        openPdfBase64(response.checkout_invoice.invoice_pdf_base64);
+                    }
+
+                    // Open final summary invoice (all payment entries) after a short delay
+                    if (response.final_invoice && response.final_invoice.success && response.final_invoice.invoice_pdf_base64) {
+                        setTimeout(function() {
+                            openPdfBase64(response.final_invoice.invoice_pdf_base64);
+                        }, 400);
+                    }
+
                     // Close modal
                     $('#checkoutModal').modal('hide');
                     // Reload page on success
@@ -2951,17 +3324,13 @@
             var originalText = submitBtn.innerHTML;
             submitBtn.innerHTML = 'Sende an Registrierkasse...';
 
-            // Ensure use_wallet is included
-            if (!$('#use_wallet').is(':checked')) {
-                formData.set('use_wallet', '0');
-                formData.set('wallet_amount', '0');
-            } else {
-                // Calculate and send wallet amount for validation
-                var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
-                var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
-                var walletAmount = Math.min(existingBalance, total);
-                formData.set('wallet_amount', walletAmount.toFixed(2));
+            var form = document.querySelector('#checkoutModal form');
+            if (form) {
+                formData = new FormData(form);
             }
+
+            // Wallet flow removed from checkout.
+            formData.set('wallet_amount', '0');
             formData.set('send_to_hellocash', '1');
 
             // Submit via AJAX
@@ -3075,48 +3444,224 @@
             }
         }
 
+        function getAlreadyPaid() {
+            return parseFloat($('#checkoutModal').data('alreadyPaid')) || 0;
+        }
+
+        function getAdditionalCostTotal() {
+            var total = 0;
+            $('#additionalCostInputs .additional-cost-input').each(function () {
+                var value = parseFloat($(this).val());
+                if (!isNaN(value)) {
+                    total += value;
+                }
+            });
+            return parseFloat(total.toFixed(2));
+        }
+
+        function getCheckoutSelectedPlan() {
+            var planId = parseInt($('#checkoutModal #price_plan').val(), 10);
+            if (!planId) {
+                return null;
+            }
+            return pricePlans.find(function (item) {
+                return item.id == planId;
+            }) || null;
+        }
+
+        /** List price per day / unit (shown in Planpreis). */
+        function getCheckoutPlanUnitPrice() {
+            var plan = getCheckoutSelectedPlan();
+            return plan ? (parseFloat(plan.price) || 0) : 0;
+        }
+
+        /** Plan portion for the stay before discount & VAT (flat = unit price once; else unit × Tage). */
+        function getCheckoutPlanStayBase() {
+            var days = parseInt($('#checkoutModal #days').val(), 10);
+            if (!days || days < 1) {
+                days = 1;
+            }
+            var plan = getCheckoutSelectedPlan();
+            if (!plan) {
+                return 0;
+            }
+            var unit = parseFloat(plan.price) || 0;
+            if (parseInt(plan.flat_rate, 10) === 1) {
+                return unit;
+            }
+            return unit * days;
+        }
+
+        function rebuildAdditionalCostInputs() {
+            var selected = $('#additional_costs').val() || [];
+            var existingValues = {};
+            $('#additionalCostInputs .additional-cost-input').each(function () {
+                existingValues[$(this).data('costId')] = $(this).val();
+            });
+
+            var html = '';
+            selected.forEach(function (costId) {
+                var option = $('#additional_costs option[value="' + costId + '"]');
+                var title = option.data('title') || option.text();
+                var defaultPrice = option.data('price');
+                var value = existingValues[costId] !== undefined ? existingValues[costId] : defaultPrice;
+                if (value === undefined || value === null || value === '') {
+                    value = '0.00';
+                }
+
+                html += '<div class="mb-3 additional-cost-row" data-cost-id="' + costId + '">';
+                html += '  <div class="input-group">';
+                html += '    <span class="input-group-text">' + title + '</span>';
+                html += '    <input type="number" step="0.01" class="form-control text-primary absInput additional-cost-input" name="additional_cost_values[' + costId + ']" data-cost-id="' + costId + '" value="' + value + '">';
+                html += '  </div>';
+                html += '</div>';
+            });
+
+            $('#additionalCostInputs').html(html);
+        }
+
+        function getPaymentMethod() {
+            return $('#checkoutModal #gateway').val();
+        }
+
+        function setDefaultPaymentAmount(total) {
+            $('#checkoutModal #received_amount').val(total.toFixed(2));
+        }
+
+        function updatePaymentMethodUI() {
+            var method = getPaymentMethod();
+            $('#payment_single_label').text(
+                method === 'Bank' ? 'Betrag Erhalten (Bank) (\u20ac)' : 'Betrag Erhalten (Bar) (\u20ac)'
+            );
+
+            if (method === 'Bank') {
+                $('#hellocashSection').hide();
+                $('#send_to_hellocash').prop('checked', false);
+            } else {
+                $('#hellocashSection').show();
+            }
+        }
+
         function recalcInvoiceTotals(options) {
             options = options || {};
-            var planCost = parseFloat($("#checkoutModal #plan_cost").val()) || 0;
-            var specialCost = parseFloat($("#checkoutModal #special_cost").val()) || 0;
+            var planStayBase = getCheckoutPlanStayBase();
+            var additionalCostTotal = getAdditionalCostTotal();
             var discount = parseInt($("#checkoutModal input[name='discount']:checked").val()) || 0;
 
-            // Calculate net total (prices are VAT exclusive)
-            var netTotal = planCost + specialCost;
+            // Calculate base total before VAT (net or gross depends on VAT mode)
+            var baseTotal = planStayBase + additionalCostTotal;
             if (discount > 0) {
-                netTotal = netTotal * (1 - (discount / 100));
+                baseTotal = baseTotal * (1 - (discount / 100));
             }
-            netTotal = parseFloat(netTotal.toFixed(2));
+            baseTotal = parseFloat(baseTotal.toFixed(2));
 
             if (manualTotalOverride && !options.forceAutoTotal) {
                 var manualGrossTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
-                var adjustedPlanCost = Math.max(0, manualGrossTotal - specialCost);
-                $("#checkoutModal #plan_cost").val(adjustedPlanCost.toFixed(2));
                 calculateVATBreakdownFromGross(manualGrossTotal);
             } else {
                 // Automatically calculate VAT and gross total
-                calculateVATBreakdown(netTotal);
+                calculateVATBreakdown(baseTotal);
                 var grossTotal = parseFloat($('#vat_gross_amount').text().replace('€', '').trim());
                 $("#checkoutModal #total_amount").val(grossTotal.toFixed(2));
             }
             
             var displayTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
-            // Cap received amount at total
+            // Cap payment input at total
             $("#checkoutModal #received_amount").attr({
                 min: 0,
                 max: displayTotal
             });
 
-            if (options.updateReceived) {
-                $("#checkoutModal #received_amount").val(displayTotal.toFixed(2));
-            }
+            var dueForPayment = Math.max(0, displayTotal - getAlreadyPaid());
+            setDefaultPaymentAmount(dueForPayment);
 
             updateManualResetButton();
+            updatePaymentMethodUI();
             updateRemaining();
+            updateCheckoutTypeBanner();
+        }
+
+        /**
+         * Compares alreadyPaid (advance) vs new grossTotal to show early/late checkout banners.
+         */
+        function updateCheckoutTypeBanner() {
+            var grossTotal    = parseFloat($("#checkoutModal #total_amount").val()) || 0;
+            var alreadyPaid   = getAlreadyPaid();
+            var originalTotal = parseFloat($('#checkoutModal').data('originalTotalDue')) || 0;
+
+            // Determine checkout deviation from planned_checkout vs today
+            var plannedText = $('#planned_checkout').text().trim();
+            var deviationText = $('#checkout_deviation').text().trim();
+
+            var isEarly = deviationText.indexOf('früher') !== -1;
+            var isLate  = deviationText.indexOf('später') !== -1;
+
+            // Hide all banners first
+            $('#earlyCheckoutBanner').hide();
+            $('#lateCheckoutBanner').hide();
+
+            if (isEarly) {
+                var refund = parseFloat((alreadyPaid - grossTotal).toFixed(2));
+                var extra  = parseFloat((grossTotal - alreadyPaid).toFixed(2));
+
+                $('#early_advance_paid').text(alreadyPaid.toFixed(2) + '€');
+                $('#early_new_total').text(grossTotal.toFixed(2) + '€');
+                var bookedTotal = parseFloat($('#checkoutModal').data('originalTotalDue')) || 0;
+                $('#early_previous_total').text(bookedTotal > 0.005 ? bookedTotal.toFixed(2) + '€' : '—');
+
+                if (refund > 0.005) {
+                    $('#early_refund_amount').text(refund.toFixed(2) + '€');
+                    $('#earlyRefundRow').show();
+                    $('#earlyExtraRow').hide();
+                } else if (extra > 0.005) {
+                    $('#early_extra_amount').text(extra.toFixed(2) + '€');
+                    $('#earlyExtraRow').show();
+                    $('#earlyRefundRow').hide();
+                } else {
+                    $('#earlyRefundRow').hide();
+                    $('#earlyExtraRow').hide();
+                }
+
+                $('#earlyCheckoutBanner').show();
+
+            } else if (isLate) {
+                var lateExtra = parseFloat((grossTotal - originalTotal).toFixed(2));
+
+                $('#late_original_total').text(originalTotal.toFixed(2) + '€');
+                $('#late_new_total').text(grossTotal.toFixed(2) + '€');
+                $('#late_extra_amount').text((lateExtra > 0 ? lateExtra : 0).toFixed(2) + '€');
+
+                $('#lateCheckoutBanner').show();
+            }
+
+            syncCheckoutOverviewBalanceRow(grossTotal, alreadyPaid);
+        }
+
+        /**
+         * Keep the Übersicht balance row in sync with live Rechnungsbetrag vs advance (same basis as early-checkout banner).
+         */
+        function syncCheckoutOverviewBalanceRow(grossTotal, alreadyPaid) {
+            var diff = parseFloat((grossTotal - alreadyPaid).toFixed(2));
+            var $label = $('#checkout_balance_label');
+            var $val = $('#amount_due');
+
+            $val.removeClass('text-danger text-success text-muted');
+
+            if (diff < -0.005) {
+                var credit = Math.abs(diff);
+                $label.text('Rückzahlung');
+                $val.addClass('text-success').text(credit.toFixed(2) + '€');
+            } else if (diff > 0.005) {
+                $label.text('Offen');
+                $val.addClass('text-danger').text(diff.toFixed(2) + '€');
+            } else {
+                $label.text('Offen');
+                $val.addClass('text-muted').text('0.00€');
+            }
         }
         
-        function calculateVATBreakdown(netAmount) {
+        function calculateVATBreakdown(baseAmount) {
             // Get VAT settings from data attributes
             // Handle 0% VAT correctly - use nullish coalescing to only default when null/undefined
             var vatPercentageData = $('#checkoutModal').data('vatPercentage');
@@ -3127,19 +3672,25 @@
             if (isNaN(vatPercentage)) {
                 vatPercentage = 20;
             }
+
+            var vatMode = $('#checkoutModal').data('vatMode') || 'exclusive';
+            if (vatMode === 'inclusive') {
+                calculateVATBreakdownFromGross(baseAmount);
+                return;
+            }
             
-            // Prices are VAT exclusive (net), calculate VAT and gross
-            var vatAmount = netAmount * (vatPercentage / 100);
-            var grossAmount = netAmount + vatAmount;
+            // Exclusive mode: base amount is net, calculate VAT and gross
+            var vatAmount = baseAmount * (vatPercentage / 100);
+            var grossAmount = baseAmount + vatAmount;
             
             // Round to 2 decimal places
-            netAmount = parseFloat(netAmount.toFixed(2));
+            baseAmount = parseFloat(baseAmount.toFixed(2));
             vatAmount = parseFloat(vatAmount.toFixed(2));
             grossAmount = parseFloat(grossAmount.toFixed(2));
             
             // Update display
             $('#vat_percentage_display').text(vatPercentage);
-            $('#vat_net_amount').text(netAmount.toFixed(2) + '€');
+            $('#vat_net_amount').text(baseAmount.toFixed(2) + '€');
             $('#vat_amount').text(vatAmount.toFixed(2) + '€');
             $('#vat_gross_amount').text(grossAmount.toFixed(2) + '€');
             
@@ -3179,96 +3730,39 @@
             // Get the new total after recalculation
             var newTotal = parseFloat($("#checkoutModal #total_amount").val()) || 0;
             
-            // If received amount was equal to old total, update it to new total
-            // This ensures the received amount stays in sync
+            // If payment total was equal to old total, update it to the new total
             if (Math.abs(currentReceived - currentTotal) < 0.01) {
-                $("#checkoutModal #received_amount").val(newTotal.toFixed(2));
+                setDefaultPaymentAmount(newTotal);
             }
             
             updateRemaining();
         });
         
-        // Handle gateway (payment method) change - hide only HelloCash section for Banküberweisung
+        // Handle payment mode change
         $(document).on('change', '#gateway', function() {
-            var selectedGateway = $(this).val();
-            
-            if (selectedGateway === 'Bank') {
-                // Hide only HelloCash section for Banküberweisung
-                $('#hellocashSection').hide();
-                // Uncheck HelloCash checkbox if it was checked
-                $('#send_to_hellocash').prop('checked', false);
-                // Recalculate totals
-                recalcInvoiceTotals();
-            } else {
-                // Show HelloCash section for Bar payment
-                $('#hellocashSection').show();
-                // Recalculate totals
-                recalcInvoiceTotals();
-            }
-        });
-        
-        // Handle wallet checkbox change
-        $(document).on('change', '#use_wallet', function() {
-            var useWallet = $(this).is(':checked');
-            var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+            updatePaymentMethodUI();
             var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
-            
-            if (useWallet && existingBalance > 0) {
-                // Wallet is being used
-                var walletUsed = Math.min(existingBalance, total);
-                var cashNeeded = Math.max(0, total - walletUsed);
-                
-                // Set received amount to cash needed
-                $("#checkoutModal #received_amount").val(cashNeeded.toFixed(2));
-            } else {
-                // Wallet not used, set received to total
-                $("#checkoutModal #received_amount").val(total.toFixed(2));
-            }
-            
+            var dueForPayment = Math.max(0, total - getAlreadyPaid());
+            setDefaultPaymentAmount(dueForPayment);
             updateRemaining();
         });
         
-        // Handle received amount input change
-        $(document).on('input change', '#received_amount', function() {
-            updateRemaining();
-        });
-
         function updateRemaining() {
             var total = parseFloat($("#checkoutModal #total_amount").val()) || 0;
-            var received = parseFloat($("#checkoutModal #received_amount").val()) || 0;
-            var useWallet = $("#checkoutModal #use_wallet").is(':checked');
-            var existingBalance = parseFloat($('#checkoutModal').data('existingBalance')) || 0;
+            var alreadyPaid = getAlreadyPaid();
 
-            // Only prevent negative received amount
-            if (received < 0) {
-                received = 0;
-                $("#checkoutModal #received_amount").val('0.00');
-            }
+            // Betrag Erhalten is auto-calculated (readonly):
+            // total minus already paid amount.
+            var received = Math.max(0, total - alreadyPaid);
+            $('#received_amount').val(received.toFixed(2));
 
-            // Handle wallet usage
             var walletUsed = 0;
-            var cashPayment = received; // Actual cash received from customer
-            
-            if (useWallet && existingBalance > 0) {
-                // Use wallet balance (up to invoice total or available balance)
-                walletUsed = Math.min(existingBalance, total);
-                // cashPayment is the actual received amount (user input)
-                // Don't override it - use the actual cash the customer pays
-                
-                // Show wallet breakdown
-                $('#walletBreakdown').show();
-                $('#wallet_used_display').text(walletUsed.toFixed(2) + '€');
-                $('#cash_payment_display').text(cashPayment.toFixed(2) + '€');
-            } else {
-                // No wallet usage
-                $('#walletBreakdown').hide();
-                walletUsed = 0;
-                cashPayment = received;
-            }
+            var cashPayment = received;
+            $('#walletBreakdown').hide();
 
             // Calculate current transaction remaining amount and advance payment
             // Use effective received (wallet + cash) for calculations
-            var effectiveReceived = walletUsed + cashPayment;
+            var effectiveReceived = alreadyPaid + walletUsed + cashPayment;
             var currentRemaining, advancePayment;
             
             if (effectiveReceived > total) {
@@ -3288,42 +3782,7 @@
             // Update remaining_amount field (for backward compatibility)
             $("#checkoutModal #remaining_amount").val(currentRemaining.toFixed(2));
             
-            // Calculate cumulative balance: existing + (advance - remaining - wallet)
-            // Positive balance = customer has credit (GREEN) - e.g., +50€
-            // Negative balance = customer owes (RED) - e.g., -30€
-            // Current transaction: advance (positive credit) - remaining (positive debt) - wallet (deducted) = net balance
-            var currentNetBalance = advancePayment - currentRemaining - walletUsed;
-            var cumulativeBalance = existingBalance + currentNetBalance;
-            
-            // Update saldo display with cumulative balance
-            updateSaldoDisplay(cumulativeBalance);
-            
             updateCheckoutStatus(total, effectiveReceived, currentRemaining);
-        }
-        
-        function updateSaldoDisplay(balance) {
-            var saldoElement = $("#checkoutModal #saldo");
-            
-            // Format balance with sign
-            // Positive balance = customer has credit (GREEN) - e.g., +50€
-            // Negative balance = customer owes (RED) - e.g., -30€
-            var sign = balance >= 0 ? '+' : '';
-            var formattedBalance = sign + balance.toFixed(2) + '€';
-            saldoElement.text(formattedBalance);
-            
-            // Remove previous color classes
-            saldoElement.removeClass('text-danger text-success');
-            
-            if (balance > 0) {
-                // Customer has credit (positive balance) - GREEN
-                saldoElement.addClass('text-success');
-            } else if (balance < 0) {
-                // Customer owes money (negative balance) - RED
-                saldoElement.addClass('text-danger');
-            } else {
-                // Zero balance - no special color
-                saldoElement.removeClass('text-danger text-success');
-            }
         }
 
         function updateCheckoutStatus(total, received, remaining) {
@@ -3399,10 +3858,8 @@
                 });
                 var price = plan ? parseFloat(plan.price) : 0;
                 var isFlatRate = plan && plan.flat_rate == 1;
-                
-                // For flat rate plans, don't multiply by days
-                var planCost = isFlatRate ? price : (price * days);
-                $('#checkoutModal #plan_cost').val(planCost.toFixed(2));
+                // Planpreis = list price per unit (per day); Rechnungsbetrag uses days × price in recalc
+                $('#checkoutModal #plan_cost').val(price.toFixed(2));
                 
                 // Hide/disable discount section for flat rate plans
                 if (isFlatRate) {
@@ -3421,31 +3878,21 @@
                  recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
              });
  
-             // Special cost change on checkout - recalculate on input and change events
-             $("#checkoutModal #special_cost").on('input change', function () {
+             // Additional costs change on checkout
+             $("#checkoutModal #additional_costs").on('change', function () {
+                 rebuildAdditionalCostInputs();
+                 recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
+             });
+
+             $(document).on('input change', '#additionalCostInputs .additional-cost-input', function () {
                  recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
              });
  
-             $("#checkoutModal #total_amount").on('input change', function () {
-                 manualTotalOverride = true;
-                 updateManualResetButton();
-                 var currentGrossTotal = parseFloat($(this).val()) || 0;
-                 var currentSpecialCost = parseFloat($("#checkoutModal #special_cost").val()) || 0;
-                 var adjustedPlanCost = Math.max(0, currentGrossTotal - currentSpecialCost);
-                 $("#checkoutModal #plan_cost").val(adjustedPlanCost.toFixed(2));
-                 calculateVATBreakdownFromGross(currentGrossTotal);
-                 updateRemaining();
-             });
-
             $("#checkoutModal #resetPlanPriceBtn").on('click', function () {
                 manualTotalOverride = false;
                 updateManualResetButton();
                 // Trigger the standard plan recalculation path to restore original values.
                 $("#checkoutModal #price_plan").trigger('change');
-            });
-
-            $("#checkoutModal #received_amount").on('input change', function () {
-                updateRemaining();
             });
 
         });
@@ -3540,7 +3987,8 @@
                     });
 
                     var available_dogs = $("#parent_" + getRoom + ' .dogItems .child');
-                    var capacity = parseInt(room.capacity);
+                    var breeding = parseInt(room.breeding_shelter_occupancy || 0);
+                    var capacity = parseInt(room.capacity) - breeding;
                     var reserved = available_dogs.length;
 
                     if (reserved >= capacity) {
@@ -3597,7 +4045,8 @@
                     });
 
                     var available_dogs = $("#parent_" + getRoom + ' .dogItems .child');
-                    var capacity = parseInt(room.capacity);
+                    var breeding = parseInt(room.breeding_shelter_occupancy || 0);
+                    var capacity = parseInt(room.capacity) - breeding;
                     var reserved = available_dogs.length - 1;
 
                     if (reserved >= capacity) {
@@ -3670,8 +4119,13 @@
         function updateRoomsCount() {
             $(".rooms .room").map((i, room) => {
                 var id = room.getAttribute('id');
+                var roomId = id.replace('parent_', '');
                 var length = $("#" + id + ' .dogItems .child').length;
-                $(`#${id} .card-header .count`).html(length)
+                
+                var roomData = rooms.find(r => r.id == roomId);
+                var breeding = roomData ? parseInt(roomData.breeding_shelter_occupancy || 0) : 0;
+                
+                $(`#${id} .card-header .count`).html(length + breeding);
             });
         }
 
@@ -3690,7 +4144,7 @@
                 }
             });
 
-            var plan = dogi.reg_plan;
+            var plan = dogi.reg_plan || dogi.day_plan;
 
             var options = $("#dogsInRoom #plan_id option");
             options.each(function () {
@@ -3721,8 +4175,11 @@
             numericValue = Math.abs(numericValue);
             this.value = numericValue.toFixed(2);
 
-            if (this.id === 'received_amount' || this.id === 'total_amount') {
+            if (this.id === 'total_amount' || this.id === 'received_amount') {
                 updateRemaining();
+            }
+            if ($(this).hasClass('additional-cost-input')) {
+                recalcInvoiceTotals({updateReceived: true, forceAutoTotal: true});
             }
         });
     </script>
@@ -3853,10 +4310,17 @@
             $('#addReservationForm').on('submit', function(e) {
                 // Ensure the initially selected dog is always included
                 var initialDogId = $('#initial_dog_id').val();
+                var selectedPlan = $('#reservation_plan_id').val();
                 
                 if (!initialDogId) {
                     e.preventDefault();
                     alert('Bitte wählen Sie einen Hund aus!');
+                    return false;
+                }
+
+                if (!selectedPlan) {
+                    e.preventDefault();
+                    alert('Bitte wählen Sie einen Preisplan aus!');
                     return false;
                 }
                 

@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\Plan;
 
@@ -13,15 +12,13 @@ class PlansSeeder extends Seeder
      */
     public function run(): void
     {
-        Plan::insert([
+        $plans = [
             [
                 'title' => 'Tag &euro; 25',
                 'type' => 'Kleiner Hund ',
                 'price' => '25.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'Tag &euro; 28',
@@ -29,8 +26,6 @@ class PlansSeeder extends Seeder
                 'price' => '28.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'Pension &euro; 28',
@@ -38,8 +33,6 @@ class PlansSeeder extends Seeder
                 'price' => '28.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'Pension &euro; 30',
@@ -47,8 +40,6 @@ class PlansSeeder extends Seeder
                 'price' => '30.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
 
             [
@@ -57,8 +48,6 @@ class PlansSeeder extends Seeder
                 'price' => '45.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => '2 Hunde Pension &euro; 50',
@@ -66,8 +55,6 @@ class PlansSeeder extends Seeder
                 'price' => '50.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'TSV Tarif &euro; 25',
@@ -75,8 +62,6 @@ class PlansSeeder extends Seeder
                 'price' => '25.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'TSV Tarif &euro; 20',
@@ -84,8 +69,6 @@ class PlansSeeder extends Seeder
                 'price' => '20.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'TSV Tarif &euro; 15',
@@ -93,8 +76,6 @@ class PlansSeeder extends Seeder
                 'price' => '15.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => '3 Hunde Tag &euro; 66',
@@ -102,8 +83,6 @@ class PlansSeeder extends Seeder
                 'price' => '66.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
 
             [
@@ -112,8 +91,6 @@ class PlansSeeder extends Seeder
                 'price' => '66.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'Tag &euro; 20',
@@ -121,8 +98,6 @@ class PlansSeeder extends Seeder
                 'price' => '20.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => '3 Std. &euro; 10',
@@ -130,8 +105,6 @@ class PlansSeeder extends Seeder
                 'price' => '10.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
 
             [
@@ -140,8 +113,6 @@ class PlansSeeder extends Seeder
                 'price' => '22.50',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'title' => 'Freunde',
@@ -149,9 +120,21 @@ class PlansSeeder extends Seeder
                 'price' => '0.00',
                 'discount' => 0.00,
                 'flat_rate' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($plans as $plan) {
+            Plan::updateOrCreate(
+                [
+                    'title' => $plan['title'],
+                    'type' => $plan['type'],
+                ],
+                [
+                    'price' => $plan['price'],
+                    'discount' => $plan['discount'],
+                    'flat_rate' => $plan['flat_rate'],
+                ]
+            );
+        }
     }
 }
