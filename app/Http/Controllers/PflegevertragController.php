@@ -267,10 +267,24 @@ class PflegevertragController extends Controller
         }
 
         $med = (array) ($care['medikamente'] ?? []);
-        $medFreq = (int) ($med['freq'] ?? 0);
-        $medNote = trim((string) ($med['note'] ?? ''));
-        if (in_array($medFreq, [1, 2, 3], true) || $medNote !== '') {
-            return true;
+        $medItems = $med['items'] ?? null;
+        if (is_array($medItems) && $medItems !== []) {
+            foreach ($medItems as $it) {
+                if (! is_array($it)) {
+                    continue;
+                }
+                $n = trim((string) ($it['note'] ?? ''));
+                $f = (int) ($it['freq'] ?? 0);
+                if (in_array($f, [1, 2, 3], true) || $n !== '') {
+                    return true;
+                }
+            }
+        } else {
+            $medFreq = (int) ($med['freq'] ?? 0);
+            $medNote = trim((string) ($med['note'] ?? ''));
+            if (in_array($medFreq, [1, 2, 3], true) || $medNote !== '') {
+                return true;
+            }
         }
 
         return false;
@@ -298,11 +312,29 @@ class PflegevertragController extends Controller
             $merged['bad'][$k] = $badChoice === $k;
         }
 
-        $merged['medikamente']['note'] = (string) $request->input('med_note', '');
-        $mf = (int) $request->input('med_freq', 0);
-        $merged['medikamente']['freq'] = in_array($mf, [1, 2, 3], true) ? $mf : null;
-        $merged['medikamente']['on'] = $merged['medikamente']['freq'] !== null
-            || trim($merged['medikamente']['note']) !== '';
+        $items = [];
+        $raw = $request->input('med_items', []);
+        if (is_array($raw)) {
+            foreach ($raw as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $note = trim((string) ($row['note'] ?? ''));
+                $f = (int) ($row['freq'] ?? 0);
+                $f = in_array($f, [1, 2, 3], true) ? $f : null;
+                if ($note === '' && $f === null) {
+                    continue;
+                }
+                $items[] = [
+                    'note' => $note,
+                    'freq' => $f,
+                ];
+            }
+        }
+        $merged['medikamente']['items'] = $items;
+        $merged['medikamente']['note'] = '';
+        $merged['medikamente']['freq'] = null;
+        $merged['medikamente']['on'] = $items !== [];
 
         return $merged;
     }

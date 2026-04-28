@@ -131,7 +131,6 @@ mit Artgenossen, Erwachsenen und Kindern, Sicherheit im Straßenverkehr, Wesenst
 @php
     $f = $care['futter'] ?? [];
     $bad = $care['bad'] ?? [];
-    $med = $care['medikamente'] ?? [];
 @endphp
 <table class="care-grid">
     <thead>
@@ -181,19 +180,30 @@ mit Artgenossen, Erwachsenen und Kindern, Sicherheit im Straßenverkehr, Wesenst
     </tbody>
 </table>
 
-@php $mf = isset($med['freq']) ? (int) $med['freq'] : null; $medOn = !empty($med['on']); @endphp
+@php
+    $medRows = \App\Models\BoardingCareAgreement::medikamenteRowsForPdf($care ?? []);
+    if (count($medRows) === 0) {
+        $medRows = [['note' => '', 'freq' => null, 'on' => false]];
+    }
+@endphp
 <table class="care-grid" style="margin-top:6px;">
     <thead>
     <tr><th colspan="4">Medikamente</th></tr>
     <tr><th>Notiz</th><th>1 Mal/T.</th><th>2 Mal/T.</th><th>3 Mal/T.</th></tr>
     </thead>
     <tbody>
-    <tr>
-        <td>{{ $med['note'] ?? '' }}</td>
-        <td class="cb care-center">{{ ($medOn && $mf === 1) ? '☑' : '☐' }}</td>
-        <td class="cb care-center">{{ ($medOn && $mf === 2) ? '☑' : '☐' }}</td>
-        <td class="cb care-center">{{ ($medOn && $mf === 3) ? '☑' : '☐' }}</td>
-    </tr>
+    @foreach($medRows as $mrow)
+        @php
+            $mf = isset($mrow['freq']) && $mrow['freq'] !== null ? (int) $mrow['freq'] : null;
+            $medOn = !empty($mrow['on']) || ($mf !== null) || (trim($mrow['note'] ?? '') !== '');
+        @endphp
+        <tr>
+            <td>{{ $mrow['note'] ?? '' }}</td>
+            <td class="cb care-center">{{ ($medOn && $mf === 1) ? '☑' : '☐' }}</td>
+            <td class="cb care-center">{{ ($medOn && $mf === 2) ? '☑' : '☐' }}</td>
+            <td class="cb care-center">{{ ($medOn && $mf === 3) ? '☑' : '☐' }}</td>
+        </tr>
+    @endforeach
     </tbody>
 </table>
 
@@ -203,13 +213,13 @@ mit Artgenossen, Erwachsenen und Kindern, Sicherheit im Straßenverkehr, Wesenst
     @foreach ([
         'Kleintierpension: pro Käfig € 22,-- (ab 3 Käfige einer gratis)/Tag',
         'Katzenpension: pro Katze € 22,-- (ab 3 Katzen eine gratis)/Tag',
-        'Hundepension: kleine Hunde € 22,-, mittelgroße Hunde € 25,-, große Hunde € 28,-- (ab 3 Hunde einer gratis)/Tag',
+        'Hundepension: kleine Hunde € 22,-, mittelgroße Hunde € 25,-, große Hunde € 30,-- (ab 3 Hunde einer gratis)/Tag',
         'Bad (je nach Tier und Rasse): € 20,-- bis € 45,--',
         'Bad und Schur (je nach Tier und Rasse): € 20,-- bis € 85,--',
         'Einzelhaltung: € 5,--/ Tag',
         'Medikamente oder Diät: € 2,-- Aufpreis/ Tag',
         'Fütterung 2 Mal täglich im Preis inkludiert, 3 Mal/Tag Aufpreis € 2,-- pro Tag, 4 Mal/Tag Aufpreis € 3,-- pro Tag',
-        'Heizkostenpauschale von 3,50/Tag (kalte Witterungsverhältnisse)',
+        'Heizkostenpauschale von 3,90/Tag (kalte Witterungsverhältnisse)',
         'Abhol- und Bringservice: pro km € 1,--',
         'Spezialservice: Gesundheitscheck und Impfung beim Tierarzt',
         'Spezialpreise bei längeren Aufenthalten (Monatspreis)',

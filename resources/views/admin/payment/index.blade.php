@@ -261,7 +261,7 @@
                         <div class="form-floating form-floating-outline">
                             <select name="method" id="grp_modal_method" class="form-control">
                                 <option value="Bar">Bar</option>
-                                <option value="Bank">Bankueberweisung</option>
+                                <option value="Bank">Banküberweisung</option>
                             </select>
                             <label for="grp_modal_method">Methode</label>
                         </div>
@@ -339,7 +339,7 @@
                                     <div class="form-floating form-floating-outline">
                                         <select name="method" id="modal_single_method" class="form-control">
                                             <option value="Bar">Bar</option>
-                                            <option value="Bank">Bankueberweisung</option>
+                                            <option value="Bank">Banküberweisung</option>
                                         </select>
                                         <label for="modal_single_method">Methode</label>
                                     </div>

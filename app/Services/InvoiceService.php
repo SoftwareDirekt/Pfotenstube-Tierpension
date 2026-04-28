@@ -860,7 +860,7 @@ class InvoiceService
     private function formatPaymentMethod(?string $method): string
     {
         if ($method === 'Bank' || $method === 'Ueberweisung') {
-            return 'Bankueberweisung';
+            return 'Banküberweisung';
         }
         return $method ?? 'Bar';
     }

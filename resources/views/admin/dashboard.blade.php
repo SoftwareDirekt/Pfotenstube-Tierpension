@@ -881,11 +881,22 @@
 
                                             @if(!empty($breedingAnimals) && is_array($breedingAnimals))
                                                 @foreach($breedingAnimals as $breedingAnimal)
+                                                    @php
+                                                        $rawPic = (string) ($breedingAnimal['picture'] ?? '');
+                                                        $bsBase = rtrim((string) (config('services.breeding_shelter.url') ?? env('BREEDING_SHELTER_URL', '')), '/');
+                                                        if ($rawPic !== '' && (str_starts_with($rawPic, 'http://') || str_starts_with($rawPic, 'https://'))) {
+                                                            $breedingImgSrc = $rawPic;
+                                                        } elseif ($rawPic !== '' && $bsBase !== '') {
+                                                            $breedingImgSrc = $bsBase . '/' . ltrim($rawPic, '/');
+                                                        } else {
+                                                            $breedingImgSrc = '';
+                                                        }
+                                                    @endphp
                                                     <div class="col-md-4 col-lg-4 col-xl-4 col-xxl-3 child-breeding" style="pointer-events: none; opacity: 0.85;">
                                                         <div class="item card mb-2 d-flex flex-column" style="border: 2px solid #5a5fe0; box-shadow: 0 0 10px rgba(90,95,224,0.3); min-height: 270px;">
                                                             <div class="card-body space-nill bg-extralight bg-secondary flex-grow-0">
                                                                 <div class="flex justify-between align-items-center">
-                                                                    <p class="text-white">TSV Zucht</p>
+                                                                    <p class="text-white">Zucht</p>
                                                                     <div class="d-flex align-items-center">
                                                                         <i class="mdi mdi-shield-lock-outline text-white fs-4"></i>
                                                                     </div>
@@ -895,8 +906,8 @@
                                                             <div class="card-header flex-grow-0">
                                                                 <div class="flex justify-between align-items-center">
                                                                     <div class="flex align-items-center">
-                                                                        @if(!empty($breedingAnimal['picture']))
-                                                                            <img src="{{ rtrim(env('BREEDING_SHELTER_URL', 'https://https://zucht.tierpension.fun'), '/') }}/{{ ltrim($breedingAnimal['picture'], '/') }}" 
+                                                                        @if($breedingImgSrc !== '')
+                                                                            <img src="{{ $breedingImgSrc }}"
                                                                                  onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($breedingAnimal['name'] ?? 'Dog') }}&background=random'"
                                                                                  class="img-fluid" alt="Dog"/>
                                                                         @else
