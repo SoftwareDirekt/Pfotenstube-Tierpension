@@ -486,7 +486,7 @@
                                                     <div class="mt-2" id="payment_method_wrapper{{$rowIndex}}">
                                                         <select class="form-control" name="payment_method[]" id="payment_method{{$rowIndex}}">
                                                             <option selected value="Bar">Bar</option>
-                                                            <option value="Bank">Bankueberweisung</option>
+                                                            <option value="Bank">Banküberweisung</option>
                                                         </select>
                                                     </div>
                                                 </td>

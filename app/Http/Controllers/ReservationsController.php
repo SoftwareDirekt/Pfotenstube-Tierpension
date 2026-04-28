@@ -197,6 +197,11 @@ class ReservationsController extends Controller
                     return back();
                 }
 
+                if (Carbon::parse($checkout)->lt(Carbon::parse($checkin))) {
+                    Session::flash('error', 'Abholdatum darf nicht vor dem Aufnahmedatum liegen.');
+                    return back();
+                }
+
                 $checkinDate = Carbon::parse($checkin)->startOfDay();
                 $checkoutDate = Carbon::parse($checkout)->startOfDay();
                 $daysDiff = $checkinDate->diffInDays($checkoutDate);
@@ -505,6 +510,11 @@ class ReservationsController extends Controller
         $checkin = Carbon::createFromFormat('d-m-Y H:i',$ex[0])->toDateTimeString();
         $checkout = Carbon::createFromFormat('d-m-Y H:i',$ex[1])->toDateTimeString();
 
+        if (Carbon::parse($checkout)->lt(Carbon::parse($checkin))) {
+            Session::flash('error', 'Abholdatum darf nicht vor dem Aufnahmedatum liegen.');
+            return redirect()->route('admin.reservation');
+        }
+
         $reservation = Reservation::find($request->res_id);
         $reservation->checkin_date = $checkin;
         $reservation->checkout_date = $checkout;
@@ -598,6 +608,11 @@ class ReservationsController extends Controller
             $ex1 = $ex[1].' 23:59';
             $checkin = Carbon::createFromFormat('d/m/Y H:i', trim($ex0))->toDateTimeString();
             $checkout = Carbon::createFromFormat('d/m/Y H:i', trim($ex1))->toDateTimeString();
+
+            if (Carbon::parse($checkout)->lt(Carbon::parse($checkin))) {
+                Session::flash('error', 'Abholdatum darf nicht vor dem Aufnahmedatum liegen.');
+                return back();
+            }
 
             $checkinDate = Carbon::parse($checkin)->startOfDay();
             $checkoutDate = Carbon::parse($checkout)->startOfDay();
@@ -706,12 +721,23 @@ class ReservationsController extends Controller
                 $checkoutDate = $reservation->checkout_date instanceof Carbon
                     ? $reservation->checkout_date
                     : ($reservation->checkout_date ? Carbon::parse($reservation->checkout_date) : null);
+                $today = Carbon::today();
 
-                if (! $checkinDate || $checkinDate->lt(Carbon::today())) {
-                    $reservation->checkin_date = Carbon::today();
+                // Planned reservation window already fully in the past -> do not auto-fix dates.
+                if ($checkoutDate && $checkoutDate->startOfDay()->lt($today)) {
+                    DB::rollBack();
+
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'Diese Reservierung liegt vollständig in der Vergangenheit. Bitte löschen und neu anlegen.',
+                    ], 422);
                 }
 
-                if (! $checkoutDate || $checkoutDate->lt(Carbon::today())) {
+                if (! $checkinDate || $checkinDate->lt($today)) {
+                    $reservation->checkin_date = $today;
+                }
+
+                if (! $checkoutDate || $checkoutDate->lt($today)) {
                     $reservation->checkout_date = Carbon::now();
                 }
             }
@@ -1537,12 +1563,21 @@ class ReservationsController extends Controller
         {
             $checkinDate = $res->checkin_date instanceof Carbon ? $res->checkin_date : ($res->checkin_date ? Carbon::parse($res->checkin_date) : null);
             $checkoutDate = $res->checkout_date instanceof Carbon ? $res->checkout_date : ($res->checkout_date ? Carbon::parse($res->checkout_date) : null);
+            $today = Carbon::today();
 
-            if (! $checkinDate || $checkinDate->lt(Carbon::today())) {
-                $res->checkin_date = Carbon::today();
+            // Planned reservation window already fully in the past -> do not auto-fix dates.
+            if ($checkoutDate && $checkoutDate->startOfDay()->lt($today)) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Diese Reservierung liegt vollständig in der Vergangenheit. Bitte löschen und neu anlegen.',
+                ], 422);
             }
 
-            if (! $checkoutDate || $checkoutDate->lt(Carbon::today())) {
+            if (! $checkinDate || $checkinDate->lt($today)) {
+                $res->checkin_date = $today;
+            }
+
+            if (! $checkoutDate || $checkoutDate->lt($today)) {
                 $res->checkout_date = Carbon::now();
             }
         }

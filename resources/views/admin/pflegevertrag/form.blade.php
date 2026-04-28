@@ -8,7 +8,7 @@
     $care = $agreement->care_options ?? BoardingCareAgreement::defaultCareOptions();
     $f = $care['futter'] ?? [];
     $bad = $care['bad'] ?? [];
-    $med = $care['medikamente'] ?? [];
+    $medFormRows = BoardingCareAgreement::medikamenteRowsForForm($care, old('med_items'));
 @endphp
 <div class="px-4 flex-grow-1 container-p-y">
     <div class="card mb-4">
@@ -126,23 +126,38 @@
                 </div>
 
                 <div class="mb-2 fw-semibold">Medikamente (Notiz und/oder Häufigkeit)</div>
-                <div class="row g-3 mb-4 align-items-end">
-                    <div class="col-md-6">
-                        <label class="form-label small">Notiz</label>
-                        <input type="text" class="form-control form-control-sm" name="med_note" id="med_note" value="{{ old('med_note', $med['note'] ?? '') }}"
-                            @unless($agreement->canEditForm()) readonly disabled @endunless>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Häufigkeit</label>
-                        <select class="form-select form-select-sm" name="med_freq" id="med_freq"
-                            @unless($agreement->canEditForm()) disabled @endunless>
-                            <option value="">—</option>
-                            <option value="1" @selected((int)old('med_freq', $med['freq'] ?? 0) === 1)>1 Mal/T.</option>
-                            <option value="2" @selected((int)old('med_freq', $med['freq'] ?? 0) === 2)>2 Mal/T.</option>
-                            <option value="3" @selected((int)old('med_freq', $med['freq'] ?? 0) === 3)>3 Mal/T.</option>
-                        </select>
-                    </div>
+                <p class="small text-muted mb-2">Für jedes Präparat eine Zeile; bei Bedarf weitere Zeilen hinzufügen.</p>
+                <div id="med-item-rows" class="mb-2">
+                    @foreach($medFormRows as $idx => $mrow)
+                        <div class="row g-2 mb-2 align-items-end med-item-row">
+                            <div class="col-md-6 col-lg-5">
+                                <label class="form-label small">Notiz</label>
+                                <input type="text" class="form-control form-control-sm" name="med_items[{{ $idx }}][note]" value="{{ $mrow['note'] }}"
+                                    @unless($agreement->canEditForm()) readonly disabled @endunless>
+                            </div>
+                            <div class="col-md-4 col-lg-3">
+                                <label class="form-label small">Häufigkeit</label>
+                                <select class="form-select form-select-sm" name="med_items[{{ $idx }}][freq]"
+                                    @unless($agreement->canEditForm()) disabled @endunless>
+                                    <option value="">—</option>
+                                    <option value="1" @selected((string)($mrow['freq'] ?? '') === '1')>1 Mal/T.</option>
+                                    <option value="2" @selected((string)($mrow['freq'] ?? '') === '2')>2 Mal/T.</option>
+                                    <option value="3" @selected((string)($mrow['freq'] ?? '') === '3')>3 Mal/T.</option>
+                                </select>
+                            </div>
+                            @if($agreement->canEditForm())
+                                <div class="col-md-2 col-lg-1 med-remove-col @if($loop->count < 2) d-none @endif">
+                                    <button type="button" class="btn btn-sm btn-outline-danger w-100 med-item-remove" title="Zeile entfernen" aria-label="Zeile entfernen">&times;</button>
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
                 </div>
+                @if($agreement->canEditForm())
+                    <div class="mb-4">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="med-item-add">+ Weitere Medikation</button>
+                    </div>
+                @endif
 
                 @if($agreement->canEditForm())
                     <button type="submit" class="btn btn-primary js-action-btn">
@@ -181,8 +196,7 @@
                                 <input type="hidden" name="futter_{{ $k }}_freq" value="" class="mirror-futter-freq-{{ $k }}">
                             @endforeach
                             <input type="hidden" name="bad_choice" value="" class="mirror-bad-choice">
-                            <input type="hidden" name="med_freq" value="" class="mirror-med-freq">
-                            <input type="hidden" name="med_note" value="" class="mirror-med-note">
+                            <div id="intake-med-mirror" class="d-none" aria-hidden="true"></div>
                             <button type="submit" class="btn btn-success btn-sm js-action-btn">
                                 <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                                 Unterschrift speichern
@@ -261,10 +275,12 @@
         if (badChoice && badChoice.value) {
             var bc = document.createElement('input'); bc.type = 'hidden'; bc.name = 'bad_choice'; bc.value = badChoice.value; bc.className = 'dynamic-preview'; prev.appendChild(bc);
         }
-        var medFreq = form.querySelector('[name="med_freq"]');
-        if (medFreq && medFreq.value) { var mf = document.createElement('input'); mf.type = 'hidden'; mf.name = 'med_freq'; mf.value = medFreq.value; mf.className = 'dynamic-preview'; prev.appendChild(mf); }
-        var medNote = form.querySelector('[name="med_note"]');
-        if (medNote && medNote.value) { var mn = document.createElement('input'); mn.type = 'hidden'; mn.name = 'med_note'; mn.value = medNote.value; mn.className = 'dynamic-preview'; prev.appendChild(mn); }
+        form.querySelectorAll('#med-item-rows .med-item-row').forEach(function (row, idx) {
+            var noteIn = row.querySelector('input[name*="[note]"]');
+            var freqIn = row.querySelector('select[name*="[freq]"]');
+            if (noteIn) { var h = document.createElement('input'); h.type = 'hidden'; h.name = 'med_items[' + idx + '][note]'; h.value = noteIn.value; h.className = 'dynamic-preview'; prev.appendChild(h); }
+            if (freqIn) { var h2 = document.createElement('input'); h2.type = 'hidden'; h2.name = 'med_items[' + idx + '][freq]'; h2.value = freqIn.value; h2.className = 'dynamic-preview'; prev.appendChild(h2); }
+        });
     }
     document.getElementById('btn-preview-pdf')?.addEventListener('click', function () {
         syncPreviewHidden();
@@ -296,6 +312,50 @@
 
     document.getElementById('form-sign-intake')?.addEventListener('submit', function () { mirrorFormToIntakeSign(); });
     setupPad('canvas-intake', 'clear-intake', 'form-sign-intake', 'input-signature-intake');
+
+    function reindexMedRows() {
+        var container = document.getElementById('med-item-rows');
+        if (!container) return;
+        container.querySelectorAll('.med-item-row').forEach(function (row, idx) {
+            var noteIn = row.querySelector('input[type="text"]');
+            var freqIn = row.querySelector('select');
+            if (noteIn) noteIn.name = 'med_items[' + idx + '][note]';
+            if (freqIn) freqIn.name = 'med_items[' + idx + '][freq]';
+        });
+        var n = container.querySelectorAll('.med-item-row').length;
+        container.querySelectorAll('.med-remove-col').forEach(function (col) {
+            if (n < 2) col.classList.add('d-none'); else col.classList.remove('d-none');
+        });
+    }
+
+    document.getElementById('med-item-add')?.addEventListener('click', function () {
+        var container = document.getElementById('med-item-rows');
+        var first = container && container.querySelector('.med-item-row');
+        if (!container || !first) return;
+        var copy = first.cloneNode(true);
+        copy.querySelectorAll('input[type="text"]').forEach(function (i) { i.value = ''; });
+        copy.querySelectorAll('select').forEach(function (s) { s.selectedIndex = 0; });
+        var rem = copy.querySelector('.med-remove-col');
+        if (rem) rem.classList.remove('d-none');
+        container.appendChild(copy);
+        reindexMedRows();
+    });
+
+    document.getElementById('med-item-rows')?.addEventListener('click', function (e) {
+        var btn = e.target.closest('.med-item-remove');
+        if (!btn) return;
+        e.preventDefault();
+        var row = btn.closest('.med-item-row');
+        var container = document.getElementById('med-item-rows');
+        if (!row || !container) return;
+        if (container.querySelectorAll('.med-item-row').length <= 1) {
+            row.querySelectorAll('input[type="text"]').forEach(function (i) { i.value = ''; });
+            row.querySelectorAll('select').forEach(function (s) { s.selectedIndex = 0; });
+            return;
+        }
+        row.remove();
+        reindexMedRows();
+    });
     setupPad('canvas-checkout', 'clear-checkout', 'form-sign-checkout', 'input-signature-checkout');
 
     function mirrorFormToIntakeSign() {
@@ -311,10 +371,16 @@
         });
         var badChoice = form.querySelector('[name="bad_choice"]');
         signForm.querySelector('.mirror-bad-choice').value = badChoice ? badChoice.value : '';
-        var medFreq = form.querySelector('[name="med_freq"]');
-        signForm.querySelector('.mirror-med-freq').value = medFreq ? medFreq.value : '';
-        var medNote = form.querySelector('[name="med_note"]');
-        signForm.querySelector('.mirror-med-note').value = medNote ? medNote.value : '';
+        var mirror = signForm.querySelector('#intake-med-mirror');
+        if (mirror) {
+            mirror.innerHTML = '';
+            form.querySelectorAll('#med-item-rows .med-item-row').forEach(function (row, idx) {
+                var noteIn = row.querySelector('input[name*="[note]"]');
+                var freqIn = row.querySelector('select[name*="[freq]"]');
+                if (noteIn) { var h = document.createElement('input'); h.type = 'hidden'; h.name = 'med_items[' + idx + '][note]'; h.value = noteIn.value; mirror.appendChild(h); }
+                if (freqIn) { var h2 = document.createElement('input'); h2.type = 'hidden'; h2.name = 'med_items[' + idx + '][freq]'; h2.value = freqIn.value; mirror.appendChild(h2); }
+            });
+        }
     }
 
     var openEmailBtn = document.getElementById('btn-open-email-confirm');

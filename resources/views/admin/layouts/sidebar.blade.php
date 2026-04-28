@@ -116,10 +116,50 @@
       @endif
 
       @if($permissions['vandv'])
-      <li class="menu-item rainbow">
+      <li class="menu-item">
         <a href="{{route('admin.v_v')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-dog"></i>
           <div>V&amp;V</div>
+        </a>
+      </li>
+      @endif
+
+      <li class="menu-header fw-light mt-3">
+        <span class="menu-header-text">Finanzen</span>
+      </li>
+
+      @if($permissions['payments'])
+      <li class="menu-item">
+        <a href="{{route('admin.payment')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-currency-eur"></i>
+          <div>Zahlung</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['invoices'])
+      <li class="menu-item">
+        <a href="{{route('admin.invoices')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
+          <div>Rechnungen</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['plans'])
+      <li class="menu-item">
+        <a href="{{route('admin.plans')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
+          <div>Preisplan</div>
+        </a>
+      </li>
+      @endif
+
+      @if($permissions['additional_costs'])
+      <li class="menu-item">
+        <a href="{{route('admin.additional-costs')}}" class="menu-link">
+          <i class="menu-icon tf-icons mdi mdi-tag-outline"></i>
+          <div>Zusatzkosten</div>
         </a>
       </li>
       @endif
@@ -171,46 +211,6 @@
         <a href="{{route('admin.calendar')}}" class="menu-link">
           <i class="menu-icon tf-icons mdi mdi-calendar-outline"></i>
           <div>Kalender</div>
-        </a>
-      </li>
-      @endif
-
-      <li class="menu-header fw-light mt-3">
-        <span class="menu-header-text">Finanzen</span>
-      </li>
-
-      @if($permissions['payments'])
-      <li class="menu-item">
-        <a href="{{route('admin.payment')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-currency-eur"></i>
-          <div>Zahlung</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['invoices'])
-      <li class="menu-item">
-        <a href="{{route('admin.invoices')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-file-document-outline"></i>
-          <div>Rechnungen</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['plans'])
-      <li class="menu-item">
-        <a href="{{route('admin.plans')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-credit-card-outline"></i>
-          <div>Preisplan</div>
-        </a>
-      </li>
-      @endif
-
-      @if($permissions['additional_costs'])
-      <li class="menu-item">
-        <a href="{{route('admin.additional-costs')}}" class="menu-link">
-          <i class="menu-icon tf-icons mdi mdi-tag-outline"></i>
-          <div>Zusatzkosten</div>
         </a>
       </li>
       @endif

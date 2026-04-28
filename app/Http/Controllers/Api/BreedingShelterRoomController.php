@@ -74,7 +74,10 @@ class BreedingShelterRoomController extends Controller
                     
                     // Handle both old format (integer) or new format (array with count + animals)
                     $count = is_array($payloadData) ? (int) ($payloadData['count'] ?? 0) : (int) $payloadData;
-                    $animals = is_array($payloadData) && isset($payloadData['animals']) ? json_encode($payloadData['animals']) : null;
+                    $animals = null;
+                    if (is_array($payloadData) && isset($payloadData['animals']) && is_array($payloadData['animals'])) {
+                        $animals = json_encode($this->normalizeAnimalPayload($payloadData['animals']));
+                    }
                     
                     $room = Room::query()->lockForUpdate()->find($roomId);
                     if (! $room) {
@@ -100,5 +103,56 @@ class BreedingShelterRoomController extends Controller
         }
 
         return $this->successResponse('Belegung synchronisiert.');
+    }
+
+    /**
+     * @param  array<int, mixed>  $animals
+     * @return array<int, mixed>
+     */
+    private function normalizeAnimalPayload(array $animals): array
+    {
+        foreach ($animals as $idx => $animal) {
+            if (! is_array($animal)) {
+                continue;
+            }
+            $animal['picture'] = $this->normalizePicturePath($animal['picture'] ?? null);
+            $animals[$idx] = $animal;
+        }
+
+        return $animals;
+    }
+
+    private function normalizePicturePath(mixed $picture): ?string
+    {
+        $raw = trim((string) ($picture ?? ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        // Already an absolute URL.
+        if (str_starts_with($raw, 'http://') || str_starts_with($raw, 'https://')) {
+            return $raw;
+        }
+
+        // Payload can arrive with escaped slashes ("storage\/...").
+        $raw = str_replace('\\/', '/', $raw);
+        $raw = '/'.ltrim($raw, '/');
+
+        $configured = (string) (config('services.breeding_shelter.url') ?? env('BREEDING_SHELTER_URL', ''));
+        if ($configured === '') {
+            return ltrim($raw, '/');
+        }
+
+        $parts = parse_url($configured);
+        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return ltrim($raw, '/');
+        }
+
+        $origin = $parts['scheme'].'://'.$parts['host'];
+        if (! empty($parts['port'])) {
+            $origin .= ':'.$parts['port'];
+        }
+
+        return $origin.$raw;
     }
 }

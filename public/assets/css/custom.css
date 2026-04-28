@@ -349,14 +349,6 @@ button.no-style {
     font-weight: 500;
 }
 
-.rainbow {
-    background: linear-gradient(65deg, rgb(255, 75, 75), rgb(255, 193, 79), rgb(255, 255, 121), rgb(91, 250, 91), rgb(54, 54, 255), rgb(106, 41, 153), rgb(226, 162, 226));
-}
-
-.rainbow a {
-    color: #000 !important;
-}
-
 .scrumboard .child .card {
     min-height: 300px;
     max-height: 300px;
